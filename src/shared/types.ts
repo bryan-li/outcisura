@@ -1,8 +1,28 @@
 import type { ReviewGrade } from './srs'
 
-export type DocumentType = 'pdf' | 'pptx'
+export type DocumentType = 'pdf' | 'pptx' | 'video'
 export type ElementKind = 'text' | 'image'
-export type CardType = 'basic' | 'image_occlusion'
+export type CardType = 'basic' | 'image_occlusion' | 'cloze'
+
+export type GenerationComplexity = 'simple' | 'standard' | 'detailed'
+
+/** User-configurable knobs applied when turning a selection into one or more AI-generated cards —
+ *  shared across every creation surface (PDF/PPTX viewer, video OCR flow, combine basket) so the
+ *  same settings mean the same thing regardless of where a card came from. */
+export interface GenerationSettings {
+  complexity: GenerationComplexity
+  /** One card per source instead of combining every source into one. */
+  splitIntoMultiple: boolean
+  /** Replaces the default rewrite instruction entirely when set. */
+  customPrompt: string | null
+  /** Generate a cloze-deletion card (one passage, key term(s) wrapped in {{}}) instead of a plain
+   *  front/back question. Mutually exclusive with doubleSided — a cloze card has no separate
+   *  "reverse" side to swap. */
+  cloze: boolean
+  /** Also create a second card with front/back swapped, sharing the same sources. No-op when
+   *  `cloze` is set. */
+  doubleSided: boolean
+}
 
 export interface BBox {
   x: number
@@ -17,6 +37,19 @@ export interface DocumentRecord {
   type: DocumentType
   importedAt: string
   pageCount: number
+  /** Video documents only — the copied source file's path under <userData>/videos/. */
+  sourceVideoPath: string | null
+  /** Video documents only. */
+  durationSeconds: number | null
+  /** pdf/pptx only — the page index to reopen on, or null to start at the beginning. */
+  lastPageIndex: number | null
+  /** Video only — the playback position (seconds) to resume from, or null to start at 0. */
+  lastPlaybackSeconds: number | null
+}
+
+export interface DocumentPositionPatch {
+  lastPageIndex?: number
+  lastPlaybackSeconds?: number
 }
 
 export interface PageRecord {
@@ -27,6 +60,8 @@ export interface PageRecord {
   height: number
   /** Cached PNG render of the page (PPTX pages go through LibreOffice→PDF first, so this is always set). */
   backgroundImagePath: string | null
+  /** Set only for a page created from a captured, paused video frame — which video-moment it is. */
+  timestampSeconds: number | null
 }
 
 export interface ElementRecord {
@@ -60,6 +95,27 @@ export interface ParsedElement {
   text?: string
   /** Data URL of the extracted image (image elements only). */
   imageData?: string
+}
+
+/** Video import is a much thinner contract than ParsedDocument — no pages to pre-render, since
+ *  frames are captured lazily on pause, not upfront. `path` is an already-on-disk path (read via
+ *  webUtils.getPathForFile in the renderer), not file bytes — the main process copies it directly,
+ *  no IPC byte transfer for what can be a multi-hundred-MB file. */
+export interface ImportVideoInput {
+  filename: string
+  path: string
+  durationSeconds: number
+  width: number
+  height: number
+}
+
+/** Input for capturing a paused video frame as a new page — see repository.createVideoFramePage. */
+export interface CreateVideoFramePageInput {
+  documentId: string
+  timestampSeconds: number
+  width: number
+  height: number
+  backgroundImagePath: string
 }
 
 export interface CardSourceRecord {
@@ -164,9 +220,28 @@ export interface NewCardInput {
 export interface AiRegenerateRequest {
   cardId: string
   instruction?: string
+  complexity?: GenerationComplexity
+  /** Ask for cloze-deletion output (`CLOZE: <text with {{blanks}}>`) instead of FRONT/BACK. */
+  cloze?: boolean
 }
 
 export interface AiRegenerateResult {
   front: string
   back: string
+}
+
+export type OcrEngine = 'tesseract' | 'claude-vision'
+
+/** One detected text region, before it's persisted as an element. */
+export interface OcrDetection {
+  text: string
+  bbox: BBox
+}
+
+export interface OcrRecognizePageInput {
+  pageId: string
+  imagePath: string
+  width: number
+  height: number
+  engine: OcrEngine
 }

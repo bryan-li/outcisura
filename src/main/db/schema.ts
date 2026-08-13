@@ -128,8 +128,77 @@ const MIGRATIONS: string[] = [
   ALTER TABLE card_sources ADD COLUMN mask_y REAL;
   ALTER TABLE card_sources ADD COLUMN mask_w REAL;
   ALTER TABLE card_sources ADD COLUMN mask_h REAL;
+  `,
+  `
+  -- Widen documents.type to allow 'video'. SQLite can't ALTER a CHECK constraint in place, so this
+  -- rebuilds the table — see the FK_OFF_MIGRATIONS handling in migrate() below. source_video_path/
+  -- duration_seconds are video-only and NULL for existing pdf/pptx rows.
+  CREATE TABLE documents_new (
+    id TEXT PRIMARY KEY,
+    filename TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('pdf', 'pptx', 'video')),
+    imported_at TEXT NOT NULL,
+    page_count INTEGER NOT NULL,
+    source_video_path TEXT,
+    duration_seconds REAL
+  );
+  INSERT INTO documents_new SELECT id, filename, type, imported_at, page_count, NULL, NULL FROM documents;
+  DROP TABLE documents;
+  ALTER TABLE documents_new RENAME TO documents;
+
+  -- Which video-moment a captured frame belongs to. NULL for ordinary pdf/pptx pages.
+  ALTER TABLE pages ADD COLUMN timestamp_seconds REAL;
+  `,
+  `
+  -- Widen cards.card_type to allow 'cloze' (see renderer/src/utils/cloze.ts). SQLite can't ALTER a CHECK
+  -- constraint in place, so this rebuilds the table the same way migration 8 widened documents.type
+  -- — see the FK_OFF_MIGRATIONS handling below (card_sources cascades off cards.id, so a plain
+  -- DROP TABLE here would silently delete every card's sources without it).
+  CREATE TABLE cards_new (
+    id TEXT PRIMARY KEY,
+    front TEXT NOT NULL,
+    back TEXT NOT NULL,
+    card_type TEXT NOT NULL CHECK (card_type IN ('basic', 'image_occlusion', 'cloze')),
+    ai_generated INTEGER NOT NULL DEFAULT 0,
+    prev_front TEXT,
+    prev_back TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    due_at TEXT NOT NULL DEFAULT '',
+    interval_days REAL NOT NULL DEFAULT 0,
+    ease_factor REAL NOT NULL DEFAULT 2.5,
+    repetitions INTEGER NOT NULL DEFAULT 0,
+    lapses INTEGER NOT NULL DEFAULT 0,
+    last_reviewed_at TEXT
+  );
+  INSERT INTO cards_new SELECT
+    id, front, back, card_type, ai_generated, prev_front, prev_back, created_at, updated_at,
+    folder_id, sort_order, due_at, interval_days, ease_factor, repetitions, lapses, last_reviewed_at
+  FROM cards;
+  DROP TABLE cards;
+  ALTER TABLE cards_new RENAME TO cards;
+  `,
+  `
+  -- Where you left off — page index for pdf/pptx, playback position for video. Both NULL until a
+  -- document is actually opened/played past the start; NULL means "open at the beginning," not 0,
+  -- since 0 is itself a meaningful page index.
+  ALTER TABLE documents ADD COLUMN last_page_index INTEGER;
+  ALTER TABLE documents ADD COLUMN last_playback_seconds REAL;
   `
 ]
+
+// Migration indices that rebuild a table other tables hold live foreign keys into (via DROP TABLE
+// + RENAME, since SQLite can't ALTER a CHECK constraint in place). Under `foreign_keys = ON` (set
+// in openDatabase below), dropping a table that's referenced by ON DELETE CASCADE children
+// silently cascade-deletes those children — confirmed empirically, not a hypothetical. These
+// migrations run outside the standard per-migration transaction, with foreign_keys explicitly
+// toggled off for the rebuild and a foreign_key_check gate before commit. Do NOT "simplify" one of
+// these back into the normal transaction loop below — PRAGMA foreign_keys is also a silent no-op
+// when set inside an already-open transaction, so that mistake would reintroduce the cascade-delete
+// data loss with no error raised anywhere.
+const FK_OFF_MIGRATIONS = new Set([8, 9])
 
 export function openDatabase(filePath: string): Database.Database {
   const db = new Database(filePath)
@@ -149,10 +218,31 @@ function migrate(db: Database.Database): void {
 
   for (let version = 0; version < MIGRATIONS.length; version++) {
     if (applied.has(version)) continue
+    if (FK_OFF_MIGRATIONS.has(version)) {
+      runFkOffMigration(db, version)
+      continue
+    }
     const run = db.transaction(() => {
       db.exec(MIGRATIONS[version])
       db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(version)
     })
     run()
+  }
+}
+
+function runFkOffMigration(db: Database.Database, version: number): void {
+  db.pragma('foreign_keys = OFF')
+  try {
+    const run = db.transaction(() => {
+      db.exec(MIGRATIONS[version])
+      const violations = db.pragma('foreign_key_check') as unknown[]
+      if (violations.length > 0) {
+        throw new Error(`Migration ${version} left FK violations: ${JSON.stringify(violations)}`)
+      }
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(version)
+    })
+    run()
+  } finally {
+    db.pragma('foreign_keys = ON')
   }
 }

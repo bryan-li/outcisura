@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { BBox, CardRecord, CardSourceRecord, ElementRecord, PageRecord } from '../../../../shared/types'
 import { useResolvedImage } from '../../hooks/useResolvedImage'
-
-/** Screen-space pixels of mouse movement before a mousedown counts as a drag rather than a click. */
-const DRAG_THRESHOLD = 4
+import { SelectableElementsOverlay } from './SelectableElementsOverlay'
 
 interface PageViewProps {
   page: PageRecord
@@ -53,77 +51,10 @@ export function PageView({
 
   const scale = Math.min(1, Math.min(900, availableWidth) / page.width)
 
-  const containerRef = useRef<HTMLDivElement>(null)
-  const dragStartRef = useRef<{ x: number; y: number } | null>(null)
-  // Set right before a real drag ends, so the click event that follows the mouseup on whatever
-  // element is under the cursor doesn't also toggle that element on top of the marquee result.
-  const suppressClickRef = useRef(false)
-  const [dragRect, setDragRect] = useState<BBox | null>(null)
-
-  function toPageCoords(e: React.MouseEvent): { x: number; y: number } {
-    const rect = containerRef.current!.getBoundingClientRect()
-    // Derive the on-screen scale from the rendered rect rather than the `scale` constant, so this
-    // stays correct under any additional scaling applied above us.
-    const renderedScale = rect.width / page.width || scale
-    return { x: (e.clientX - rect.left) / renderedScale, y: (e.clientY - rect.top) / renderedScale }
-  }
-
-  function handleMouseDown(e: React.MouseEvent): void {
-    if (e.button !== 0) return
-    dragStartRef.current = toPageCoords(e)
-  }
-
-  function handleMouseMove(e: React.MouseEvent): void {
-    const start = dragStartRef.current
-    if (!start) return
-    const current = toPageCoords(e)
-    if (!dragRect && Math.hypot((current.x - start.x) * scale, (current.y - start.y) * scale) < DRAG_THRESHOLD) {
-      return
-    }
-    setDragRect({
-      x: Math.min(start.x, current.x),
-      y: Math.min(start.y, current.y),
-      w: Math.abs(current.x - start.x),
-      h: Math.abs(current.y - start.y)
-    })
-  }
-
-  function handleMouseUp(e: React.MouseEvent): void {
-    if (dragRect) {
-      const hits = elements.filter((el) => rectsIntersect(padBBox(el.bbox), dragRect))
-      onDragSelect(hits, e.shiftKey)
-      suppressClickRef.current = true
-    }
-    dragStartRef.current = null
-    setDragRect(null)
-  }
-
-  function handleMouseLeave(): void {
-    dragStartRef.current = null
-    setDragRect(null)
-  }
-
-  function handleContainerClick(e: React.MouseEvent): void {
-    if (suppressClickRef.current) {
-      // Tail end of a real drag landing on empty space — the drag already set the selection
-      // via onDragSelect; don't immediately clear it.
-      suppressClickRef.current = false
-      return
-    }
-    if ((e.target as HTMLElement).tagName === 'BUTTON') return // handled by that element's own onToggle
-    onClearSelection()
-  }
-
   return (
     <div ref={wrapperRef} style={{ width: '100%' }}>
       <div style={{ width: page.width * scale, height: page.height * scale, overflow: 'visible' }}>
         <div
-          ref={containerRef}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
-          onClick={handleContainerClick}
           style={{
             position: 'relative',
             width: page.width,
@@ -134,8 +65,7 @@ export function PageView({
             borderRadius: 'var(--radius-lg)',
             overflow: 'hidden',
             boxShadow: '0 1px 3px #0000001a, 0 8px 24px #00000014',
-            background: '#fff',
-            cursor: 'crosshair'
+            background: '#fff'
           }}
         >
           {backgroundSrc && (
@@ -147,20 +77,19 @@ export function PageView({
             />
           )}
 
-          {elements.map((el) => (
-            <ElementOverlay
-              key={el.id}
-              element={el}
-              selected={selectedIds.has(el.id)}
-              onToggle={() => {
-                if (suppressClickRef.current) {
-                  suppressClickRef.current = false
-                  return
-                }
-                onToggleSelect(el)
-              }}
-            />
-          ))}
+          {/* Rendered before CardSourceOverlay below, on purpose — later-in-DOM siblings paint on
+              top, so an existing flashcard's own box (and its hover thumbnail) always stays
+              clickable/hoverable above this overlay's full-page hit area, with no manual
+              tagName-check needed to arbitrate between them (they're siblings now, not nested). */}
+          <SelectableElementsOverlay
+            width={page.width}
+            height={page.height}
+            elements={elements}
+            selectedIds={selectedIds}
+            onToggleSelect={onToggleSelect}
+            onDragSelect={onDragSelect}
+            onClearSelection={onClearSelection}
+          />
 
           {cardSources.map(({ card, source }) => (
             <CardSourceOverlay
@@ -173,73 +102,10 @@ export function PageView({
             />
           ))}
 
-          {dragRect && (
-            <div
-              style={{
-                position: 'absolute',
-                left: dragRect.x,
-                top: dragRect.y,
-                width: dragRect.w,
-                height: dragRect.h,
-                border: '1px dashed #4c8bf5',
-                background: '#4c8bf51a',
-                pointerEvents: 'none'
-              }}
-            />
-          )}
-
           {flashBBox && <FlashHighlight bbox={flashBBox} />}
         </div>
       </div>
     </div>
-  )
-}
-
-function rectsIntersect(a: BBox, b: BBox): boolean {
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
-}
-
-/**
- * Word-tight boxes are precise but fiddly to click and look fragmented when several are selected.
- * Pad a bit — proportional to the element's own size so a title doesn't get a speck of padding and
- * a caption doesn't get an oversized one, capped so large images don't balloon.
- */
-function padBBox(b: BBox): BBox {
-  const pad = Math.min(10, Math.max(2, Math.min(b.w, b.h) * 0.2))
-  return { x: b.x - pad, y: b.y - pad, w: b.w + pad * 2, h: b.h + pad * 2 }
-}
-
-interface ElementOverlayProps {
-  element: ElementRecord
-  selected: boolean
-  onToggle: () => void
-}
-
-function ElementOverlay({ element, selected, onToggle }: ElementOverlayProps): JSX.Element {
-  const [hovered, setHovered] = useState(false)
-  const { x, y, w, h } = padBBox(element.bbox)
-
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        position: 'absolute',
-        left: x,
-        top: y,
-        width: w,
-        height: h,
-        margin: 0,
-        padding: 0,
-        borderRadius: 3,
-        border: selected ? '2px solid #4c8bf5' : hovered ? '2px solid #4c8bf580' : 'none',
-        background: selected ? '#4c8bf526' : hovered ? '#4c8bf512' : 'transparent',
-        cursor: 'pointer'
-      }}
-      title={element.text ?? undefined}
-    />
   )
 }
 

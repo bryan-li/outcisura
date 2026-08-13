@@ -24,7 +24,10 @@ interface OcclusionEditorProps {
   documentId: string
   pageId: string
   documentLabel: string
-  slideNumber: number
+  /** How to describe this source in generated card copy — "Slide 3" for a pdf/pptx page, "at 0:42"
+   *  for a captured video frame. Fully caller-formatted so this component stays agnostic to what
+   *  kind of document it came from. */
+  sourceLabel: string
   /** The image to occlude — either a parsed page image element's crop, or a fresh screenshot crop. */
   sourceImagePath: string
   /** That image's own position/size on the page, for converting mask coordinates back to page space. */
@@ -41,7 +44,7 @@ export function OcclusionEditor({
   documentId,
   pageId,
   documentLabel,
-  slideNumber,
+  sourceLabel,
   sourceImagePath,
   sourceBBox,
   onClose,
@@ -188,8 +191,8 @@ export function OcclusionEditor({
         // of showing as "Untitled" — the user can rewrite either line like any other card.
         const regionLabel = groupMasks.length > 1 ? `${groupMasks.length} hidden regions` : '1 hidden region'
         await createCard({
-          front: `🖼 What is hidden here? — Slide ${slideNumber}`,
-          back: `• ${regionLabel} on ${documentLabel} · Slide ${slideNumber}`,
+          front: `🖼 What is hidden here? — ${sourceLabel}`,
+          back: `• ${regionLabel} on ${documentLabel} · ${sourceLabel}`,
           cardType: 'image_occlusion',
           sources: groupMasks.map((mask, i) => ({
             documentId,
@@ -198,8 +201,8 @@ export function OcclusionEditor({
             bbox: maskToPageBBox(mask.rect),
             label:
               groupMasks.length > 1
-                ? `${documentLabel} · Slide ${slideNumber} (mask ${i + 1} of ${groupMasks.length})`
-                : `${documentLabel} · Slide ${slideNumber} (mask)`,
+                ? `${documentLabel} · ${sourceLabel} (mask ${i + 1} of ${groupMasks.length})`
+                : `${documentLabel} · ${sourceLabel} (mask)`,
             imagePath: sourceImagePath,
             maskBBox: maskToFraction(mask.rect)
           }))
@@ -242,7 +245,7 @@ export function OcclusionEditor({
                 strokeWidth={2}
               />
             ))}
-            {liveRect && <Rect x={liveRect.x} y={liveRect.y} width={liveRect.w} height={liveRect.h} fill="#4c8bf555" stroke="#4c8bf5" />}
+            {liveRect && <Rect x={liveRect.x} y={liveRect.y} width={liveRect.w} height={liveRect.h} fill="#e86b0f55" stroke="#e86b0f" />}
           </Layer>
         </Stage>
 

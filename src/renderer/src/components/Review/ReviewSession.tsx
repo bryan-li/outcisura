@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import type { CardRecord, SrsSnapshot } from '../../../../shared/types'
+import type { BBox, CardRecord, SrsSnapshot } from '../../../../shared/types'
 import { nextSrsState, formatInterval, type ReviewGrade } from '../../../../shared/srs'
 import { useCardsStore } from '../../state/cardsStore'
 import { useFoldersStore } from '../../state/foldersStore'
@@ -7,6 +7,7 @@ import { useUiStore, type MainView, type ReviewScope } from '../../state/uiStore
 import { allCardsInScope, dueCards, requeueAfterAgain } from '../../utils/srsQueue'
 import { backTextToLines } from '../../utils/blockCard'
 import { firstImageSourcePath, maskBBoxesFor } from '../../utils/occlusion'
+import { parseCloze } from '../../utils/cloze'
 import { OcclusionImage } from '../CardBrowser/OcclusionImage'
 
 interface ReviewSessionProps {
@@ -279,26 +280,68 @@ function CardFace({
 }): JSX.Element {
   const backLines = backTextToLines(card.back)
   const imagePath = firstImageSourcePath(card)
+  const [zoomed, setZoomed] = useState(false)
+  const isCloze = card.cardType === 'cloze'
 
   return (
     <div style={cardFaceStyle} onClick={!revealed ? onReveal : undefined}>
-      <div style={{ fontSize: 'var(--font-lg)', fontWeight: 600, textAlign: 'center' }}>
-        {card.front.trim() || <em style={{ fontWeight: 400, opacity: 0.5 }}>Untitled</em>}
-      </div>
+      {isCloze ? (
+        <div style={{ fontSize: 'var(--font-lg)', fontWeight: 600, textAlign: 'center', lineHeight: 1.5 }}>
+          {card.front.trim() ? (
+            parseCloze(card.front).map((seg, i) =>
+              seg.isBlank ? (
+                revealed ? (
+                  <span key={i} style={clozeRevealedStyle}>
+                    {seg.text}
+                  </span>
+                ) : (
+                  <span key={i} style={clozeBlankStyle}>
+                    ▢▢▢▢
+                  </span>
+                )
+              ) : (
+                <span key={i}>{seg.text}</span>
+              )
+            )
+          ) : (
+            <em style={{ fontWeight: 400, opacity: 0.5 }}>Untitled</em>
+          )}
+        </div>
+      ) : (
+        <div style={{ fontSize: 'var(--font-lg)', fontWeight: 600, textAlign: 'center' }}>
+          {card.front.trim() || <em style={{ fontWeight: 400, opacity: 0.5 }}>Untitled</em>}
+        </div>
+      )}
 
       {/* Same image throughout — only the mask boxes toggle with `revealed`, so answering doesn't
           swap in a second, previously-unmasked copy of the picture. */}
       {imagePath && (
-        <div style={{ marginTop: 'var(--space-3)' }}>
+        <div
+          style={{ marginTop: 'var(--space-3)', cursor: 'zoom-in' }}
+          title="Click to enlarge"
+          onClick={(e) => {
+            // Enlarging is independent of answering — without this, clicking the image would
+            // also bubble up to the card face's own onClick and flip to the answer.
+            e.stopPropagation()
+            setZoomed(true)
+          }}
+        >
           <OcclusionImage imagePath={imagePath} maskBBoxes={maskBBoxesFor(card, imagePath)} revealed={revealed} maxWidth={420} />
         </div>
       )}
 
-      {!revealed ? (
+      {imagePath && zoomed && (
+        <ImageLightbox imagePath={imagePath} maskBBoxes={maskBBoxesFor(card, imagePath)} revealed={revealed} onClose={() => setZoomed(false)} />
+      )}
+
+      {!revealed && (
         <button onClick={onReveal} style={{ marginTop: 'var(--space-5)' }}>
           Show Answer
         </button>
-      ) : (
+      )}
+      {/* A cloze card's answer already appeared inline in the passage above once revealed —
+          there's no separate back content to show underneath it. */}
+      {revealed && !isCloze && (
         <div style={{ marginTop: 'var(--space-4)', width: '100%', animation: 'expand-collapse 150ms ease' }}>
           <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '0 0 var(--space-3)' }} />
           {backLines.length > 0 ? (
@@ -316,6 +359,55 @@ function CardFace({
       )}
     </div>
   )
+}
+
+function ImageLightbox({
+  imagePath,
+  maskBBoxes,
+  revealed,
+  onClose
+}: {
+  imagePath: string
+  maskBBoxes: BBox[]
+  revealed: boolean
+  onClose: () => void
+}): JSX.Element {
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  return (
+    <div
+      style={lightboxOverlayStyle}
+      onClick={(e) => {
+        // Despite being position:fixed, this overlay is still a DOM descendant of the card face
+        // (which reveals the answer on click) — without stopping propagation here, closing the
+        // lightbox via backdrop click would also bubble up and flip the card underneath it.
+        e.stopPropagation()
+        onClose()
+      }}
+    >
+      <div onClick={(e) => e.stopPropagation()} style={{ animation: 'scale-in 150ms ease' }}>
+        <OcclusionImage imagePath={imagePath} maskBBoxes={maskBBoxes} revealed={revealed} maxWidth={Math.min(window.innerWidth * 0.85, 900)} />
+      </div>
+    </div>
+  )
+}
+
+const lightboxOverlayStyle: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  background: '#000000a0',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 60,
+  cursor: 'zoom-out',
+  animation: 'fade-in 120ms ease'
 }
 
 const containerStyle: CSSProperties = {
@@ -347,6 +439,21 @@ const progressFillStyle: CSSProperties = {
   background: 'var(--accent)',
   borderRadius: 999,
   transition: 'width 150ms ease'
+}
+
+const clozeBlankStyle: CSSProperties = {
+  display: 'inline-block',
+  letterSpacing: '-2px',
+  color: 'var(--accent)',
+  fontWeight: 700
+}
+
+const clozeRevealedStyle: CSSProperties = {
+  display: 'inline-block',
+  color: 'var(--accent)',
+  background: 'var(--accent-soft)',
+  borderRadius: 3,
+  padding: '0 3px'
 }
 
 const cardFaceStyle: CSSProperties = {

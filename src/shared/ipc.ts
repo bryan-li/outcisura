@@ -3,12 +3,16 @@ import type {
   CardRecord,
   CardReorderItem,
   CardUpdatePatch,
+  CreateVideoFramePageInput,
+  DocumentPositionPatch,
   DocumentRecord,
   ElementRecord,
   FolderRecord,
   FolderReorderItem,
   FolderUpdatePatch,
+  ImportVideoInput,
   NewCardInput,
+  OcrRecognizePageInput,
   PageRecord,
   ParsedDocument,
   ReviewLogEntry,
@@ -18,6 +22,8 @@ import type { ReviewGrade } from './srs'
 
 export const IpcChannels = {
   documentsImport: 'documents:import',
+  documentsImportVideo: 'documents:importVideo',
+  documentsCreateVideoFramePage: 'documents:createVideoFramePage',
   documentsList: 'documents:list',
   documentsGetPages: 'documents:getPages',
   documentsGetElements: 'documents:getElements',
@@ -25,6 +31,7 @@ export const IpcChannels = {
   documentsConvertPptxToPdf: 'documents:convertPptxToPdf',
   documentsDelete: 'documents:delete',
   documentsSaveImage: 'documents:saveImage',
+  documentsUpdatePosition: 'documents:updatePosition',
   cardsCreate: 'cards:create',
   cardsList: 'cards:list',
   cardsUpdate: 'cards:update',
@@ -39,14 +46,25 @@ export const IpcChannels = {
   foldersDelete: 'folders:delete',
   reviewLogList: 'reviewLog:list',
   aiRegenerate: 'ai:regenerate',
-  aiGenerateFromSources: 'ai:generateFromSources'
+  aiGenerateFromSources: 'ai:generateFromSources',
+  ocrRecognizePage: 'ocr:recognizePage'
 } as const
 
 /** Shape of the `window.api` bridge exposed by the preload script. */
 export interface FlashcardApi {
+  /** Resolves a renderer File object (from an <input type=file>) to its absolute path on disk, via
+   *  Electron's webUtils — File.path was removed in Electron 32. Synchronous, no IPC round-trip:
+   *  webUtils is directly callable from the preload script's own context. Used for video import,
+   *  where the file itself is far too large to ship across IPC as bytes — only the path is needed. */
+  getPathForFile(file: File): string
   documents: {
     /** Persists a parsed document (produced client-side by the PDF/PPTX parsers) and its cached images. */
     import(parsed: ParsedDocument): Promise<DocumentRecord>
+    /** Copies an already-on-disk video file into storage and creates its document row. No pages
+     *  are created here — frames are captured lazily, only when the user pauses and selects. */
+    importVideo(input: ImportVideoInput): Promise<DocumentRecord>
+    /** Captures a paused video frame as a new page, so the existing occlusion pipeline can run on it. */
+    createVideoFramePage(input: CreateVideoFramePageInput): Promise<PageRecord>
     list(): Promise<DocumentRecord[]>
     getPages(documentId: string): Promise<PageRecord[]>
     getElements(pageId: string): Promise<ElementRecord[]>
@@ -58,6 +76,9 @@ export interface FlashcardApi {
     delete(id: string): Promise<void>
     /** Saves an arbitrary `data:` URL (e.g. a screenshot crop for image occlusion) and returns its file path. */
     saveImage(dataUrl: string): Promise<string>
+    /** Persists where the user left off, so reopening the document resumes there. Fire-and-forget
+     *  from the caller's side — see documentsStore for when this actually gets called. */
+    updatePosition(id: string, patch: DocumentPositionPatch): Promise<void>
   }
   cards: {
     create(input: NewCardInput): Promise<CardRecord>
@@ -88,6 +109,12 @@ export interface FlashcardApi {
     /** Every review grade ever logged — small enough for a personal deck to fetch whole and
      *  compute stats (reviewed-today, streak) from client-side. */
     list(): Promise<ReviewLogEntry[]>
+  }
+  ocr: {
+    /** Runs OCR on an already-captured page image and persists the detected regions as elements on
+     *  it, returning them ready to render as selectable overlays — mirrors how parsed PDF/PPTX
+     *  text elements already work. */
+    recognizePage(input: OcrRecognizePageInput): Promise<ElementRecord[]>
   }
   ui: {
     /** Scales the whole interface via real browser zoom (1 = 100%). */

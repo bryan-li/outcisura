@@ -4,9 +4,12 @@ import { useDocumentsStore } from '../../state/documentsStore'
 import { useCardsStore } from '../../state/cardsStore'
 import { useUiStore } from '../../state/uiStore'
 import { PageView } from './PageView'
+import { VideoPlayer } from './VideoPlayer'
 import { OcclusionEditor } from '../CardEditor/OcclusionEditor'
+import { GenerationSettingsPanel } from '../CardEditor/GenerationSettingsPanel'
 import type { PendingSource } from '../../types/pendingSource'
 import { cropImageDataUrl } from '../../utils/cropImage'
+import { unionBBox, padBBoxForCrop } from '../../utils/bbox'
 
 interface OcclusionSource {
   imagePath: string
@@ -55,14 +58,6 @@ const dividerStyle: CSSProperties = {
   flexShrink: 0
 }
 
-function unionBBox(boxes: BBox[]): BBox {
-  const x = Math.min(...boxes.map((b) => b.x))
-  const y = Math.min(...boxes.map((b) => b.y))
-  const right = Math.max(...boxes.map((b) => b.x + b.w))
-  const bottom = Math.max(...boxes.map((b) => b.y + b.h))
-  return { x, y, w: right - x, h: bottom - y }
-}
-
 export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
   const pagesByDocument = useDocumentsStore((s) => s.pagesByDocument)
   const elementsByPage = useDocumentsStore((s) => s.elementsByPage)
@@ -74,6 +69,7 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
   const combineMode = useUiStore((s) => s.combineMode)
   const toggleCombineMode = useUiStore((s) => s.toggleCombineMode)
   const addToBasket = useUiStore((s) => s.addToBasket)
+  const generationSettings = useUiStore((s) => s.generationSettings)
   const createFromSources = useCardsStore((s) => s.createFromSources)
   const cards = useCardsStore((s) => s.cards)
   const focusCard = useUiStore((s) => s.focusCard)
@@ -138,13 +134,26 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
   }
 
   /**
-   * A multi-element selection on one slide becomes a single source: one rectangle spanning
-   * everything selected, one backlink chip — not one source per word. Combine mode still ends up
-   * with multiple sources overall, just one per "Add to combined card" press rather than one per
-   * element within it.
+   * A multi-element selection on one slide normally becomes a single source: one rectangle
+   * spanning everything selected, one backlink chip — not one source per word. With "split into
+   * separate cards" on, each selected element becomes its own source instead, so the caller ends
+   * up with one card per element rather than one combined card. Combine mode still ends up with
+   * multiple sources overall either way, just one (or several) per "Add to combined card" press
+   * rather than always exactly one.
    */
   function sourcesFromSelection(): PendingSource[] {
     if (!page || selectedElements.length === 0) return []
+    if (generationSettings.splitIntoMultiple) {
+      return selectedElements.map((el) => ({
+        documentId: document.id,
+        pageId: page.id,
+        elementId: el.id,
+        bbox: el.bbox,
+        label: `${document.filename} · Slide ${page.pageIndex + 1}`,
+        previewText: el.text,
+        previewImagePath: el.imagePath
+      }))
+    }
     const bbox = unionBBox(selectedElements.map((el) => el.bbox))
     const previewText =
       selectedElements
@@ -176,8 +185,8 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
     setCardError(null)
     setCreatingCard(true)
     try {
-      const { aiError } = await createFromSources(sourcesFromSelection())
-      if (aiError) setCardError(`Card saved, but AI generation failed: ${aiError}`)
+      const { errors } = await createFromSources(sourcesFromSelection(), generationSettings)
+      if (errors.length > 0) setCardError(`Card saved, but AI generation failed: ${errors.join('; ')}`)
       setSelectedElementIds(new Set())
     } finally {
       setCreatingCard(false)
@@ -196,7 +205,12 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
     if (!page || !page.backgroundImagePath || selectedElements.length === 0) return
     setCapturingScreenshot(true)
     try {
-      const bbox = unionBBox(selectedElements.map((el) => el.bbox))
+      // Padded, not the pixel-tight union — a selection that just barely clips the edge of what
+      // you meant to capture is the common case, not the exception, so the crop gets a margin
+      // instead of demanding a pixel-perfect selection. The padded box (not the tight one) is what
+      // gets recorded as the source's own bbox too, since that's what was actually captured — the
+      // occlusion editor converts mask coordinates back to page space relative to this rectangle.
+      const bbox = padBBoxForCrop(unionBBox(selectedElements.map((el) => el.bbox)), page.width, page.height)
       const backgroundDataUrl = await window.api.documents.getImage(page.backgroundImagePath)
       const croppedDataUrl = await cropImageDataUrl(backgroundDataUrl, bbox)
       const savedPath = await window.api.documents.saveImage(croppedDataUrl)
@@ -204,6 +218,15 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
     } finally {
       setCapturingScreenshot(false)
     }
+  }
+
+  // Early return, before the "no pages yet" check below — a freshly-imported video legitimately
+  // has zero pages until the user captures a frame, which would otherwise stick on "Loading
+  // pages…" forever. Every hook above is still called unconditionally on every render either way
+  // (rules of hooks); only the JSX branches here. The rest of this component (PageView, the
+  // toolbar, screenshot-occlusion) is untouched and never reached for a video document.
+  if (document.type === 'video') {
+    return <VideoPlayer document={document} />
   }
 
   if (!page) {
@@ -263,6 +286,8 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
         >
           🔗 Combine
         </button>
+
+        <GenerationSettingsPanel />
 
         <button
           disabled={cardSourcesOnPage.length === 0}
@@ -331,7 +356,7 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
           documentId={document.id}
           pageId={page.id}
           documentLabel={document.filename}
-          slideNumber={page.pageIndex + 1}
+          sourceLabel={`Slide ${page.pageIndex + 1}`}
           sourceImagePath={occlusionSource.imagePath}
           sourceBBox={occlusionSource.bbox}
           onClose={() => setOcclusionSource(null)}

@@ -1,6 +1,14 @@
 import { create } from 'zustand'
-import type { BBox } from '../../../shared/types'
+import type { BBox, GenerationSettings } from '../../../shared/types'
 import type { PendingSource } from '../types/pendingSource'
+
+export const DEFAULT_GENERATION_SETTINGS: GenerationSettings = {
+  complexity: 'standard',
+  splitIntoMultiple: false,
+  customPrompt: null,
+  cloze: false,
+  doubleSided: false
+}
 
 export type ReviewScope =
   | { kind: 'all' }
@@ -56,6 +64,11 @@ interface UiState {
   addToBasket: (sources: PendingSource[]) => void
   removeFromBasket: (index: number) => void
   clearBasket: () => void
+
+  /** Shared across every creation surface (viewer, video OCR flow, combine basket) — set once,
+   *  applies wherever a card next gets generated, rather than each surface keeping its own copy. */
+  generationSettings: GenerationSettings
+  updateGenerationSettings: (patch: Partial<GenerationSettings>) => void
 }
 
 export const useUiStore = create<UiState>((set, get) => ({
@@ -78,5 +91,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   toggleCombineMode: () => set({ combineMode: !get().combineMode }),
   addToBasket: (sources) => set({ combineBasket: [...get().combineBasket, ...sources] }),
   removeFromBasket: (index) => set({ combineBasket: get().combineBasket.filter((_, i) => i !== index) }),
-  clearBasket: () => set({ combineBasket: [] })
+  clearBasket: () => set({ combineBasket: [] }),
+
+  generationSettings: DEFAULT_GENERATION_SETTINGS,
+  updateGenerationSettings: (patch) => set({ generationSettings: { ...get().generationSettings, ...patch } })
 }))

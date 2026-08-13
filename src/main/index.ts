@@ -5,13 +5,19 @@ import { is } from '@electron-toolkit/utils'
 import { openDatabase } from './db/schema'
 import { Repository } from './db/repository'
 import { AiService } from './aiService'
+import { OcrService } from './ocrService'
 import { registerIpc } from './ipc/registerIpc'
+import { registerVideoProtocolPrivileges, registerVideoProtocolHandler } from './videoProtocol'
 
 // Pinned to the app's original internal name, independent of package.json's "name"/"productName"
 // (branded as "Outcisura" — see index.html/Sidebar) — app.getPath('userData') derives from
 // app.name, and letting that drift with a rebrand would silently point the database at a brand
 // new, empty folder, orphaning every existing card.
 app.setName('flashcard-app')
+
+// Electron requires privileged scheme registration before app.whenReady() — can't be deferred
+// alongside the actual handler registration below.
+registerVideoProtocolPrivileges()
 
 /** Loads simple KEY=value lines from .env into process.env, without pulling in the `dotenv` dependency. */
 function loadDotEnv(path: string): void {
@@ -69,8 +75,12 @@ app.whenReady().then(() => {
   if (!ai) {
     console.warn('ANTHROPIC_API_KEY not set — AI regenerate will be unavailable.')
   }
+  // Unlike AiService, constructed unconditionally — Tesseract OCR needs no key, only the Claude
+  // Vision engine choice does (and throws its own clear error if picked with none set).
+  const ocr = new OcrService(apiKey ?? null)
 
-  registerIpc(repo, ai)
+  registerIpc(repo, ai, ocr)
+  registerVideoProtocolHandler()
 
   createWindow()
 

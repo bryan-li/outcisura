@@ -6,6 +6,8 @@ import { useFoldersStore } from '../../state/foldersStore'
 import { useUiStore, type MainView } from '../../state/uiStore'
 import { parsePdf } from '../../parsers/pdfParser'
 import { parsePptx } from '../../parsers/pptxParser'
+import { parseVideoFile } from '../../parsers/videoParser'
+import { formatDuration } from '../../utils/formatDuration'
 import { computeMove, getChildren, type DropPosition } from '../../utils/folderTree'
 import { bySortOrder, computeCardReorder } from '../../utils/cardOrder'
 import { dueCards } from '../../utils/srsQueue'
@@ -55,11 +57,33 @@ export function Sidebar(): JSX.Element {
   const [rootDropActive, setRootDropActive] = useState(false)
   const [libraryCollapsed, setLibraryCollapsed] = useState(false)
   const [foldersCollapsed, setFoldersCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
 
   async function handleFileChosen(file: File): Promise<void> {
     setImportError(null)
     setImporting(true)
     const fileExt = ext(file)
+
+    // Video has no pages to parse and a genuinely different payload (a path, not a ParsedDocument)
+    // — kept as its own early branch rather than forcing it through the pdf/pptx shape below.
+    if (fileExt === 'mp4') {
+      setImportProgress({ phase: 'parsing', current: 0, total: 1 })
+      try {
+        const input = await parseVideoFile(file)
+        setImportProgress({ phase: 'saving' })
+        const record = await window.api.documents.importVideo(input)
+        await loadDocuments()
+        setView({ type: 'library' })
+        await openDocument(record.id)
+      } catch (err) {
+        setImportError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setImporting(false)
+        setImportProgress(null)
+      }
+      return
+    }
+
     setImportProgress(fileExt === 'pptx' ? { phase: 'converting' } : { phase: 'parsing', current: 0, total: 1 })
     try {
       const parsed =
@@ -68,7 +92,7 @@ export function Sidebar(): JSX.Element {
           : fileExt === 'pptx'
             ? await parsePptx(file, setImportProgress)
             : null
-      if (!parsed) throw new Error('Unsupported file type — choose a .pdf or .pptx file')
+      if (!parsed) throw new Error('Unsupported file type — choose a .pdf, .pptx, or .mp4 file')
       setImportProgress({ phase: 'saving' })
       const record = await window.api.documents.import(parsed)
       await loadDocuments()
@@ -115,16 +139,34 @@ export function Sidebar(): JSX.Element {
     for (const id of cardIds) updateCard(id, { folderId })
   }
 
+  if (collapsed) {
+    return (
+      <aside style={collapsedSidebarStyle}>
+        <button onClick={() => setView({ type: 'home' })} title="Outcisura" style={collapsedMarkButtonStyle}>
+          <pre aria-hidden="true" style={wordmarkMarkStyle}>{PILLAR_MARK}</pre>
+        </button>
+        <button onClick={() => setCollapsed(false)} title="Expand sidebar" style={collapseToggleStyle}>
+          »
+        </button>
+      </aside>
+    )
+  }
+
   return (
     <aside style={sidebarStyle}>
-      <button
-        onClick={() => setView({ type: 'home' })}
-        title="Outcisura"
-        style={wordmarkStyle}
-      >
-        <pre aria-hidden="true" style={wordmarkMarkStyle}>{PILLAR_MARK}</pre>
-        Outcisura
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <button
+          onClick={() => setView({ type: 'home' })}
+          title="Outcisura"
+          style={{ ...wordmarkStyle, flex: 1, minWidth: 0 }}
+        >
+          <pre aria-hidden="true" style={wordmarkMarkStyle}>{PILLAR_MARK}</pre>
+          Outcisura
+        </button>
+        <button onClick={() => setCollapsed(true)} title="Collapse sidebar" style={collapseToggleStyle}>
+          «
+        </button>
+      </div>
 
       <div style={{ padding: '0 var(--space-2)' }}>
         <NavItem label="🏠 Home" active={isView(view, { type: 'home' })} onClick={() => setView({ type: 'home' })} />
@@ -147,7 +189,7 @@ export function Sidebar(): JSX.Element {
             <label style={{ cursor: 'pointer', display: 'inline-flex' }}>
               <input
                 type="file"
-                accept=".pdf,.pptx"
+                accept=".pdf,.pptx,.mp4"
                 style={{ display: 'none' }}
                 onChange={(e) => {
                   const file = e.target.files?.[0]
@@ -398,9 +440,15 @@ function DocumentRow({
     >
       <span style={{ ...caretButtonStyle, visibility: 'hidden' }} />
       <button onClick={onOpen} style={{ ...navFolderTitleStyle, fontWeight: active ? 600 : 400 }}>
-        {doc.type === 'pdf' ? '📕' : '📽'} {doc.filename}{' '}
+        {doc.type === 'pdf' ? '📕' : doc.type === 'pptx' ? '📽' : '🎬'} {doc.filename}{' '}
         <span style={{ color: 'var(--fg-faint)' }}>
-          ({doc.pageCount} {doc.pageCount === 1 ? 'page' : 'pages'})
+          (
+          {doc.type === 'video'
+            ? doc.durationSeconds !== null
+              ? formatDuration(doc.durationSeconds)
+              : '—'
+            : `${doc.pageCount} ${doc.pageCount === 1 ? 'page' : 'pages'}`}
+          )
         </span>
       </button>
       <button className="doc-del" onClick={onDelete} title="Delete document" style={{ ...smallIconButton, color: 'var(--danger)' }}>
@@ -884,6 +932,41 @@ const sectionStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: 1
+}
+
+const collapsedSidebarStyle: CSSProperties = {
+  width: 44,
+  flexShrink: 0,
+  height: '100%',
+  background: 'var(--bg-sidebar)',
+  borderRight: '1px solid var(--border)',
+  padding: 'var(--space-3) 0',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 'var(--space-2)'
+}
+
+const collapsedMarkButtonStyle: CSSProperties = {
+  border: 'none',
+  background: 'none',
+  cursor: 'pointer',
+  padding: 6,
+  borderRadius: 'var(--radius-sm)'
+}
+
+// Shared by both the expand (in the collapsed rail) and collapse (in the full sidebar's wordmark
+// row) toggles — kept small and quiet since it's a secondary affordance, not primary navigation.
+const collapseToggleStyle: CSSProperties = {
+  border: 'none',
+  background: 'none',
+  cursor: 'pointer',
+  color: 'var(--fg-muted)',
+  fontSize: 'var(--font-md)',
+  lineHeight: 1,
+  padding: '4px 6px',
+  borderRadius: 'var(--radius-sm)',
+  flexShrink: 0
 }
 
 const sectionHeaderRow: CSSProperties = {

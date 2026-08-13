@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useUiStore } from '../../state/uiStore'
 import { useCardsStore } from '../../state/cardsStore'
+import { GenerationSettingsPanel } from './GenerationSettingsPanel'
 
 export function CombineBasketBar(): JSX.Element {
   const basket = useUiStore((s) => s.combineBasket)
   const removeFromBasket = useUiStore((s) => s.removeFromBasket)
   const clearBasket = useUiStore((s) => s.clearBasket)
   const createFromSources = useCardsStore((s) => s.createFromSources)
+  const generationSettings = useUiStore((s) => s.generationSettings)
 
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -15,8 +17,8 @@ export function CombineBasketBar(): JSX.Element {
     setError(null)
     setCreating(true)
     try {
-      const { aiError } = await createFromSources(basket)
-      if (aiError) setError(`Card saved, but AI generation failed: ${aiError}`)
+      const { errors } = await createFromSources(basket, generationSettings)
+      if (errors.length > 0) setError(`Card saved, but AI generation failed: ${errors.join('; ')}`)
       clearBasket()
     } finally {
       setCreating(false)
@@ -60,6 +62,7 @@ export function CombineBasketBar(): JSX.Element {
       )}
       {error && <span style={{ fontSize: 'var(--font-xs)', color: 'var(--danger)' }}>{error}</span>}
       <div style={{ flex: 1 }} />
+      <GenerationSettingsPanel />
       <button disabled={basket.length === 0 || creating} onClick={clearBasket}>
         Clear
       </button>

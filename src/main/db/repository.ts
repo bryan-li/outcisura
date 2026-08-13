@@ -6,11 +6,15 @@ import type {
   CardReorderItem,
   CardSourceRecord,
   CardUpdatePatch,
+  CreateVideoFramePageInput,
+  DocumentPositionPatch,
   DocumentRecord,
+  ElementKind,
   ElementRecord,
   FolderRecord,
   FolderReorderItem,
   FolderUpdatePatch,
+  ImportVideoInput,
   NewCardInput,
   PageRecord,
   ParsedDocument,
@@ -19,6 +23,7 @@ import type {
 } from '../../shared/types'
 import { nextSrsState, type ReviewGrade } from '../../shared/srs'
 import { saveDataUrlImage } from '../imageStore'
+import { saveVideoFile, deleteVideoFile } from '../videoStore'
 
 export class Repository {
   constructor(private db: Database.Database) {}
@@ -65,26 +70,114 @@ export class Repository {
     })
     run()
 
-    return { id: documentId, filename: parsed.filename, type: parsed.type, importedAt, pageCount: parsed.pages.length }
+    return {
+      id: documentId,
+      filename: parsed.filename,
+      type: parsed.type,
+      importedAt,
+      pageCount: parsed.pages.length,
+      sourceVideoPath: null,
+      durationSeconds: null,
+      lastPageIndex: null,
+      lastPlaybackSeconds: null
+    }
+  }
+
+  /** No pages/elements inserted here, unlike importDocument — a video has nothing to pre-render;
+   *  frames are created lazily via createVideoFramePage, only when the user actually captures one. */
+  importVideoDocument(input: ImportVideoInput): DocumentRecord {
+    const documentId = randomUUID()
+    const importedAt = new Date().toISOString()
+    const sourceVideoPath = saveVideoFile(input.path)
+    this.db
+      .prepare(
+        `INSERT INTO documents (id, filename, type, imported_at, page_count, source_video_path, duration_seconds)
+         VALUES (?, ?, 'video', ?, 0, ?, ?)`
+      )
+      .run(documentId, input.filename, importedAt, sourceVideoPath, input.durationSeconds)
+    return {
+      id: documentId,
+      filename: input.filename,
+      type: 'video',
+      importedAt,
+      pageCount: 0,
+      sourceVideoPath,
+      durationSeconds: input.durationSeconds,
+      lastPageIndex: null,
+      lastPlaybackSeconds: null
+    }
+  }
+
+  /** A paused video frame, captured on-demand — becomes an ordinary page (zero elements) so the
+   *  entire existing occlusion/crop/card-creation pipeline works on it unchanged. page_index is
+   *  ordering-only here (matches getPages' ORDER BY), not semantically meaningful for video. */
+  createVideoFramePage(input: CreateVideoFramePageInput): PageRecord {
+    const pageIndex = (
+      this.db.prepare(`SELECT COUNT(*) as c FROM pages WHERE document_id = ?`).get(input.documentId) as { c: number }
+    ).c
+    const id = randomUUID()
+    this.db
+      .prepare(
+        `INSERT INTO pages (id, document_id, page_index, width, height, background_image_path, timestamp_seconds)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(id, input.documentId, pageIndex, input.width, input.height, input.backgroundImagePath, input.timestampSeconds)
+    return {
+      id,
+      documentId: input.documentId,
+      pageIndex,
+      width: input.width,
+      height: input.height,
+      backgroundImagePath: input.backgroundImagePath,
+      timestampSeconds: input.timestampSeconds
+    }
   }
 
   listDocuments(): DocumentRecord[] {
     const rows = this.db
-      .prepare(`SELECT id, filename, type, imported_at, page_count FROM documents ORDER BY imported_at DESC`)
-      .all() as { id: string; filename: string; type: 'pdf' | 'pptx'; imported_at: string; page_count: number }[]
+      .prepare(
+        `SELECT id, filename, type, imported_at, page_count, source_video_path, duration_seconds, last_page_index, last_playback_seconds FROM documents ORDER BY imported_at DESC`
+      )
+      .all() as {
+      id: string
+      filename: string
+      type: 'pdf' | 'pptx' | 'video'
+      imported_at: string
+      page_count: number
+      source_video_path: string | null
+      duration_seconds: number | null
+      last_page_index: number | null
+      last_playback_seconds: number | null
+    }[]
     return rows.map((r) => ({
       id: r.id,
       filename: r.filename,
       type: r.type,
       importedAt: r.imported_at,
-      pageCount: r.page_count
+      pageCount: r.page_count,
+      sourceVideoPath: r.source_video_path,
+      durationSeconds: r.duration_seconds,
+      lastPageIndex: r.last_page_index,
+      lastPlaybackSeconds: r.last_playback_seconds
     }))
+  }
+
+  /** Only ever called with the one field that applies to this document's type (page index for
+   *  pdf/pptx, playback seconds for video) — a plain patch rather than two separate methods since
+   *  the caller (documentsStore) already knows which one it has. */
+  updateDocumentPosition(id: string, patch: DocumentPositionPatch): void {
+    if (patch.lastPageIndex !== undefined) {
+      this.db.prepare(`UPDATE documents SET last_page_index = ? WHERE id = ?`).run(patch.lastPageIndex, id)
+    }
+    if (patch.lastPlaybackSeconds !== undefined) {
+      this.db.prepare(`UPDATE documents SET last_playback_seconds = ? WHERE id = ?`).run(patch.lastPlaybackSeconds, id)
+    }
   }
 
   getPages(documentId: string): PageRecord[] {
     const rows = this.db
       .prepare(
-        `SELECT id, document_id, page_index, width, height, background_image_path FROM pages WHERE document_id = ? ORDER BY page_index ASC`
+        `SELECT id, document_id, page_index, width, height, background_image_path, timestamp_seconds FROM pages WHERE document_id = ? ORDER BY page_index ASC`
       )
       .all(documentId) as {
       id: string
@@ -93,6 +186,7 @@ export class Repository {
       width: number
       height: number
       background_image_path: string | null
+      timestamp_seconds: number | null
     }[]
     return rows.map((r) => ({
       id: r.id,
@@ -100,12 +194,17 @@ export class Repository {
       pageIndex: r.page_index,
       width: r.width,
       height: r.height,
-      backgroundImagePath: r.background_image_path
+      backgroundImagePath: r.background_image_path,
+      timestampSeconds: r.timestamp_seconds
     }))
   }
 
   deleteDocument(id: string): void {
+    const row = this.db.prepare(`SELECT source_video_path FROM documents WHERE id = ?`).get(id) as
+      | { source_video_path: string | null }
+      | undefined
     this.db.prepare(`DELETE FROM documents WHERE id = ?`).run(id)
+    if (row?.source_video_path) deleteVideoFile(row.source_video_path)
   }
 
   getElements(pageId: string): ElementRecord[] {
@@ -130,6 +229,27 @@ export class Repository {
       text: r.text,
       imagePath: r.image_path
     }))
+  }
+
+  /** Standalone counterpart to importDocument's inline element insert — that one only ever runs as
+   *  part of a fresh import; this is for adding elements to a page that already exists (OCR results
+   *  on a captured video frame today). Builds return records from known inputs rather than
+   *  re-querying, matching createVideoFramePage's own style. */
+  insertElements(
+    pageId: string,
+    elements: { kind: ElementKind; bbox: BBox; text: string | null; imagePath: string | null }[]
+  ): ElementRecord[] {
+    const insertElement = this.db.prepare(
+      `INSERT INTO elements (id, page_id, kind, x, y, w, h, text, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    const ids = elements.map(() => randomUUID())
+    const run = this.db.transaction(() => {
+      elements.forEach((el, i) =>
+        insertElement.run(ids[i], pageId, el.kind, el.bbox.x, el.bbox.y, el.bbox.w, el.bbox.h, el.text, el.imagePath)
+      )
+    })
+    run()
+    return elements.map((el, i) => ({ id: ids[i], pageId, kind: el.kind, bbox: el.bbox, text: el.text, imagePath: el.imagePath }))
   }
 
   createCard(input: NewCardInput): CardRecord {

@@ -11,7 +11,19 @@ interface DocumentsState {
   loadDocuments: () => Promise<void>
   openDocument: (documentId: string) => Promise<void>
   deleteDocument: (documentId: string) => Promise<void>
+  /** Also persists the new position (fire-and-forget) so reopening this document later resumes
+   *  here — see DocumentRecord.lastPageIndex. */
   setActivePageIndex: (index: number) => void
+  /** Video only — same persistence as setActivePageIndex, but for playback position. VideoPlayer
+   *  calls this on pause/unmount rather than continuously (video's timeupdate event fires many
+   *  times a second; writing to the DB on every tick would be needless churn for no real benefit —
+   *  resuming within a second or two of where you paused is exactly as useful as resuming exactly). */
+  updateLastPlaybackSeconds: (documentId: string, seconds: number) => void
+  /** Video frame pages are created lazily (see VideoPlayer.captureFrame), one at a time, outside
+   *  openDocument's normal fetch-on-open flow — this is how a freshly captured page becomes visible
+   *  to the rest of the app (card backlinks via goToSource, the video timeline's marker list)
+   *  without needing a full re-fetch. */
+  registerPage: (documentId: string, page: PageRecord) => void
 }
 
 export const useDocumentsStore = create<DocumentsState>((set, get) => ({
@@ -39,7 +51,11 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
         set((state) => ({ elementsByPage: { ...state.elementsByPage, [page.id]: elements } }))
       })
     )
-    set({ activeDocumentId: documentId, activePageIndex: 0 })
+    // Resume where you left off — clamped in case the stored index is stale (e.g. pages changed
+    // since it was saved), rather than trusting it blindly and rendering an out-of-range page.
+    const lastPageIndex = get().documents.find((d) => d.id === documentId)?.lastPageIndex
+    const resumeIndex = lastPageIndex != null ? Math.min(Math.max(0, lastPageIndex), Math.max(0, pages.length - 1)) : 0
+    set({ activeDocumentId: documentId, activePageIndex: resumeIndex })
   },
 
   deleteDocument: async (documentId) => {
@@ -61,5 +77,29 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
     })
   },
 
-  setActivePageIndex: (index) => set({ activePageIndex: index })
+  setActivePageIndex: (index) => {
+    const documentId = get().activeDocumentId
+    set((state) => ({
+      activePageIndex: index,
+      documents: documentId
+        ? state.documents.map((d) => (d.id === documentId ? { ...d, lastPageIndex: index } : d))
+        : state.documents
+    }))
+    if (documentId) void window.api.documents.updatePosition(documentId, { lastPageIndex: index })
+  },
+
+  updateLastPlaybackSeconds: (documentId, seconds) => {
+    set((state) => ({
+      documents: state.documents.map((d) => (d.id === documentId ? { ...d, lastPlaybackSeconds: seconds } : d))
+    }))
+    void window.api.documents.updatePosition(documentId, { lastPlaybackSeconds: seconds })
+  },
+
+  registerPage: (documentId, page) =>
+    set((state) => ({
+      pagesByDocument: {
+        ...state.pagesByDocument,
+        [documentId]: [...(state.pagesByDocument[documentId] ?? []), page]
+      }
+    }))
 }))

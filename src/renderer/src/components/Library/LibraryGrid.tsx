@@ -3,6 +3,7 @@ import { useDocumentsStore } from '../../state/documentsStore'
 import { useCardsStore } from '../../state/cardsStore'
 import { useUiStore } from '../../state/uiStore'
 import { useDocumentThumbnail } from '../../hooks/useDocumentThumbnail'
+import { formatDuration } from '../../utils/formatDuration'
 import { BentoGrid, BentoTile } from '../Grid/Bento'
 
 export function LibraryGrid(): JSX.Element {
@@ -75,7 +76,7 @@ function DocumentTile({ document, cards, wide, tall, onClick }: DocumentTileProp
         {thumbnail ? (
           <img src={thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
         ) : (
-          <span style={{ fontSize: 28, opacity: 0.35 }}>📄</span>
+          <span style={{ fontSize: 28, opacity: 0.35 }}>{document.type === 'video' ? '🎬' : '📄'}</span>
         )}
       </div>
       <div style={{ flexShrink: 0 }}>
@@ -83,7 +84,13 @@ function DocumentTile({ document, cards, wide, tall, onClick }: DocumentTileProp
           {document.filename}
         </div>
         <div style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)', marginTop: 2 }}>
-          {document.type.toUpperCase()} · {document.pageCount} slides · {cardCount} card{cardCount === 1 ? '' : 's'}
+          {document.type.toUpperCase()} ·{' '}
+          {document.type === 'video'
+            ? document.durationSeconds !== null
+              ? formatDuration(document.durationSeconds)
+              : '—'
+            : `${document.pageCount} slides`}{' '}
+          · {cardCount} card{cardCount === 1 ? '' : 's'}
         </div>
       </div>
     </BentoTile>

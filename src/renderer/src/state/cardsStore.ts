@@ -1,19 +1,23 @@
 import { create } from 'zustand'
-import type { CardRecord, CardReorderItem, CardUpdatePatch, NewCardInput, SrsSnapshot } from '../../../shared/types'
+import type { CardRecord, CardReorderItem, CardUpdatePatch, GenerationSettings, NewCardInput, SrsSnapshot } from '../../../shared/types'
 import type { ReviewGrade } from '../../../shared/srs'
 import type { PendingSource } from '../types/pendingSource'
+import { DEFAULT_GENERATION_SETTINGS } from './uiStore'
 
 interface CardsState {
   cards: CardRecord[]
   loadCards: () => Promise<void>
   createCard: (input: NewCardInput) => Promise<CardRecord>
   /**
-   * The standard creation path: persist a card seeded with the highlighted source text, then let
-   * Claude rewrite it into a proper question/answer. Returns an `aiError` (rather than throwing)
-   * when generation fails — the card is already saved with its raw source text at that point, so
-   * the user keeps their capture and can edit or retry it by hand.
+   * The standard creation path: persist one or more cards seeded with the highlighted source
+   * text, then let Claude rewrite each into a proper question/answer (or a cloze passage — see
+   * `GenerationSettings`). `settings.splitIntoMultiple` creates one card per source instead of
+   * combining every source into one; `settings.doubleSided` additionally creates a reversed
+   * companion for each. Per-card generation failures are collected into `errors` rather than
+   * thrown — every card is already saved with its raw source text at that point, so a failure on
+   * one doesn't lose the others, and the user keeps their capture either way.
    */
-  createFromSources: (sources: PendingSource[]) => Promise<{ card: CardRecord; aiError: string | null }>
+  createFromSources: (sources: PendingSource[], settings?: GenerationSettings) => Promise<{ cards: CardRecord[]; errors: string[] }>
   updateCard: (id: string, patch: CardUpdatePatch) => Promise<void>
   /** Persists a batch of {id, sortOrder} moves computed client-side after a drag-drop reorder. */
   reorderCards: (items: CardReorderItem[]) => Promise<void>
@@ -40,17 +44,17 @@ export const useCardsStore = create<CardsState>((set, get) => ({
     return card
   },
 
-  createFromSources: async (sources) => {
-    const seedText = sources
-      .map((s) => s.previewText)
-      .filter((t): t is string => !!t && t.trim().length > 0)
-      .join('\n')
+  createFromSources: async (sources, settings = DEFAULT_GENERATION_SETTINGS) => {
+    const groups = settings.splitIntoMultiple ? sources.map((s) => [s]) : [sources]
+    const cards: CardRecord[] = []
+    const errors: string[] = []
 
-    const card = await window.api.cards.create({
-      front: '',
-      back: seedText,
-      cardType: 'basic',
-      sources: sources.map((s) => ({
+    for (const group of groups) {
+      const seedText = group
+        .map((s) => s.previewText)
+        .filter((t): t is string => !!t && t.trim().length > 0)
+        .join('\n')
+      const sourceInputs = group.map((s) => ({
         documentId: s.documentId,
         pageId: s.pageId,
         elementId: s.elementId,
@@ -58,16 +62,43 @@ export const useCardsStore = create<CardsState>((set, get) => ({
         label: s.label,
         imagePath: s.previewImagePath
       }))
-    })
-    set({ cards: [card, ...get().cards] })
 
-    try {
-      const generated = await window.api.ai.regenerate({ cardId: card.id })
-      set({ cards: get().cards.map((c) => (c.id === card.id ? generated : c)) })
-      return { card: generated, aiError: null }
-    } catch (err) {
-      return { card, aiError: err instanceof Error ? err.message : String(err) }
+      const card = await window.api.cards.create({
+        front: '',
+        back: seedText,
+        cardType: settings.cloze ? 'cloze' : 'basic',
+        sources: sourceInputs
+      })
+      set({ cards: [card, ...get().cards] })
+      cards.push(card)
+
+      try {
+        const generated = await window.api.ai.regenerate({
+          cardId: card.id,
+          instruction: settings.customPrompt ?? undefined,
+          complexity: settings.complexity,
+          cloze: settings.cloze
+        })
+        set({ cards: get().cards.map((c) => (c.id === card.id ? generated : c)) })
+        cards[cards.length - 1] = generated
+
+        // A cloze card has no separate "reverse" side to swap, so doubleSided is a no-op there.
+        if (settings.doubleSided && !settings.cloze) {
+          const reversed = await window.api.cards.create({
+            front: generated.back,
+            back: generated.front,
+            cardType: 'basic',
+            sources: sourceInputs
+          })
+          set({ cards: [reversed, ...get().cards] })
+          cards.push(reversed)
+        }
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : String(err))
+      }
     }
+
+    return { cards, errors }
   },
 
   updateCard: async (id, patch) => {

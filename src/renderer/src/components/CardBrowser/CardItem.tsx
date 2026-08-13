@@ -5,6 +5,7 @@ import { useUiStore } from '../../state/uiStore'
 import { backTextToLines, blockTextToCard, cardToBlockText } from '../../utils/blockCard'
 import { computeCardReorder } from '../../utils/cardOrder'
 import { firstImageSourcePath, maskBBoxesFor } from '../../utils/occlusion'
+import { parseCloze } from '../../utils/cloze'
 import { OcclusionImage } from './OcclusionImage'
 
 export const CARD_DRAG_MIME = 'application/x-card-id'
@@ -34,9 +35,13 @@ interface CardItemProps {
   /** The current visual order of the list this card renders in (a folder's own cards, or a
    *  by-source group) — the scope within which drag-to-reorder repositions it. */
   siblingIds: string[]
+  /** Shown as a small badge next to the front text — used by views (like "All Cards") that mix
+   *  cards from several folders together, so a foldered card's home is still visible at a glance. */
+  folderLabel?: string
+  onFolderClick?: () => void
 }
 
-export function CardItem({ card, siblingIds }: CardItemProps): JSX.Element {
+export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardItemProps): JSX.Element {
   const updateCard = useCardsStore((s) => s.updateCard)
   const deleteCard = useCardsStore((s) => s.deleteCard)
   const regenerate = useCardsStore((s) => s.regenerate)
@@ -85,15 +90,19 @@ export function CardItem({ card, siblingIds }: CardItemProps): JSX.Element {
     return () => window.removeEventListener('mousedown', handleOutside)
   }, [sourceMenuOpen])
 
+  const isCloze = card.cardType === 'cloze'
+
   function startEditing(): void {
-    setDraftText(cardToBlockText(card.front, card.back))
+    // A cloze card is one plain-text passage, not a front/back pair — the `:>` block convention
+    // doesn't apply (and back stays empty for cloze cards), so it's edited as-is instead.
+    setDraftText(isCloze ? card.front : cardToBlockText(card.front, card.back))
     setEditing(true)
     setExpanded(true)
     requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
   function commitEdit(): void {
-    const { front, back } = blockTextToCard(draftText)
+    const { front, back } = isCloze ? { front: draftText.trim(), back: '' } : blockTextToCard(draftText)
     setEditing(false)
     if (front !== card.front || back !== card.back) updateCard(card.id, { front, back })
   }
@@ -226,10 +235,41 @@ export function CardItem({ card, siblingIds }: CardItemProps): JSX.Element {
             />
           ) : (
             <div onClick={startEditing} style={{ cursor: 'text' }}>
-              <strong style={{ fontSize: 'var(--font-md)', lineHeight: `${CARD_LINE_HEIGHT}px`, display: 'inline-block' }}>
-                {card.front.trim() || <em style={{ fontWeight: 400, opacity: 0.5 }}>Untitled — click to edit</em>}
-              </strong>
-              {expanded && backLines.length > 0 && (
+              {isCloze ? (
+                <span style={{ fontSize: 'var(--font-md)', lineHeight: `${CARD_LINE_HEIGHT}px` }}>
+                  {card.front.trim() ? (
+                    // Always masked here — browsing a card list shouldn't spoil a cloze answer any
+                    // more than it does for an occlusion card's thumbnail.
+                    parseCloze(card.front).map((seg, i) =>
+                      seg.isBlank ? (
+                        <span key={i} style={clozeBlankStyle} title={seg.text}>
+                          ▢▢▢▢
+                        </span>
+                      ) : (
+                        <span key={i}>{seg.text}</span>
+                      )
+                    )
+                  ) : (
+                    <em style={{ fontWeight: 400, opacity: 0.5 }}>Untitled cloze — click to edit</em>
+                  )}
+                </span>
+              ) : (
+                <strong style={{ fontSize: 'var(--font-md)', lineHeight: `${CARD_LINE_HEIGHT}px`, display: 'inline-block' }}>
+                  {card.front.trim() || <em style={{ fontWeight: 400, opacity: 0.5 }}>Untitled — click to edit</em>}
+                </strong>
+              )}
+              {folderLabel && (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onFolderClick?.()
+                  }}
+                  style={folderBadgeStyle}
+                >
+                  📁 {folderLabel}
+                </span>
+              )}
+              {!isCloze && expanded && backLines.length > 0 && (
                 <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
                   {backLines.map((line, i) => (
                     <li key={i} style={{ marginLeft: line.depth * 16, fontSize: 'var(--font-md)' }}>
@@ -238,9 +278,14 @@ export function CardItem({ card, siblingIds }: CardItemProps): JSX.Element {
                   ))}
                 </ul>
               )}
-              {expanded && backLines.length === 0 && (
+              {!isCloze && expanded && backLines.length === 0 && (
                 <p style={{ margin: '4px 0 0', fontSize: 'var(--font-sm)', color: 'var(--fg-faint)' }}>
                   No answer yet — click to add one after "{`:>`}"
+                </p>
+              )}
+              {isCloze && expanded && (
+                <p style={{ margin: '4px 0 0', fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>
+                  Wrap the hidden answer in {'{{double braces}}'} — everything wrapped is hidden together.
                 </p>
               )}
               {expanded && imagePath && (
@@ -306,6 +351,25 @@ function IconButton({
 }
 
 /** Sized to CARD_LINE_HEIGHT so gutter icons sit centered on the question's first line. */
+const clozeBlankStyle: CSSProperties = {
+  display: 'inline-block',
+  letterSpacing: '-2px',
+  color: 'var(--accent)',
+  fontWeight: 700,
+  cursor: 'default'
+}
+
+const folderBadgeStyle: CSSProperties = {
+  marginLeft: 8,
+  padding: '1px 7px',
+  borderRadius: 999,
+  fontSize: 'var(--font-xs)',
+  color: 'var(--fg-muted)',
+  background: 'var(--bg-hover)',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap'
+}
+
 const gutterButtonStyle: CSSProperties = {
   height: CARD_LINE_HEIGHT,
   width: 16,

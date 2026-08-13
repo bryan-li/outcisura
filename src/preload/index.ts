@@ -1,17 +1,21 @@
-import { contextBridge, ipcRenderer, webFrame } from 'electron'
+import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { IpcChannels } from '../shared/ipc'
 import type { FlashcardApi } from '../shared/ipc'
 
 const api: FlashcardApi = {
+  getPathForFile: (file) => webUtils.getPathForFile(file),
   documents: {
     import: (parsed) => ipcRenderer.invoke(IpcChannels.documentsImport, parsed),
+    importVideo: (input) => ipcRenderer.invoke(IpcChannels.documentsImportVideo, input),
+    createVideoFramePage: (input) => ipcRenderer.invoke(IpcChannels.documentsCreateVideoFramePage, input),
     list: () => ipcRenderer.invoke(IpcChannels.documentsList),
     getPages: (documentId) => ipcRenderer.invoke(IpcChannels.documentsGetPages, documentId),
     getElements: (pageId) => ipcRenderer.invoke(IpcChannels.documentsGetElements, pageId),
     getImage: (path) => ipcRenderer.invoke(IpcChannels.documentsGetImage, path),
     convertPptxToPdf: (pptxBytes) => ipcRenderer.invoke(IpcChannels.documentsConvertPptxToPdf, pptxBytes),
     delete: (id) => ipcRenderer.invoke(IpcChannels.documentsDelete, id),
-    saveImage: (dataUrl) => ipcRenderer.invoke(IpcChannels.documentsSaveImage, dataUrl)
+    saveImage: (dataUrl) => ipcRenderer.invoke(IpcChannels.documentsSaveImage, dataUrl),
+    updatePosition: (id, patch) => ipcRenderer.invoke(IpcChannels.documentsUpdatePosition, id, patch)
   },
   cards: {
     create: (input) => ipcRenderer.invoke(IpcChannels.cardsCreate, input),
@@ -34,6 +38,9 @@ const api: FlashcardApi = {
   },
   reviewLog: {
     list: () => ipcRenderer.invoke(IpcChannels.reviewLogList)
+  },
+  ocr: {
+    recognizePage: (input) => ipcRenderer.invoke(IpcChannels.ocrRecognizePage, input)
   },
   ui: {
     // Real browser zoom rather than a CSS transform: layout stays in CSS pixels, so pointer

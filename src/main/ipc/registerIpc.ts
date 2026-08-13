@@ -3,20 +3,29 @@ import { IpcChannels } from '../../shared/ipc'
 import type {
   AiRegenerateRequest,
   CardReorderItem,
+  CreateVideoFramePageInput,
+  DocumentPositionPatch,
   FolderReorderItem,
   FolderUpdatePatch,
+  ImportVideoInput,
   NewCardInput,
+  OcrRecognizePageInput,
   ParsedDocument,
   SrsSnapshot
 } from '../../shared/types'
 import type { ReviewGrade } from '../../shared/srs'
 import type { AiService } from '../aiService'
+import type { OcrService } from '../ocrService'
 import type { Repository } from '../db/repository'
 import { readImageAsDataUrl, saveDataUrlImage } from '../imageStore'
 import { convertPptxToPdf } from '../pptxConverter'
 
-export function registerIpc(repo: Repository, ai: AiService | null): void {
+export function registerIpc(repo: Repository, ai: AiService | null, ocr: OcrService): void {
   ipcMain.handle(IpcChannels.documentsImport, (_event, parsed: ParsedDocument) => repo.importDocument(parsed))
+  ipcMain.handle(IpcChannels.documentsImportVideo, (_event, input: ImportVideoInput) => repo.importVideoDocument(input))
+  ipcMain.handle(IpcChannels.documentsCreateVideoFramePage, (_event, input: CreateVideoFramePageInput) =>
+    repo.createVideoFramePage(input)
+  )
   ipcMain.handle(IpcChannels.documentsList, () => repo.listDocuments())
   ipcMain.handle(IpcChannels.documentsGetPages, (_event, documentId: string) => repo.getPages(documentId))
   ipcMain.handle(IpcChannels.documentsGetElements, (_event, pageId: string) => repo.getElements(pageId))
@@ -29,6 +38,9 @@ export function registerIpc(repo: Repository, ai: AiService | null): void {
     repo.deleteDocument(id)
   })
   ipcMain.handle(IpcChannels.documentsSaveImage, (_event, dataUrl: string) => saveDataUrlImage(dataUrl))
+  ipcMain.handle(IpcChannels.documentsUpdatePosition, (_event, id: string, patch: DocumentPositionPatch) => {
+    repo.updateDocumentPosition(id, patch)
+  })
 
   ipcMain.handle(IpcChannels.cardsCreate, (_event, input: NewCardInput) => repo.createCard(input))
   ipcMain.handle(IpcChannels.cardsList, () => repo.listCards())
@@ -61,4 +73,12 @@ export function registerIpc(repo: Repository, ai: AiService | null): void {
   })
 
   ipcMain.handle(IpcChannels.reviewLogList, () => repo.listReviewLog())
+
+  ipcMain.handle(IpcChannels.ocrRecognizePage, async (_event, input: OcrRecognizePageInput) => {
+    const detections = await ocr.recognize(input.imagePath, input.engine, { width: input.width, height: input.height })
+    return repo.insertElements(
+      input.pageId,
+      detections.map((d) => ({ kind: 'text' as const, bbox: d.bbox, text: d.text, imagePath: null }))
+    )
+  })
 }
