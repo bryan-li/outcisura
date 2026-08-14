@@ -42,11 +42,20 @@ const api: FlashcardApi = {
   ocr: {
     recognizePage: (input) => ipcRenderer.invoke(IpcChannels.ocrRecognizePage, input)
   },
+  transcription: {
+    transcribe: (input) => ipcRenderer.invoke(IpcChannels.transcriptionTranscribe, input)
+  },
   ui: {
     // Real browser zoom rather than a CSS transform: layout stays in CSS pixels, so pointer
     // coordinates (drag-select on slides, Konva mask drawing) keep working unscaled.
     setZoomFactor: (factor) => webFrame.setZoomFactor(factor),
     getZoomFactor: () => webFrame.getZoomFactor()
+  },
+  settings: {
+    getApiKeyStatus: () => ipcRenderer.invoke(IpcChannels.settingsGetApiKeyStatus),
+    setApiKey: (apiKey) => ipcRenderer.invoke(IpcChannels.settingsSetApiKey, apiKey),
+    getOpenAiKeyStatus: () => ipcRenderer.invoke(IpcChannels.settingsGetOpenAiKeyStatus),
+    setOpenAiKey: (apiKey) => ipcRenderer.invoke(IpcChannels.settingsSetOpenAiKey, apiKey)
   }
 }
 

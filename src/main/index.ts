@@ -6,8 +6,10 @@ import { openDatabase } from './db/schema'
 import { Repository } from './db/repository'
 import { AiService } from './aiService'
 import { OcrService } from './ocrService'
+import { TranscriptionService } from './transcriptionService'
 import { registerIpc } from './ipc/registerIpc'
 import { registerVideoProtocolPrivileges, registerVideoProtocolHandler } from './videoProtocol'
+import { getApiKey, getOpenAiApiKey } from './settingsStore'
 
 // Pinned to the app's original internal name, independent of package.json's "name"/"productName"
 // (branded as "Outcisura" — see index.html/Sidebar) — app.getPath('userData') derives from
@@ -70,16 +72,19 @@ app.whenReady().then(() => {
   const db = openDatabase(dbPath)
   const repo = new Repository(db)
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  const ai = apiKey ? new AiService(apiKey, repo) : null
-  if (!ai) {
-    console.warn('ANTHROPIC_API_KEY not set — AI regenerate will be unavailable.')
+  // Settings-saved key wins over .env, falls back to it otherwise (see settingsStore). Both
+  // services are always constructed — like OcrService already was — and expose setApiKey so the
+  // Settings view can update them live, with no restart, when the user saves/clears a key there.
+  const apiKey = getApiKey()
+  const ai = new AiService(apiKey, repo)
+  if (!apiKey) {
+    console.warn('No Anthropic API key set — AI regenerate and Claude Vision OCR will be unavailable until one is added in Settings.')
   }
-  // Unlike AiService, constructed unconditionally — Tesseract OCR needs no key, only the Claude
-  // Vision engine choice does (and throws its own clear error if picked with none set).
-  const ocr = new OcrService(apiKey ?? null)
+  const ocr = new OcrService(apiKey)
+  // Same shape again: the local Whisper engine needs no key, only the OpenAI engine does.
+  const transcription = new TranscriptionService(getOpenAiApiKey())
 
-  registerIpc(repo, ai, ocr)
+  registerIpc(repo, ai, ocr, transcription)
   registerVideoProtocolHandler()
 
   createWindow()

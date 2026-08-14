@@ -32,18 +32,25 @@
     "afterSign": "build/afterSign.cjs",
     "mac": {
       "category": "public.app-category.education",
-      "target": ["dmg"]
+      "target": [
+        "dmg"
+      ]
     },
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "category": "Education"
     }
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
+    "@xenova/transformers": "^2.17.2",
     "better-sqlite3": "^11.5.0",
     "konva": "^9.3.16",
     "pdfjs-dist": "^4.7.76",

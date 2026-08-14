@@ -1,5 +1,6 @@
 import type {
   AiRegenerateRequest,
+  ApiKeyStatus,
   CardRecord,
   CardReorderItem,
   CardUpdatePatch,
@@ -16,7 +17,8 @@ import type {
   PageRecord,
   ParsedDocument,
   ReviewLogEntry,
-  SrsSnapshot
+  SrsSnapshot,
+  TranscribeAudioInput
 } from './types'
 import type { ReviewGrade } from './srs'
 
@@ -47,7 +49,12 @@ export const IpcChannels = {
   reviewLogList: 'reviewLog:list',
   aiRegenerate: 'ai:regenerate',
   aiGenerateFromSources: 'ai:generateFromSources',
-  ocrRecognizePage: 'ocr:recognizePage'
+  ocrRecognizePage: 'ocr:recognizePage',
+  transcriptionTranscribe: 'transcription:transcribe',
+  settingsGetApiKeyStatus: 'settings:getApiKeyStatus',
+  settingsSetApiKey: 'settings:setApiKey',
+  settingsGetOpenAiKeyStatus: 'settings:getOpenAiKeyStatus',
+  settingsSetOpenAiKey: 'settings:setOpenAiKey'
 } as const
 
 /** Shape of the `window.api` bridge exposed by the preload script. */
@@ -116,9 +123,27 @@ export interface FlashcardApi {
      *  text elements already work. */
     recognizePage(input: OcrRecognizePageInput): Promise<ElementRecord[]>
   }
+  transcription: {
+    /** Transcribes an already-sliced, already-resampled audio clip (see utils/audioSlice.ts) and
+     *  returns the raw text — no persistence here, unlike ocr.recognizePage, since there's no
+     *  page/element to attach a transcript to until the caller decides to make a card from it. */
+    transcribe(input: TranscribeAudioInput): Promise<string>
+  }
   ui: {
     /** Scales the whole interface via real browser zoom (1 = 100%). */
     setZoomFactor(factor: number): void
     getZoomFactor(): number
+  }
+  settings: {
+    /** Never returns the raw key — just whether one is set and its last 4 characters, enough to
+     *  confirm which key without re-exposing the secret to the renderer after it's been saved. */
+    getApiKeyStatus(): Promise<ApiKeyStatus>
+    /** Pass null to clear. Takes effect immediately in the running app (AiService/OcrService both
+     *  update live) — no restart needed. */
+    setApiKey(apiKey: string | null): Promise<ApiKeyStatus>
+    /** Same shape as the Anthropic key above, for the OpenAI Whisper transcription engine. */
+    getOpenAiKeyStatus(): Promise<ApiKeyStatus>
+    /** Pass null to clear. Takes effect immediately (TranscriptionService.setApiKey) — no restart needed. */
+    setOpenAiKey(apiKey: string | null): Promise<ApiKeyStatus>
   }
 }

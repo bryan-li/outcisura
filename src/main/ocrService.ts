@@ -73,6 +73,12 @@ export class OcrService {
     this.client = apiKey ? new Anthropic({ apiKey }) : null
   }
 
+  /** Called when the user sets/changes/clears the key from Settings — takes effect immediately,
+   *  no restart needed. */
+  setApiKey(apiKey: string | null): void {
+    this.client = apiKey ? new Anthropic({ apiKey }) : null
+  }
+
   async recognize(
     imagePath: string,
     engine: OcrEngine,

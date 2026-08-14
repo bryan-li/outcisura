@@ -6,6 +6,19 @@ export function getChildren(folders: FolderRecord[], parentId: string | null): F
   return folders.filter((f) => f.parentId === parentId).sort((a, b) => a.sortOrder - b.sortOrder)
 }
 
+/** A folder's chain of ancestors, nearest first, not including the folder itself — the empty
+ *  array for a root-level folder. Symmetric with getDescendantIds below. */
+export function getAncestorIds(folders: FolderRecord[], folderId: string): string[] {
+  const byId = new Map(folders.map((f) => [f.id, f]))
+  const result: string[] = []
+  let current = byId.get(folderId)
+  while (current?.parentId) {
+    result.push(current.parentId)
+    current = byId.get(current.parentId)
+  }
+  return result
+}
+
 export function getDescendantIds(folders: FolderRecord[], rootId: string): Set<string> {
   const result = new Set<string>()
   const stack = [rootId]

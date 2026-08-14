@@ -245,3 +245,22 @@ export interface OcrRecognizePageInput {
   height: number
   engine: OcrEngine
 }
+
+/** 'whisper-local' runs entirely on-device via @xenova/transformers (no key needed); 'openai-whisper'
+ *  calls OpenAI's hosted API — same local-vs-cloud shape as OcrEngine above. */
+export type TranscriptionEngine = 'whisper-local' | 'openai-whisper'
+
+export interface TranscribeAudioInput {
+  /** Raw mono PCM samples at TRANSCRIPTION_SAMPLE_RATE (see shared/audio.ts), already sliced to the
+   *  desired window and resampled client-side — the main process only ever sees ready-to-transcribe
+   *  audio, never touches the source video file. */
+  audioData: ArrayBuffer
+  engine: TranscriptionEngine
+}
+
+/** Never carries the raw key back to the renderer after it's been saved once — Settings only ever
+ *  needs to know whether one is set and enough of a hint (last 4 chars) to confirm which one. */
+export interface ApiKeyStatus {
+  hasKey: boolean
+  last4: string | null
+}

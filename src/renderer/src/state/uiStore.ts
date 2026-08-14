@@ -29,10 +29,35 @@ export type MainView =
   | { type: 'folder'; folderId: string }
   /** Stats, what's due next, and a folder picker for custom sessions — the landing page for review. */
   | { type: 'review-dashboard' }
+  /** The Obsidian-style force-directed graph of cards/folders/documents. */
+  | { type: 'graph' }
   /** A spaced-repetition study session. `returnTo` is set by the caller (not inferred from scope)
    *  so Exit/Esc always lands back wherever the session was actually launched from. `force` skips
    *  the due-date filter entirely — every card in scope, regardless of schedule ("cram" mode). */
   | { type: 'review'; scope: ReviewScope; returnTo: MainView; force?: boolean }
+  /** Same `returnTo`-not-inferred-from-scope reasoning as review above — the settings button can be
+   *  reached from anywhere, so Back needs to know explicitly where "anywhere" was. */
+  | { type: 'settings'; returnTo: MainView }
+
+export type Theme = 'light' | 'dark' | 'system'
+
+const THEME_STORAGE_KEY = 'ui-theme'
+
+function readStoredTheme(): Theme {
+  const raw = window.localStorage.getItem(THEME_STORAGE_KEY)
+  return raw === 'light' || raw === 'dark' ? raw : 'system'
+}
+
+/** 'system' means "no override" — just remove the attribute and let styles.css's own
+ *  prefers-color-scheme media query decide, same as before this toggle existed. */
+function applyTheme(theme: Theme): void {
+  if (theme === 'system') delete document.documentElement.dataset.theme
+  else document.documentElement.dataset.theme = theme
+}
+
+// Applied once at module load (before the store or any component exists) so the very first paint
+// already matches a previously saved override, instead of flashing system-default then correcting.
+applyTheme(readStoredTheme())
 
 interface FlashTarget {
   documentId: string
@@ -69,6 +94,9 @@ interface UiState {
    *  applies wherever a card next gets generated, rather than each surface keeping its own copy. */
   generationSettings: GenerationSettings
   updateGenerationSettings: (patch: Partial<GenerationSettings>) => void
+
+  theme: Theme
+  setTheme: (theme: Theme) => void
 }
 
 export const useUiStore = create<UiState>((set, get) => ({
@@ -94,5 +122,12 @@ export const useUiStore = create<UiState>((set, get) => ({
   clearBasket: () => set({ combineBasket: [] }),
 
   generationSettings: DEFAULT_GENERATION_SETTINGS,
-  updateGenerationSettings: (patch) => set({ generationSettings: { ...get().generationSettings, ...patch } })
+  updateGenerationSettings: (patch) => set({ generationSettings: { ...get().generationSettings, ...patch } }),
+
+  theme: readStoredTheme(),
+  setTheme: (theme) => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+    applyTheme(theme)
+    set({ theme })
+  }
 }))

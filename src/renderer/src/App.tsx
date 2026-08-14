@@ -15,6 +15,8 @@ import { CombineBasketBar } from './components/CardEditor/CombineBasketBar'
 import { ZoomControl } from './components/ZoomControl'
 import { ReviewSession } from './components/Review/ReviewSession'
 import { ReviewDashboard } from './components/Review/ReviewDashboard'
+import { GraphPage } from './components/Graph/GraphPage'
+import { SettingsView } from './components/Settings/SettingsView'
 import { useDeleteSelectedCardsShortcut } from './hooks/useDeleteSelectedCardsShortcut'
 
 export default function App(): JSX.Element {
@@ -63,6 +65,8 @@ export default function App(): JSX.Element {
           {view.type === 'folder' && <FolderCardsView folderId={view.folderId} />}
           {view.type === 'review-dashboard' && <ReviewDashboard />}
           {view.type === 'review' && <ReviewSession scope={view.scope} returnTo={view.returnTo} force={view.force} />}
+          {view.type === 'graph' && <GraphPage />}
+          {view.type === 'settings' && <SettingsView />}
         </div>
       </main>
 

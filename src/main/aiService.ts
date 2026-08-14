@@ -9,13 +9,21 @@ const MODEL = 'claude-sonnet-5'
 type ContentBlock = Anthropic.TextBlockParam | Anthropic.ImageBlockParam
 
 export class AiService {
-  private client: Anthropic
+  private client: Anthropic | null
 
-  constructor(apiKey: string, private repo: Repository) {
-    this.client = new Anthropic({ apiKey })
+  constructor(apiKey: string | null, private repo: Repository) {
+    this.client = apiKey ? new Anthropic({ apiKey }) : null
+  }
+
+  /** Called when the user sets/changes/clears the key from Settings — takes effect immediately,
+   *  no restart needed, mirroring OcrService's own setApiKey. */
+  setApiKey(apiKey: string | null): void {
+    this.client = apiKey ? new Anthropic({ apiKey }) : null
   }
 
   async regenerate(req: AiRegenerateRequest): Promise<AiRegenerateResult> {
+    if (!this.client) throw new Error('AI service unavailable: set an API key in Settings')
+    const client = this.client
     const card = this.repo.getCard(req.cardId)
     if (!card) throw new Error(`Card ${req.cardId} not found`)
 
@@ -34,7 +42,7 @@ export class AiService {
       content.push(...this.imageBlocks(imagePath))
     }
 
-    const message = await this.client.messages.create({
+    const message = await client.messages.create({
       model: MODEL,
       max_tokens: 1024,
       messages: [{ role: 'user', content }]

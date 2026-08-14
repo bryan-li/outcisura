@@ -148,13 +148,20 @@ export function Sidebar(): JSX.Element {
         <button onClick={() => setCollapsed(false)} title="Expand sidebar" style={collapseToggleStyle}>
           »
         </button>
+        <button
+          onClick={() => setView({ type: 'settings', returnTo: view })}
+          title="Settings"
+          style={{ ...collapsedMarkButtonStyle, marginTop: 'auto', fontSize: 'var(--font-md)' }}
+        >
+          ⚙️
+        </button>
       </aside>
     )
   }
 
   return (
     <aside style={sidebarStyle}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: 'var(--space-3) 0 0' }}>
         <button
           onClick={() => setView({ type: 'home' })}
           title="Outcisura"
@@ -168,6 +175,7 @@ export function Sidebar(): JSX.Element {
         </button>
       </div>
 
+      <div style={sidebarScrollStyle}>
       <div style={{ padding: '0 var(--space-2)' }}>
         <NavItem label="🏠 Home" active={isView(view, { type: 'home' })} onClick={() => setView({ type: 'home' })} />
         <NavItem label="🗂 All Cards" active={isView(view, { type: 'cards' })} onClick={() => setView({ type: 'cards' })} />
@@ -176,6 +184,7 @@ export function Sidebar(): JSX.Element {
           active={view.type === 'review' || view.type === 'review-dashboard'}
           onClick={() => setView({ type: 'review-dashboard' })}
         />
+        <NavItem label="🕸️ Graph" active={isView(view, { type: 'graph' })} onClick={() => setView({ type: 'graph' })} />
       </div>
 
       <div style={sectionStyle}>
@@ -295,6 +304,13 @@ export function Sidebar(): JSX.Element {
       </div>
 
       <NewlyCreatedSection />
+      </div>
+
+      <div style={sidebarFooterStyle}>
+        <button onClick={() => setView({ type: 'settings', returnTo: view })} style={settingsButtonStyle} title="Settings">
+          ⚙️ Settings
+        </button>
+      </div>
     </aside>
   )
 }
@@ -919,13 +935,43 @@ const sidebarStyle: CSSProperties = {
   width: 'clamp(180px, 22vw, 300px)',
   flexShrink: 0,
   height: '100%',
-  overflowY: 'auto',
   background: 'var(--bg-sidebar)',
   borderRight: '1px solid var(--border)',
+  display: 'flex',
+  flexDirection: 'column'
+}
+
+// Everything between the wordmark header and the settings footer scrolls on its own — those two
+// stay pinned (settings reachable from anywhere, without needing to scroll a long folder/library
+// list first) instead of the whole aside scrolling as one unit like it used to.
+const sidebarScrollStyle: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  overflowY: 'auto',
   padding: 'var(--space-3) 0',
   display: 'flex',
   flexDirection: 'column',
   gap: 'var(--space-4)'
+}
+
+const sidebarFooterStyle: CSSProperties = {
+  flexShrink: 0,
+  padding: 'var(--space-2)',
+  borderTop: '1px solid var(--border)'
+}
+
+const settingsButtonStyle: CSSProperties = {
+  width: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  border: 'none',
+  background: 'none',
+  color: 'var(--fg-muted)',
+  cursor: 'pointer',
+  fontSize: 'var(--font-sm)',
+  padding: '6px 8px',
+  borderRadius: 'var(--radius-sm)'
 }
 
 const sectionStyle: CSSProperties = {

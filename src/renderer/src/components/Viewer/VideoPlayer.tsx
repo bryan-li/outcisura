@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import type { BBox, DocumentRecord, ElementRecord, OcrEngine, PageRecord } from '../../../../shared/types'
+import type { BBox, DocumentRecord, ElementRecord, OcrEngine, PageRecord, TranscriptionEngine } from '../../../../shared/types'
 import { videoSrc } from '../../utils/videoSrc'
 import { formatDuration } from '../../utils/formatDuration'
 import { unionBBox } from '../../utils/bbox'
+import { decodeVideoAudio, sliceForTranscription } from '../../utils/audioSlice'
 import { VideoFrameSelector } from './VideoFrameSelector'
 import { SelectableElementsOverlay } from './SelectableElementsOverlay'
 import { VideoTimeline, type TimelineMarker } from './VideoTimeline'
@@ -32,6 +33,17 @@ const DEFAULT_OCR_ENGINE: OcrEngine = 'tesseract'
 function readStoredEngine(): OcrEngine {
   const stored = window.localStorage.getItem(OCR_ENGINE_KEY)
   return stored === 'tesseract' || stored === 'claude-vision' ? stored : DEFAULT_OCR_ENGINE
+}
+
+const TRANSCRIPTION_ENGINE_KEY = 'transcription-engine'
+const DEFAULT_TRANSCRIPTION_ENGINE: TranscriptionEngine = 'whisper-local'
+// How far back from the paused position to transcribe — mirrors "OCR this frame" being tied to the
+// paused instant, but audio needs a window rather than a single point in time.
+const TRANSCRIBE_WINDOW_SECONDS = 15
+
+function readStoredTranscriptionEngine(): TranscriptionEngine {
+  const stored = window.localStorage.getItem(TRANSCRIPTION_ENGINE_KEY)
+  return stored === 'whisper-local' || stored === 'openai-whisper' ? stored : DEFAULT_TRANSCRIPTION_ENGINE
 }
 
 export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
@@ -66,6 +78,20 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
   const [ocrElements, setOcrElements] = useState<ElementRecord[] | null>(null)
   const [selectedElementIds, setSelectedElementIds] = useState<Set<string>>(new Set())
   const [creatingCard, setCreatingCard] = useState(false)
+
+  const [transcriptionEngine, setTranscriptionEngine] = useState<TranscriptionEngine>(readStoredTranscriptionEngine)
+  const [transcribing, setTranscribing] = useState(false)
+  const [transcriptionError, setTranscriptionError] = useState<string | null>(null)
+  const [transcriptPage, setTranscriptPage] = useState<PageRecord | null>(null)
+  const [transcript, setTranscript] = useState<string | null>(null)
+  // Decoding a video's whole audio track is the expensive part (not the transcription call itself)
+  // — cached per document so hitting "Transcribe" repeatedly on the same video doesn't redo it.
+  // Invalidated below whenever the document itself changes, since VideoPlayer doesn't remount just
+  // because the active document switched (App.tsx's viewKey is 'library' for every video).
+  const audioBufferRef = useRef<AudioBuffer | null>(null)
+  useEffect(() => {
+    audioBufferRef.current = null
+  }, [document.id])
 
   const [currentTime, setCurrentTime] = useState(0)
   const [flashedPageId, setFlashedPageId] = useState<string | null>(null)
@@ -260,6 +286,64 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
     }
   }
 
+  function updateTranscriptionEngine(engine: TranscriptionEngine): void {
+    setTranscriptionEngine(engine)
+    window.localStorage.setItem(TRANSCRIPTION_ENGINE_KEY, engine)
+  }
+
+  async function handleTranscribe(): Promise<void> {
+    setTranscriptionError(null)
+    setTranscribing(true)
+    try {
+      if (!audioBufferRef.current) {
+        audioBufferRef.current = await decodeVideoAudio(videoSrc(document.sourceVideoPath!))
+      }
+      const endSeconds = videoRef.current?.currentTime ?? 0
+      const startSeconds = Math.max(0, endSeconds - TRANSCRIBE_WINDOW_SECONDS)
+      const audioData = await sliceForTranscription(audioBufferRef.current, startSeconds, endSeconds)
+      const { page } = await captureFrame()
+      const text = await window.api.transcription.transcribe({
+        // Same defensive slice as documentsConvertPptxToPdf's return — getChannelData's view could
+        // in principle have a nonzero byteOffset, and IPC should ship exactly these bytes, not
+        // whatever else happens to share the same underlying buffer.
+        audioData: audioData.buffer.slice(audioData.byteOffset, audioData.byteOffset + audioData.byteLength) as ArrayBuffer,
+        engine: transcriptionEngine
+      })
+      setTranscriptPage(page)
+      setTranscript(text)
+    } catch (err) {
+      setTranscriptionError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setTranscribing(false)
+    }
+  }
+
+  async function handleCreateTranscriptFlashcard(): Promise<void> {
+    if (!transcriptPage || !transcript) return
+    setCreatingCard(true)
+    setCaptureError(null)
+    try {
+      const label = `${document.filename} · at ${formatDuration(transcriptPage.timestampSeconds!)}`
+      const sources = [
+        {
+          documentId: document.id,
+          pageId: transcriptPage.id,
+          elementId: null,
+          bbox: { x: 0, y: 0, w: transcriptPage.width, h: transcriptPage.height },
+          label,
+          previewText: transcript,
+          previewImagePath: null
+        }
+      ]
+      const { errors } = await createFromSources(sources, generationSettings)
+      if (errors.length > 0) setCaptureError(`Card saved, but AI generation failed: ${errors.join('; ')}`)
+      setTranscript(null)
+      setTranscriptPage(null)
+    } finally {
+      setCreatingCard(false)
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1, minHeight: 0 }}>
       <header>
@@ -307,6 +391,26 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
 
         <span style={dividerStyle} />
 
+        <button
+          disabled={!paused || transcribing}
+          onClick={handleTranscribe}
+          title={paused ? `Transcribe the last ${TRANSCRIBE_WINDOW_SECONDS}s of audio leading up to this moment` : 'Pause the video to transcribe'}
+          style={quietButtonStyle}
+        >
+          {transcribing ? 'Listening…' : `🎙️ Transcribe last ${TRANSCRIBE_WINDOW_SECONDS}s`}
+        </button>
+        <select
+          value={transcriptionEngine}
+          onChange={(e) => updateTranscriptionEngine(e.target.value as TranscriptionEngine)}
+          title="Which engine transcribes the audio"
+          style={selectStyle}
+        >
+          <option value="whisper-local">Whisper-tiny (local)</option>
+          <option value="openai-whisper">OpenAI Whisper</option>
+        </select>
+
+        <span style={dividerStyle} />
+
         <GenerationSettingsPanel />
 
         {!paused && <span style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>Pause to select or OCR a frame</span>}
@@ -315,6 +419,31 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
 
       {captureError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{captureError}</p>}
       {ocrError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{ocrError}</p>}
+      {transcriptionError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{transcriptionError}</p>}
+      {transcript !== null && transcript.trim() === '' && (
+        <p style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-sm)', margin: 0 }}>
+          No speech detected in that window — try the other engine, or a moment with clearer audio.
+        </p>
+      )}
+
+      {transcript && transcript.trim() !== '' && (
+        <div style={{ ...toolbarStyle, alignItems: 'flex-start' }}>
+          <p style={{ margin: 0, flex: 1, fontSize: 'var(--font-sm)' }}>{transcript}</p>
+          <button
+            onClick={() => {
+              setTranscript(null)
+              setTranscriptPage(null)
+            }}
+            style={quietButtonStyle}
+          >
+            Done
+          </button>
+          <button disabled={creatingCard} onClick={handleCreateTranscriptFlashcard} style={primaryButtonStyle}>
+            {creatingCard ? 'Creating…' : '✨ Create Flashcard'}
+          </button>
+        </div>
+      )}
+
       {ocrElements && ocrElements.length === 0 && (
         <p style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-sm)', margin: 0 }}>
           No text detected in this frame — try the other engine, or a moment with clearer on-screen text.
@@ -371,6 +500,8 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
               setSelectMode(false)
               setOcrElements(null)
               setOcrPage(null)
+              setTranscript(null)
+              setTranscriptPage(null)
             }}
             onTimeUpdate={(e) => {
               currentTimeRef.current = e.currentTarget.currentTime

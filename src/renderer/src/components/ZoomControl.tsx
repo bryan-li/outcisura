@@ -1,27 +1,9 @@
-import { useEffect, useState } from 'react'
-
-const STORAGE_KEY = 'ui-zoom-factor'
-/** Roomier than browser default — this app is read-heavy and the old 100% felt cramped. */
-const DEFAULT_ZOOM = 1.2
-const MIN_ZOOM = 0.8
-const MAX_ZOOM = 2
-
-function readStoredZoom(): number {
-  const raw = window.localStorage.getItem(STORAGE_KEY)
-  const parsed = raw ? Number(raw) : NaN
-  if (!Number.isFinite(parsed) || parsed < MIN_ZOOM || parsed > MAX_ZOOM) return DEFAULT_ZOOM
-  return parsed
-}
+import { useState } from 'react'
+import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useZoomFactor } from '../hooks/useZoomFactor'
 
 export function ZoomControl(): JSX.Element {
-  const [zoom, setZoom] = useState(readStoredZoom)
+  const [zoom, setZoom] = useZoomFactor()
   const [expanded, setExpanded] = useState(false)
-
-  useEffect(() => {
-    // Guarded: zoom is a nice-to-have, and a missing bridge must never take down the whole app.
-    window.api?.ui?.setZoomFactor?.(zoom)
-    window.localStorage.setItem(STORAGE_KEY, String(zoom))
-  }, [zoom])
 
   return (
     <div

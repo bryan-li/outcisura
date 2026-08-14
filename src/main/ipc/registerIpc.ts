@@ -11,16 +11,19 @@ import type {
   NewCardInput,
   OcrRecognizePageInput,
   ParsedDocument,
-  SrsSnapshot
+  SrsSnapshot,
+  TranscribeAudioInput
 } from '../../shared/types'
 import type { ReviewGrade } from '../../shared/srs'
 import type { AiService } from '../aiService'
 import type { OcrService } from '../ocrService'
+import type { TranscriptionService } from '../transcriptionService'
 import type { Repository } from '../db/repository'
 import { readImageAsDataUrl, saveDataUrlImage } from '../imageStore'
 import { convertPptxToPdf } from '../pptxConverter'
+import { getApiKeyStatus, setApiKey, getOpenAiApiKeyStatus, setOpenAiApiKey } from '../settingsStore'
 
-export function registerIpc(repo: Repository, ai: AiService | null, ocr: OcrService): void {
+export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, transcription: TranscriptionService): void {
   ipcMain.handle(IpcChannels.documentsImport, (_event, parsed: ParsedDocument) => repo.importDocument(parsed))
   ipcMain.handle(IpcChannels.documentsImportVideo, (_event, input: ImportVideoInput) => repo.importVideoDocument(input))
   ipcMain.handle(IpcChannels.documentsCreateVideoFramePage, (_event, input: CreateVideoFramePageInput) =>
@@ -67,7 +70,6 @@ export function registerIpc(repo: Repository, ai: AiService | null, ocr: OcrServ
   })
 
   ipcMain.handle(IpcChannels.aiRegenerate, async (_event, req: AiRegenerateRequest) => {
-    if (!ai) throw new Error('AI service unavailable: set ANTHROPIC_API_KEY')
     const result = await ai.regenerate(req)
     return repo.applyAiRegeneration(req.cardId, result)
   })
@@ -80,5 +82,24 @@ export function registerIpc(repo: Repository, ai: AiService | null, ocr: OcrServ
       input.pageId,
       detections.map((d) => ({ kind: 'text' as const, bbox: d.bbox, text: d.text, imagePath: null }))
     )
+  })
+
+  ipcMain.handle(IpcChannels.transcriptionTranscribe, async (_event, input: TranscribeAudioInput) => {
+    return transcription.transcribe(new Float32Array(input.audioData), input.engine)
+  })
+
+  ipcMain.handle(IpcChannels.settingsGetApiKeyStatus, () => getApiKeyStatus())
+  ipcMain.handle(IpcChannels.settingsSetApiKey, (_event, apiKey: string | null) => {
+    setApiKey(apiKey)
+    ai.setApiKey(apiKey)
+    ocr.setApiKey(apiKey)
+    return getApiKeyStatus()
+  })
+
+  ipcMain.handle(IpcChannels.settingsGetOpenAiKeyStatus, () => getOpenAiApiKeyStatus())
+  ipcMain.handle(IpcChannels.settingsSetOpenAiKey, (_event, apiKey: string | null) => {
+    setOpenAiApiKey(apiKey)
+    transcription.setApiKey(apiKey)
+    return getOpenAiApiKeyStatus()
   })
 }
