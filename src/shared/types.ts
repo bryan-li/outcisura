@@ -2,7 +2,7 @@ import type { ReviewGrade } from './srs'
 
 export type DocumentType = 'pdf' | 'pptx' | 'video'
 export type ElementKind = 'text' | 'image'
-export type CardType = 'basic' | 'image_occlusion' | 'cloze'
+export type CardType = 'basic' | 'image_occlusion' | 'cloze' | 'picture'
 
 export type GenerationComplexity = 'simple' | 'standard' | 'detailed'
 
@@ -62,6 +62,10 @@ export interface PageRecord {
   backgroundImagePath: string | null
   /** Set only for a page created from a captured, paused video frame — which video-moment it is. */
   timestampSeconds: number | null
+  /** Set only for a page captured from a transcribed [start,end) range — the range's end, so a
+   *  card's backlink can highlight the whole span it came from, not just its start point. Null for
+   *  an ordinary single-frame capture (OCR / region-select), where there's no range to speak of. */
+  timestampEndSeconds: number | null
 }
 
 export interface ElementRecord {
@@ -116,6 +120,8 @@ export interface CreateVideoFramePageInput {
   width: number
   height: number
   backgroundImagePath: string
+  /** See PageRecord.timestampEndSeconds — set only when capturing for a transcribed range. */
+  timestampEndSeconds?: number
 }
 
 export interface CardSourceRecord {
@@ -133,6 +139,11 @@ export interface CardSourceRecord {
    *  `imagePath`'s own natural width/height. Null for non-occlusion sources and for occlusion
    *  cards made before this field existed — both render the image unmasked. */
   maskBBox: BBox | null
+  /** Which side of the card this image belongs to — only meaningful for cards assembled via the
+   *  multi-image "Create Flashcard" modal, where front and back can each carry several images.
+   *  Null for every other kind of source (occlusion crops, parsed-element sources, a single
+   *  picture-card image) — those have no "which face" concept at all. */
+  imageFace: 'front' | 'back' | null
 }
 
 export interface FolderRecord {
@@ -175,6 +186,10 @@ export interface CardRecord {
   lapses: number
   lastReviewedAt: string | null
   sources: CardSourceRecord[]
+  /** 'picture' cards only — when true, the card's image stays hidden on the front (question-only)
+   *  and only appears once flipped, instead of showing on both faces like every other image-bearing
+   *  card type. Always false for non-picture cards. */
+  revealImageOnFlip: boolean
 }
 
 export type CardUpdatePatch = Partial<Pick<CardRecord, 'front' | 'back' | 'folderId'>>
@@ -208,6 +223,8 @@ export interface NewCardSourceInput {
   label: string
   imagePath?: string | null
   maskBBox?: BBox | null
+  /** See CardSourceRecord.imageFace. */
+  imageFace?: 'front' | 'back' | null
 }
 
 export interface NewCardInput {
@@ -215,6 +232,8 @@ export interface NewCardInput {
   back: string
   cardType: CardType
   sources: NewCardSourceInput[]
+  /** See CardRecord.revealImageOnFlip. Defaults to false when omitted. */
+  revealImageOnFlip?: boolean
 }
 
 export interface AiRegenerateRequest {
@@ -263,4 +282,45 @@ export interface TranscribeAudioInput {
 export interface ApiKeyStatus {
   hasKey: boolean
   last4: string | null
+}
+
+/** A already-transcribed [startSeconds, endSeconds) range on one video, from one engine — the unit
+ *  of reuse for range-based transcription (see getTranscriptCoverage). Segments from different
+ *  engines never overlap-check against each other, by design: switching engines is a deliberate
+ *  "redo this with a different model" choice, not something that should silently reuse the other
+ *  model's output. */
+export interface TranscriptSegmentRecord {
+  id: string
+  documentId: string
+  engine: TranscriptionEngine
+  startSeconds: number
+  endSeconds: number
+  text: string
+}
+
+export interface TimeRange {
+  startSeconds: number
+  endSeconds: number
+}
+
+export interface TranscriptCoverageInput {
+  documentId: string
+  engine: TranscriptionEngine
+  range: TimeRange
+}
+
+/** `existingSegments` overlap the requested range and can be reused as-is; `gaps` are the
+ *  sub-ranges within the request that still need actual transcription — the caller transcribes
+ *  each gap, saves it via saveTranscriptSegment, then stitches existingSegments + the new ones
+ *  (sorted by startSeconds) into the full displayed transcript. */
+export interface TranscriptCoverageResult {
+  existingSegments: TranscriptSegmentRecord[]
+  gaps: TimeRange[]
+}
+
+export interface SaveTranscriptSegmentInput {
+  documentId: string
+  engine: TranscriptionEngine
+  range: TimeRange
+  text: string
 }

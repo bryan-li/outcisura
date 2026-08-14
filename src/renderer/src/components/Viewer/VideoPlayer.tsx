@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import type { BBox, DocumentRecord, ElementRecord, OcrEngine, PageRecord, TranscriptionEngine } from '../../../../shared/types'
+import type { BBox, DocumentRecord, ElementRecord, OcrEngine, PageRecord, TimeRange, TranscriptionEngine } from '../../../../shared/types'
 import { videoSrc } from '../../utils/videoSrc'
 import { formatDuration } from '../../utils/formatDuration'
 import { unionBBox } from '../../utils/bbox'
 import { decodeVideoAudio, sliceForTranscription } from '../../utils/audioSlice'
 import { VideoFrameSelector } from './VideoFrameSelector'
 import { SelectableElementsOverlay } from './SelectableElementsOverlay'
-import { VideoTimeline, type TimelineMarker } from './VideoTimeline'
+import { VideoTimeline, type TimelineMarker, MIN_RANGE_SECONDS } from './VideoTimeline'
 import { OcclusionEditor } from '../CardEditor/OcclusionEditor'
 import { GenerationSettingsPanel } from '../CardEditor/GenerationSettingsPanel'
 import { cropImageDataUrl } from '../../utils/cropImage'
@@ -37,9 +37,6 @@ function readStoredEngine(): OcrEngine {
 
 const TRANSCRIPTION_ENGINE_KEY = 'transcription-engine'
 const DEFAULT_TRANSCRIPTION_ENGINE: TranscriptionEngine = 'whisper-local'
-// How far back from the paused position to transcribe — mirrors "OCR this frame" being tied to the
-// paused instant, but audio needs a window rather than a single point in time.
-const TRANSCRIBE_WINDOW_SECONDS = 15
 
 function readStoredTranscriptionEngine(): TranscriptionEngine {
   const stored = window.localStorage.getItem(TRANSCRIPTION_ENGINE_KEY)
@@ -66,6 +63,9 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
   const [availableWidth, setAvailableWidth] = useState(900)
   const [dims, setDims] = useState<{ width: number; height: number } | null>(null)
   const [paused, setPaused] = useState(true)
+  const [volume, setVolume] = useState(1)
+  const [muted, setMuted] = useState(false)
+  const [playbackRate, setPlaybackRate] = useState(1)
   const [selectMode, setSelectMode] = useState(false)
   const [capturing, setCapturing] = useState(false)
   const [captureError, setCaptureError] = useState<string | null>(null)
@@ -80,6 +80,13 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
   const [creatingCard, setCreatingCard] = useState(false)
 
   const [transcriptionEngine, setTranscriptionEngine] = useState<TranscriptionEngine>(readStoredTranscriptionEngine)
+  const [rangeSelectMode, setRangeSelectMode] = useState(false)
+  const [selectedRange, setSelectedRange] = useState<TimeRange | null>(null)
+  // The paused instant "Set start" was clicked at — an alternative to dragging on the timeline for
+  // marking a range, one frame-accurate pause+click at a time rather than a mouse drag. Promoted to
+  // a real selectedRange once "Set end" lands on a second paused instant at least MIN_RANGE_SECONDS
+  // later; cleared either way (promoted, or cancelled by hand).
+  const [draftStartSeconds, setDraftStartSeconds] = useState<number | null>(null)
   const [transcribing, setTranscribing] = useState(false)
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null)
   const [transcriptPage, setTranscriptPage] = useState<PageRecord | null>(null)
@@ -95,6 +102,10 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
 
   const [currentTime, setCurrentTime] = useState(0)
   const [flashedPageId, setFlashedPageId] = useState<string | null>(null)
+  // Set alongside flashedPageId when the backlinked page came from a transcribed range (has a
+  // timestampEndSeconds) — lets the timeline highlight the whole span the card came from, not
+  // just flash a point at its start.
+  const [flashedRange, setFlashedRange] = useState<TimeRange | null>(null)
 
   // Persist on unmount too, not just onPause — switching to a different document/view while this
   // one is still playing doesn't fire a pause event, so without this the position would only ever
@@ -130,7 +141,8 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
         pageId,
         timestampSeconds: byPageId.get(pageId)!.timestampSeconds!,
         cardCount: count,
-        label
+        label,
+        timestampEndSeconds: byPageId.get(pageId)!.timestampEndSeconds
       }))
       .sort((a, b) => a.timestampSeconds - b.timestampSeconds)
   }, [cards, pagesByDocument, document.id])
@@ -149,8 +161,10 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
       video.pause()
     }
     setFlashedPageId(page.id)
+    setFlashedRange(page.timestampEndSeconds !== null ? { startSeconds: page.timestampSeconds, endSeconds: page.timestampEndSeconds } : null)
     const timer = setTimeout(() => {
       setFlashedPageId(null)
+      setFlashedRange(null)
       clearFlashTarget()
     }, 2400)
     return () => clearTimeout(timer)
@@ -170,14 +184,46 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
 
   const scale = dims ? Math.min(1, Math.min(900, availableWidth) / dims.width) : 1
 
+  /** Frame-accurate skip, clamped to the video's own bounds — no-ops silently if the video/duration
+   *  isn't loaded yet (matches the toolbar's other buttons, which are just inert until then). */
+  function skip(deltaSeconds: number): void {
+    const v = videoRef.current
+    if (!v || !Number.isFinite(v.duration)) return
+    v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + deltaSeconds))
+  }
+
+  function updateVolume(next: number): void {
+    setVolume(next)
+    setMuted(false)
+    const v = videoRef.current
+    if (v) {
+      v.volume = next
+      v.muted = false
+    }
+  }
+
+  function toggleMute(): void {
+    const next = !muted
+    setMuted(next)
+    const v = videoRef.current
+    if (v) v.muted = next
+  }
+
+  function updatePlaybackRate(rate: number): void {
+    setPlaybackRate(rate)
+    const v = videoRef.current
+    if (v) v.playbackRate = rate
+  }
+
   function updateOcrEngine(engine: OcrEngine): void {
     setOcrEngine(engine)
     window.localStorage.setItem(OCR_ENGINE_KEY, engine)
   }
 
   /** Shared prefix of both the occlusion flow and the OCR flow: draw the paused frame to an
-   *  offscreen canvas at native resolution, save it, and create the page row it becomes. */
-  async function captureFrame(): Promise<{ page: PageRecord; frameDataUrl: string }> {
+   *  offscreen canvas at native resolution, save it, and create the page row it becomes.
+   *  `timestampEndSeconds` is set only by the transcript-range flow — see PageRecord's own field. */
+  async function captureFrame(timestampEndSeconds?: number): Promise<{ page: PageRecord; frameDataUrl: string }> {
     const video = videoRef.current
     if (!video || !dims) throw new Error('Video not ready')
     const canvas = window.document.createElement('canvas')
@@ -194,7 +240,8 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
       timestampSeconds,
       width: dims.width,
       height: dims.height,
-      backgroundImagePath
+      backgroundImagePath,
+      timestampEndSeconds
     })
     // Video frame pages don't go through documentsStore's normal openDocument fetch (they're
     // created one at a time, lazily) — without this, the page stays invisible to the rest of the
@@ -291,31 +338,82 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
     window.localStorage.setItem(TRANSCRIPTION_ENGINE_KEY, engine)
   }
 
-  async function handleTranscribe(): Promise<void> {
+  /** Transcribes one already-decoded audio slice and ships it over IPC — a defensive byte-range
+   *  slice first, same as documentsConvertPptxToPdf's return: getChannelData's view could in
+   *  principle have a nonzero byteOffset, and IPC should ship exactly these bytes, not whatever else
+   *  happens to share the same underlying buffer. */
+  async function transcribeSlice(range: TimeRange): Promise<string> {
+    const audioData = await sliceForTranscription(audioBufferRef.current!, range.startSeconds, range.endSeconds)
+    return window.api.transcription.transcribe({
+      audioData: audioData.buffer.slice(audioData.byteOffset, audioData.byteOffset + audioData.byteLength) as ArrayBuffer,
+      engine: transcriptionEngine
+    })
+  }
+
+  /** Transcribes a user-marked [start,end) range, reusing whatever's already been transcribed for
+   *  this document+engine instead of re-running Whisper over audio it's already seen — see
+   *  repository.getTranscriptCoverage. Only the still-uncovered gaps actually get transcribed; the
+   *  final text is existing + new segments stitched back together in time order. Switching engines
+   *  gets no free reuse: coverage is looked up per-engine on purpose, since it's a deliberate
+   *  "redo this with a different model" choice. */
+  async function handleTranscribeRange(range: TimeRange): Promise<void> {
     setTranscriptionError(null)
     setTranscribing(true)
     try {
       if (!audioBufferRef.current) {
         audioBufferRef.current = await decodeVideoAudio(videoSrc(document.sourceVideoPath!))
       }
-      const endSeconds = videoRef.current?.currentTime ?? 0
-      const startSeconds = Math.max(0, endSeconds - TRANSCRIBE_WINDOW_SECONDS)
-      const audioData = await sliceForTranscription(audioBufferRef.current, startSeconds, endSeconds)
-      const { page } = await captureFrame()
-      const text = await window.api.transcription.transcribe({
-        // Same defensive slice as documentsConvertPptxToPdf's return — getChannelData's view could
-        // in principle have a nonzero byteOffset, and IPC should ship exactly these bytes, not
-        // whatever else happens to share the same underlying buffer.
-        audioData: audioData.buffer.slice(audioData.byteOffset, audioData.byteOffset + audioData.byteLength) as ArrayBuffer,
-        engine: transcriptionEngine
-      })
+
+      const coverage = await window.api.transcription.getCoverage({ documentId: document.id, engine: transcriptionEngine, range })
+      const newSegments: { startSeconds: number; text: string }[] = []
+      for (const gap of coverage.gaps) {
+        const text = await transcribeSlice(gap)
+        await window.api.transcription.saveSegment({ documentId: document.id, engine: transcriptionEngine, range: gap, text })
+        newSegments.push({ startSeconds: gap.startSeconds, text })
+      }
+
+      const stitched = [...coverage.existingSegments, ...newSegments]
+        .sort((a, b) => a.startSeconds - b.startSeconds)
+        .map((s) => s.text)
+        .filter((t) => t.trim() !== '')
+        .join(' ')
+
+      // Seek to the range's start before capturing, so the source thumbnail attached to the
+      // resulting card shows something meaningful — the video could otherwise be paused anywhere
+      // when a range gets marked (it's drawn on the timeline, not tied to the current playhead the
+      // way OCR/select-region are). For a range built via "Set start"/"Set end" this is already
+      // the exact frame the user deliberately paused on; a dragged range just uses wherever it starts.
+      const video = videoRef.current
+      if (video) video.currentTime = range.startSeconds
+      const { page } = await captureFrame(range.endSeconds)
       setTranscriptPage(page)
-      setTranscript(text)
+      setTranscript(stitched)
+      setSelectedRange(null)
     } catch (err) {
       setTranscriptionError(err instanceof Error ? err.message : String(err))
     } finally {
       setTranscribing(false)
     }
+  }
+
+  /** The two-click alternative to dragging on the timeline: pause at the desired start and click
+   *  "Set start," then pause at the desired end and click "Set end." Rejects an end that lands too
+   *  close to (or before) the start, same threshold a drag enforces, so this can't produce a range
+   *  the transcribe flow wouldn't already accept from a drag. */
+  function handleSetStart(): void {
+    const t = videoRef.current?.currentTime
+    if (t === undefined) return
+    setDraftStartSeconds(t)
+  }
+
+  function handleSetEnd(): void {
+    const t = videoRef.current?.currentTime
+    if (t === undefined || draftStartSeconds === null) return
+    const startSeconds = Math.min(draftStartSeconds, t)
+    const endSeconds = Math.max(draftStartSeconds, t)
+    if (endSeconds - startSeconds < MIN_RANGE_SECONDS) return
+    setSelectedRange({ startSeconds, endSeconds })
+    setDraftStartSeconds(null)
   }
 
   async function handleCreateTranscriptFlashcard(): Promise<void> {
@@ -393,11 +491,19 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
 
         <button
           disabled={!paused || transcribing}
-          onClick={handleTranscribe}
-          title={paused ? `Transcribe the last ${TRANSCRIBE_WINDOW_SECONDS}s of audio leading up to this moment` : 'Pause the video to transcribe'}
-          style={quietButtonStyle}
+          onClick={() => {
+            setRangeSelectMode((v) => !v)
+            setSelectedRange(null)
+            setDraftStartSeconds(null)
+          }}
+          title={paused ? 'Drag on the timeline below to mark a range to transcribe' : 'Pause the video to mark a transcript range'}
+          style={{
+            border: rangeSelectMode ? '1px solid var(--accent)' : '1px solid transparent',
+            background: rangeSelectMode ? 'var(--accent-soft)' : 'transparent',
+            color: rangeSelectMode ? 'var(--accent)' : 'var(--fg-muted)'
+          }}
         >
-          {transcribing ? 'Listening…' : `🎙️ Transcribe last ${TRANSCRIBE_WINDOW_SECONDS}s`}
+          🎙️ {rangeSelectMode ? 'Cancel range' : 'Mark transcript range'}
         </button>
         <select
           value={transcriptionEngine}
@@ -412,37 +518,11 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
         <span style={dividerStyle} />
 
         <GenerationSettingsPanel />
-
-        {!paused && <span style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>Pause to select or OCR a frame</span>}
-        {capturing && <span style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>Capturing…</span>}
       </div>
 
       {captureError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{captureError}</p>}
       {ocrError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{ocrError}</p>}
       {transcriptionError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{transcriptionError}</p>}
-      {transcript !== null && transcript.trim() === '' && (
-        <p style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-sm)', margin: 0 }}>
-          No speech detected in that window — try the other engine, or a moment with clearer audio.
-        </p>
-      )}
-
-      {transcript && transcript.trim() !== '' && (
-        <div style={{ ...toolbarStyle, alignItems: 'flex-start' }}>
-          <p style={{ margin: 0, flex: 1, fontSize: 'var(--font-sm)' }}>{transcript}</p>
-          <button
-            onClick={() => {
-              setTranscript(null)
-              setTranscriptPage(null)
-            }}
-            style={quietButtonStyle}
-          >
-            Done
-          </button>
-          <button disabled={creatingCard} onClick={handleCreateTranscriptFlashcard} style={primaryButtonStyle}>
-            {creatingCard ? 'Creating…' : '✨ Create Flashcard'}
-          </button>
-        </div>
-      )}
 
       {ocrElements && ocrElements.length === 0 && (
         <p style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-sm)', margin: 0 }}>
@@ -472,12 +552,23 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
         </div>
       )}
 
-      <div ref={wrapperRef} style={{ width: '100%', overflow: 'auto', flex: 1 }}>
+      {/* Video + the transcript-range side panel share one row with a fixed-width right column —
+          reserved whether or not a range is currently marked, so marking one only changes the
+          column's *content*, never the video's own available width. A panel that only appears on
+          demand (the old layout) would still resize/shift the video the moment it showed up. */}
+      <div style={{ display: 'flex', gap: 'var(--space-3)', flex: 1, minHeight: 0 }}>
+        <div ref={wrapperRef} style={{ width: '100%', overflow: 'auto', flex: 1, minWidth: 0 }}>
         <div style={{ position: 'relative', width: dims ? dims.width * scale : '100%' }}>
           <video
             ref={videoRef}
             src={videoSrc(document.sourceVideoPath!)}
-            controls
+            onClick={() => {
+              if (selectMode || ocrElements) return // let the capture overlay handle the click instead
+              const v = videoRef.current
+              if (!v) return
+              if (v.paused) v.play()
+              else v.pause()
+            }}
             onLoadedMetadata={(e) => {
               const v = e.currentTarget
               setDims({ width: v.videoWidth, height: v.videoHeight })
@@ -502,6 +593,12 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
               setOcrPage(null)
               setTranscript(null)
               setTranscriptPage(null)
+              // Deliberately NOT clearing rangeSelectMode/selectedRange here — pressing play to
+              // scrub through (or double-check) a marked range you're about to transcribe used to
+              // wipe it, which meant using playback at all cost you your marker. The range-marking
+              // toolbar buttons already stay disabled while playing (see `disabled={!paused}`
+              // below), so nothing lets you START a new drag mid-playback anyway — this only stops
+              // an *existing* mark/mode from being thrown away.
             }}
             onTimeUpdate={(e) => {
               currentTimeRef.current = e.currentTarget.currentTime
@@ -543,6 +640,145 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
             />
           )}
         </div>
+        </div>
+
+        <div style={rangeSidePanelStyle}>
+          {transcript !== null ? (
+            transcript.trim() === '' ? (
+              <>
+                <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600 }}>No speech detected</div>
+                <div style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>
+                  Try the other engine, or a range with clearer audio.
+                </div>
+                <button
+                  onClick={() => {
+                    setTranscript(null)
+                    setTranscriptPage(null)
+                  }}
+                  style={{ ...quietButtonStyle, marginTop: 'auto' }}
+                >
+                  Done
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600 }}>Transcript</div>
+                <div style={{ fontSize: 'var(--font-sm)', overflowY: 'auto', flex: 1 }}>{transcript}</div>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'auto' }}>
+                  <button
+                    onClick={() => {
+                      setTranscript(null)
+                      setTranscriptPage(null)
+                    }}
+                    style={quietButtonStyle}
+                  >
+                    Done
+                  </button>
+                  <button disabled={creatingCard} onClick={handleCreateTranscriptFlashcard} style={primaryButtonStyle}>
+                    {creatingCard ? 'Creating…' : '✨ Create Flashcard'}
+                  </button>
+                </div>
+              </>
+            )
+          ) : selectedRange ? (
+            <>
+              <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600 }}>Transcript range</div>
+              <div style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)' }}>
+                {formatDuration(selectedRange.startSeconds)} – {formatDuration(selectedRange.endSeconds)} (
+                {formatDuration(selectedRange.endSeconds - selectedRange.startSeconds)})
+              </div>
+              <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'auto' }}>
+                <button disabled={transcribing} onClick={() => setSelectedRange(null)} style={quietButtonStyle}>
+                  Cancel
+                </button>
+                <button disabled={transcribing} onClick={() => handleTranscribeRange(selectedRange)} style={primaryButtonStyle}>
+                  {transcribing ? 'Transcribing…' : '🎙️ Transcribe'}
+                </button>
+              </div>
+            </>
+          ) : draftStartSeconds !== null ? (
+            <>
+              <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600 }}>Transcript range</div>
+              <div style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)' }}>
+                Start set at {formatDuration(draftStartSeconds)} — pause where you want it to end, then set the end.
+              </div>
+              <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'auto' }}>
+                <button onClick={() => setDraftStartSeconds(null)} style={quietButtonStyle}>
+                  Cancel
+                </button>
+                <button disabled={!paused} onClick={handleSetEnd} title={paused ? undefined : 'Pause the video to set the end'} style={primaryButtonStyle}>
+                  🏁 Set end here
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>
+                Drag on the timeline below, or pause here and set a start, to mark a range to transcribe.
+              </div>
+              <button
+                disabled={!paused}
+                onClick={handleSetStart}
+                title={paused ? undefined : 'Pause the video to set a start'}
+                style={{ ...quietButtonStyle, marginTop: 'auto' }}
+              >
+                📍 Set start here
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div style={toolbarStyle}>
+        <button onClick={() => skip(-10)} title="Back 10 seconds" style={quietButtonStyle}>
+          ⏪ 10s
+        </button>
+        <button
+          onClick={() => {
+            const v = videoRef.current
+            if (!v) return
+            if (v.paused) v.play()
+            else v.pause()
+          }}
+          title={paused ? 'Play (or press space with the timeline below selected)' : 'Pause'}
+          style={{ ...quietButtonStyle, width: 76, textAlign: 'center' }}
+        >
+          {paused ? '▶️ Play' : '⏸️ Pause'}
+        </button>
+        <button onClick={() => skip(10)} title="Forward 10 seconds" style={quietButtonStyle}>
+          10s ⏩
+        </button>
+
+        <span style={dividerStyle} />
+
+        <button onClick={toggleMute} title={muted ? 'Unmute' : 'Mute'} style={quietButtonStyle}>
+          {muted || volume === 0 ? '🔇' : volume < 0.5 ? '🔉' : '🔊'}
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={muted ? 0 : volume}
+          onChange={(e) => updateVolume(Number(e.target.value))}
+          title="Volume"
+          style={{ width: 70 }}
+        />
+        <select
+          value={playbackRate}
+          onChange={(e) => updatePlaybackRate(Number(e.target.value))}
+          title="Playback speed"
+          style={selectStyle}
+        >
+          {[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => (
+            <option key={rate} value={rate}>
+              {rate}×
+            </option>
+          ))}
+        </select>
+
+        {!paused && <span style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>Pause to select, OCR, or mark a transcript range</span>}
+        {capturing && <span style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>Capturing…</span>}
       </div>
 
       {document.durationSeconds !== null && (
@@ -551,11 +787,27 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
           currentTime={currentTime}
           markers={markers}
           flashedPageId={flashedPageId}
+          flashedRange={flashedRange}
           onSeek={(t) => {
             const video = videoRef.current
             if (!video) return
             video.currentTime = t
             video.pause()
+          }}
+          rangeSelectMode={rangeSelectMode}
+          selectedRange={selectedRange}
+          onRangeChange={setSelectedRange}
+          onRangeSelected={(range) => {
+            setSelectedRange(range)
+            setRangeSelectMode(false)
+            setDraftStartSeconds(null)
+          }}
+          draftStartSeconds={draftStartSeconds}
+          onTogglePlay={() => {
+            const v = videoRef.current
+            if (!v) return
+            if (v.paused) v.play()
+            else v.pause()
           }}
         />
       )}
@@ -579,6 +831,18 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
   )
 }
 
+const rangeSidePanelStyle: CSSProperties = {
+  width: 220,
+  flexShrink: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 'var(--space-2)',
+  padding: 'var(--space-3)',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius-lg)',
+  background: 'var(--bg-sidebar)'
+}
+
 const toolbarStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -587,7 +851,10 @@ const toolbarStyle: CSSProperties = {
   padding: '6px 8px',
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius-lg)',
-  background: 'var(--bg-sidebar)'
+  background: 'var(--bg-sidebar)',
+  // Now that this sits between the video and the timeline (not flush against other bars), a
+  // floating look reads better than a flat inline strip.
+  boxShadow: '0 4px 16px #00000020'
 }
 
 const dividerStyle: CSSProperties = {

@@ -19,7 +19,12 @@ import type {
   PageRecord,
   ParsedDocument,
   ReviewLogEntry,
-  SrsSnapshot
+  SaveTranscriptSegmentInput,
+  SrsSnapshot,
+  TimeRange,
+  TranscriptCoverageResult,
+  TranscriptionEngine,
+  TranscriptSegmentRecord
 } from '../../shared/types'
 import { nextSrsState, type ReviewGrade } from '../../shared/srs'
 import { saveDataUrlImage } from '../imageStore'
@@ -118,10 +123,19 @@ export class Repository {
     const id = randomUUID()
     this.db
       .prepare(
-        `INSERT INTO pages (id, document_id, page_index, width, height, background_image_path, timestamp_seconds)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO pages (id, document_id, page_index, width, height, background_image_path, timestamp_seconds, timestamp_end_seconds)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(id, input.documentId, pageIndex, input.width, input.height, input.backgroundImagePath, input.timestampSeconds)
+      .run(
+        id,
+        input.documentId,
+        pageIndex,
+        input.width,
+        input.height,
+        input.backgroundImagePath,
+        input.timestampSeconds,
+        input.timestampEndSeconds ?? null
+      )
     return {
       id,
       documentId: input.documentId,
@@ -129,7 +143,8 @@ export class Repository {
       width: input.width,
       height: input.height,
       backgroundImagePath: input.backgroundImagePath,
-      timestampSeconds: input.timestampSeconds
+      timestampSeconds: input.timestampSeconds,
+      timestampEndSeconds: input.timestampEndSeconds ?? null
     }
   }
 
@@ -177,7 +192,7 @@ export class Repository {
   getPages(documentId: string): PageRecord[] {
     const rows = this.db
       .prepare(
-        `SELECT id, document_id, page_index, width, height, background_image_path, timestamp_seconds FROM pages WHERE document_id = ? ORDER BY page_index ASC`
+        `SELECT id, document_id, page_index, width, height, background_image_path, timestamp_seconds, timestamp_end_seconds FROM pages WHERE document_id = ? ORDER BY page_index ASC`
       )
       .all(documentId) as {
       id: string
@@ -187,6 +202,7 @@ export class Repository {
       height: number
       background_image_path: string | null
       timestamp_seconds: number | null
+      timestamp_end_seconds: number | null
     }[]
     return rows.map((r) => ({
       id: r.id,
@@ -195,7 +211,8 @@ export class Repository {
       width: r.width,
       height: r.height,
       backgroundImagePath: r.background_image_path,
-      timestampSeconds: r.timestamp_seconds
+      timestampSeconds: r.timestamp_seconds,
+      timestampEndSeconds: r.timestamp_end_seconds
     }))
   }
 
@@ -264,18 +281,19 @@ export class Repository {
     const insertCard = this.db.prepare(
       `INSERT INTO cards (
          id, front, back, card_type, ai_generated, prev_front, prev_back, folder_id, sort_order,
-         due_at, interval_days, ease_factor, repetitions, lapses, last_reviewed_at, created_at, updated_at
+         due_at, interval_days, ease_factor, repetitions, lapses, last_reviewed_at, created_at, updated_at,
+         reveal_image_on_flip
        )
-       VALUES (?, ?, ?, ?, 0, NULL, NULL, NULL, ?, ?, 0, 2.5, 0, 0, NULL, ?, ?)`
+       VALUES (?, ?, ?, ?, 0, NULL, NULL, NULL, ?, ?, 0, 2.5, 0, 0, NULL, ?, ?, ?)`
     )
     const insertSource = this.db.prepare(
-      `INSERT INTO card_sources (id, card_id, document_id, page_id, element_id, x, y, w, h, label, image_path, mask_x, mask_y, mask_w, mask_h)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO card_sources (id, card_id, document_id, page_id, element_id, x, y, w, h, label, image_path, mask_x, mask_y, mask_w, mask_h, image_face)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
 
     const run = this.db.transaction(() => {
       // due_at = now: brand-new cards are immediately due, so they show up in the queue right away.
-      insertCard.run(cardId, input.front, input.back, input.cardType, sortOrder, now, now, now)
+      insertCard.run(cardId, input.front, input.back, input.cardType, sortOrder, now, now, now, input.revealImageOnFlip ? 1 : 0)
       for (const src of input.sources) {
         insertSource.run(
           randomUUID(),
@@ -292,7 +310,8 @@ export class Repository {
           src.maskBBox?.x ?? null,
           src.maskBBox?.y ?? null,
           src.maskBBox?.w ?? null,
-          src.maskBBox?.h ?? null
+          src.maskBBox?.h ?? null,
+          src.imageFace ?? null
         )
       }
     })
@@ -464,7 +483,8 @@ export class Repository {
       bbox: { x: s.x, y: s.y, w: s.w, h: s.h } satisfies BBox,
       label: s.label,
       imagePath: s.image_path,
-      maskBBox: s.mask_x !== null ? ({ x: s.mask_x, y: s.mask_y!, w: s.mask_w!, h: s.mask_h! } satisfies BBox) : null
+      maskBBox: s.mask_x !== null ? ({ x: s.mask_x, y: s.mask_y!, w: s.mask_w!, h: s.mask_h! } satisfies BBox) : null,
+      imageFace: s.image_face
     }))
     return {
       id: row.id,
@@ -484,8 +504,75 @@ export class Repository {
       repetitions: row.repetitions,
       lapses: row.lapses,
       lastReviewedAt: row.last_reviewed_at,
-      sources
+      sources,
+      revealImageOnFlip: !!row.reveal_image_on_flip
     }
+  }
+
+  listTranscriptSegments(documentId: string, engine: TranscriptionEngine): TranscriptSegmentRecord[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM transcript_segments WHERE document_id = ? AND engine = ? ORDER BY start_seconds`)
+      .all(documentId, engine) as TranscriptSegmentRow[]
+    return rows.map(hydrateTranscriptSegment)
+  }
+
+  insertTranscriptSegment(input: SaveTranscriptSegmentInput): TranscriptSegmentRecord {
+    const id = randomUUID()
+    this.db
+      .prepare(
+        `INSERT INTO transcript_segments (id, document_id, engine, start_seconds, end_seconds, text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(id, input.documentId, input.engine, input.range.startSeconds, input.range.endSeconds, input.text, new Date().toISOString())
+    return {
+      id,
+      documentId: input.documentId,
+      engine: input.engine,
+      startSeconds: input.range.startSeconds,
+      endSeconds: input.range.endSeconds,
+      text: input.text
+    }
+  }
+
+  /** Diffs a requested [start,end) range against what's already been transcribed for this
+   *  document+engine — `existingSegments` can be reused verbatim, `gaps` are the sub-ranges the
+   *  caller still needs to actually transcribe. Pure read, no writes; the caller transcribes each
+   *  gap and persists it via insertTranscriptSegment afterward. */
+  getTranscriptCoverage(documentId: string, engine: TranscriptionEngine, range: TimeRange): TranscriptCoverageResult {
+    const all = this.listTranscriptSegments(documentId, engine)
+    const existingSegments = all
+      .filter((s) => s.endSeconds > range.startSeconds && s.startSeconds < range.endSeconds)
+      .sort((a, b) => a.startSeconds - b.startSeconds)
+
+    const gaps: TimeRange[] = []
+    let cursor = range.startSeconds
+    for (const seg of existingSegments) {
+      const segStart = Math.max(seg.startSeconds, range.startSeconds)
+      if (segStart > cursor) gaps.push({ startSeconds: cursor, endSeconds: segStart })
+      cursor = Math.max(cursor, Math.min(seg.endSeconds, range.endSeconds))
+    }
+    if (cursor < range.endSeconds) gaps.push({ startSeconds: cursor, endSeconds: range.endSeconds })
+
+    return { existingSegments, gaps }
+  }
+}
+
+interface TranscriptSegmentRow {
+  id: string
+  document_id: string
+  engine: TranscriptionEngine
+  start_seconds: number
+  end_seconds: number
+  text: string
+}
+
+function hydrateTranscriptSegment(row: TranscriptSegmentRow): TranscriptSegmentRecord {
+  return {
+    id: row.id,
+    documentId: row.document_id,
+    engine: row.engine,
+    startSeconds: row.start_seconds,
+    endSeconds: row.end_seconds,
+    text: row.text
   }
 }
 
@@ -493,7 +580,7 @@ interface CardRow {
   id: string
   front: string
   back: string
-  card_type: 'basic' | 'image_occlusion'
+  card_type: 'basic' | 'image_occlusion' | 'cloze' | 'picture'
   ai_generated: number
   prev_front: string | null
   prev_back: string | null
@@ -507,6 +594,7 @@ interface CardRow {
   repetitions: number
   lapses: number
   last_reviewed_at: string | null
+  reveal_image_on_flip: number
 }
 
 interface CardSourceRow {
@@ -525,6 +613,7 @@ interface CardSourceRow {
   mask_y: number | null
   mask_w: number | null
   mask_h: number | null
+  image_face: 'front' | 'back' | null
 }
 
 interface FolderRow {

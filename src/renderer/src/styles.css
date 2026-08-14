@@ -190,6 +190,35 @@ select:focus {
   opacity: 1;
 }
 
+/* CSS-only hover tooltip for the review heatmap cells — a native `title` attribute is the usual
+   choice here, but Chromium's title tooltip has a long hover delay and the cells are only 11px
+   square, so a fast mouse pass rarely triggers it. This shows instantly instead. */
+.heatmap-cell {
+  position: relative;
+}
+
+.heatmap-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  font-size: var(--font-xs);
+  white-space: nowrap;
+  box-shadow: 0 4px 12px #00000026;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease;
+  z-index: 20;
+}
+
+.heatmap-cell:hover .heatmap-tooltip {
+  opacity: 1;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

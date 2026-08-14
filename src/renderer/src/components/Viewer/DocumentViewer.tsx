@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import type { BBox, CardRecord, DocumentRecord, ElementRecord } from '../../../../shared/types'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import type { BBox, CardRecord, CardType, DocumentRecord, ElementRecord, NewCardSourceInput } from '../../../../shared/types'
 import { useDocumentsStore } from '../../state/documentsStore'
 import { useCardsStore } from '../../state/cardsStore'
 import { useUiStore } from '../../state/uiStore'
 import { PageView } from './PageView'
 import { VideoPlayer } from './VideoPlayer'
 import { OcclusionEditor } from '../CardEditor/OcclusionEditor'
+import { PictureCardEditor } from '../CardEditor/PictureCardEditor'
+import { CreateFlashcardModal, type StagedImage } from '../CardEditor/CreateFlashcardModal'
 import { GenerationSettingsPanel } from '../CardEditor/GenerationSettingsPanel'
 import type { PendingSource } from '../../types/pendingSource'
 import { cropImageDataUrl } from '../../utils/cropImage'
@@ -58,6 +60,47 @@ const dividerStyle: CSSProperties = {
   flexShrink: 0
 }
 
+const pictureMenuStyle: CSSProperties = {
+  position: 'absolute',
+  top: '100%',
+  left: 0,
+  marginTop: 4,
+  width: 240,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+  padding: 6,
+  background: 'var(--modal-bg)',
+  color: 'var(--modal-fg)',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius-md)',
+  boxShadow: '0 8px 24px #00000030',
+  zIndex: 20,
+  animation: 'pop-in 150ms ease'
+}
+
+const pictureMenuItemStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
+  gap: 1,
+  width: '100%',
+  border: 'none',
+  background: 'none',
+  textAlign: 'left',
+  padding: '6px 8px',
+  borderRadius: 'var(--radius-sm)',
+  cursor: 'pointer',
+  color: 'inherit',
+  fontSize: 'var(--font-sm)'
+}
+
+const pictureMenuHintStyle: CSSProperties = {
+  fontSize: 'var(--font-xs)',
+  color: 'var(--fg-faint)',
+  fontWeight: 400
+}
+
 export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
   const pagesByDocument = useDocumentsStore((s) => s.pagesByDocument)
   const elementsByPage = useDocumentsStore((s) => s.elementsByPage)
@@ -77,10 +120,41 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
   const [selectedElementIds, setSelectedElementIds] = useState<Set<string>>(new Set())
   const [flashBBox, setFlashBBox] = useState<BBox | null>(null)
   const [occlusionSource, setOcclusionSource] = useState<OcclusionSource | null>(null)
+  const [pictureCardSource, setPictureCardSource] = useState<OcclusionSource | null>(null)
+  // Which editor a free hand-drawn capture should feed into once the drag finishes — null means the
+  // free-select overlay isn't active at all (ordinary element marquee-select is showing instead).
+  // 'multi' feeds a captured region into the advanced modal's staged-images list instead of opening
+  // a dedicated editor for it.
+  const [freeSelectTarget, setFreeSelectTarget] = useState<'picture' | 'occlusion' | 'multi' | null>(null)
   const [capturingScreenshot, setCapturingScreenshot] = useState(false)
   const [creatingCard, setCreatingCard] = useState(false)
   const [cardError, setCardError] = useState<string | null>(null)
   const [showCardSources, setShowCardSources] = useState(false)
+  const [pictureMenuOpen, setPictureMenuOpen] = useState(false)
+  const pictureMenuRef = useRef<HTMLDivElement>(null)
+
+  // The advanced multi-image creation modal's whole form, lifted up here (not local state inside
+  // the modal component) specifically so that "Add screenshot" can hide the modal, let a free drag
+  // capture a region on the actual page underneath, and reopen it — without losing anything the
+  // user already typed or arranged.
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createFront, setCreateFront] = useState('')
+  const [createBack, setCreateBack] = useState('')
+  const [createHideUntilFlip, setCreateHideUntilFlip] = useState(false)
+  const [stagedImages, setStagedImages] = useState<StagedImage[]>([])
+  const [createSaving, setCreateSaving] = useState(false)
+  const [createGenerating, setCreateGenerating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const createCard = useCardsStore((s) => s.createCard)
+
+  useEffect(() => {
+    if (!pictureMenuOpen) return
+    function handleOutside(e: MouseEvent): void {
+      if (pictureMenuRef.current && !pictureMenuRef.current.contains(e.target as Node)) setPictureMenuOpen(false)
+    }
+    window.addEventListener('mousedown', handleOutside)
+    return () => window.removeEventListener('mousedown', handleOutside)
+  }, [pictureMenuOpen])
 
   const pages = pagesByDocument[document.id] ?? []
   const page = pages[activePageIndex]
@@ -196,27 +270,139 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
   const canOccludeExact = selectedElements.length === 1 && selectedElements[0].kind === 'image'
 
   /**
-   * Occlusion isn't limited to elements the parser detected as images — a labeled diagram is
-   * usually vector shapes + text, with nothing that parses as a single "image" to select. Instead,
-   * crop a screenshot of whatever region is selected (any kind, any count) straight off the
-   * page's own render and use that as the occlusion source.
+   * The actual crop+save, given an exact page-space bbox — shared by every screenshot-sourced
+   * capture (occlusion, element-selection picture cards, and free-drawn picture cards below), none
+   * of which are limited to elements the parser detected (a labeled diagram is usually vector
+   * shapes + text, with nothing that parses as a single "image" to select).
    */
-  async function handleScreenshotOcclusion(): Promise<void> {
-    if (!page || !page.backgroundImagePath || selectedElements.length === 0) return
+  async function cropAndSave(bbox: BBox): Promise<OcclusionSource | null> {
+    if (!page || !page.backgroundImagePath) return null
+    const backgroundDataUrl = await window.api.documents.getImage(page.backgroundImagePath)
+    const croppedDataUrl = await cropImageDataUrl(backgroundDataUrl, bbox)
+    const savedPath = await window.api.documents.saveImage(croppedDataUrl)
+    return { imagePath: savedPath, bbox }
+  }
+
+  /** Crops the padded union of whatever elements are currently selected — not the pixel-tight
+   *  union, since a selection that just barely clips the edge of what you meant to capture is the
+   *  common case, not the exception, so the crop gets a margin instead of demanding a pixel-perfect
+   *  selection. The padded box (not the tight one) is what gets recorded as the source's own bbox
+   *  too — the occlusion editor converts mask coordinates back to page space relative to it. Still
+   *  used by the picture-card element-selection path; occlusion now only ever comes from a free
+   *  drag (see handleFreeCapture below) or canOccludeExact's direct single-image-element path. */
+  async function captureScreenshotCrop(): Promise<OcclusionSource | null> {
+    if (!page || selectedElements.length === 0) return null
+    const bbox = padBBoxForCrop(unionBBox(selectedElements.map((el) => el.bbox)), page.width, page.height)
+    return cropAndSave(bbox)
+  }
+
+  async function handleScreenshotPictureCard(): Promise<void> {
     setCapturingScreenshot(true)
     try {
-      // Padded, not the pixel-tight union — a selection that just barely clips the edge of what
-      // you meant to capture is the common case, not the exception, so the crop gets a margin
-      // instead of demanding a pixel-perfect selection. The padded box (not the tight one) is what
-      // gets recorded as the source's own bbox too, since that's what was actually captured — the
-      // occlusion editor converts mask coordinates back to page space relative to this rectangle.
-      const bbox = padBBoxForCrop(unionBBox(selectedElements.map((el) => el.bbox)), page.width, page.height)
-      const backgroundDataUrl = await window.api.documents.getImage(page.backgroundImagePath)
-      const croppedDataUrl = await cropImageDataUrl(backgroundDataUrl, bbox)
-      const savedPath = await window.api.documents.saveImage(croppedDataUrl)
-      setOcclusionSource({ imagePath: savedPath, bbox })
+      const source = await captureScreenshotCrop()
+      if (source) setPictureCardSource(source)
     } finally {
       setCapturingScreenshot(false)
+    }
+  }
+
+  /** The free-hand-drawn rectangle IS exactly what the user meant to capture — no padding here,
+   *  unlike the element-selection path above, since there's no "just barely clipped the edge" risk
+   *  when you're drawing the box yourself. Feeds into whichever editor freeSelectTarget names —
+   *  'multi' appends to the advanced modal's staged images and reopens it instead of opening a
+   *  dedicated editor. */
+  async function handleFreeCapture(bbox: BBox): Promise<void> {
+    const target = freeSelectTarget
+    setCapturingScreenshot(true)
+    try {
+      const source = await cropAndSave(bbox)
+      if (source) {
+        if (target === 'occlusion') setOcclusionSource(source)
+        else if (target === 'multi') {
+          setStagedImages((prev) => [...prev, { id: crypto.randomUUID(), imagePath: source.imagePath, bbox: source.bbox, face: 'front' }])
+          setCreateModalOpen(true)
+        } else setPictureCardSource(source)
+      }
+      setFreeSelectTarget(null)
+    } finally {
+      setCapturingScreenshot(false)
+    }
+  }
+
+  function handleRequestScreenshotForModal(): void {
+    setCreateModalOpen(false)
+    setFreeSelectTarget('multi')
+  }
+
+  function resetCreateModal(): void {
+    setCreateModalOpen(false)
+    setCreateFront('')
+    setCreateBack('')
+    setCreateHideUntilFlip(false)
+    setStagedImages([])
+    setCreateError(null)
+  }
+
+  function sourcesForStaged(images: StagedImage[]): NewCardSourceInput[] {
+    return images.map((img) => ({
+      documentId: document.id,
+      pageId: page!.id,
+      elementId: null,
+      bbox: img.bbox,
+      label: `${document.filename} · Slide ${page!.pageIndex + 1}`,
+      imagePath: img.imagePath,
+      imageFace: img.face
+    }))
+  }
+
+  /** Shared by the plain Save and the Generate-with-AI buttons — the only difference is whether
+   *  Claude gets a turn to rewrite the placeholder front/back afterward. Also handles doubleSided
+   *  (from the shared generation settings): a reversed companion card, with both the text AND each
+   *  image's face swapped, since "reversed" should mean the whole card flips, not just its text. */
+  async function saveCreateModal(withAi: boolean): Promise<void> {
+    if (withAi) setCreateGenerating(true)
+    else setCreateSaving(true)
+    setCreateError(null)
+    try {
+      // Images take precedence over the cloze setting — a cloze card is one passage with inline
+      // blanks, no front/back split to hang per-face images off of.
+      const cardType: CardType = stagedImages.length > 0 ? 'picture' : generationSettings.cloze ? 'cloze' : 'basic'
+      const card = await createCard({
+        front: createFront.trim() || 'Untitled',
+        back: createBack.trim(),
+        cardType,
+        revealImageOnFlip: createHideUntilFlip,
+        sources: sourcesForStaged(stagedImages)
+      })
+
+      let finalCard = card
+      if (withAi) {
+        finalCard = await window.api.ai.regenerate({
+          cardId: card.id,
+          instruction: generationSettings.customPrompt ?? undefined,
+          complexity: generationSettings.complexity,
+          cloze: cardType === 'cloze'
+        })
+        useCardsStore.setState({ cards: useCardsStore.getState().cards.map((c) => (c.id === card.id ? finalCard : c)) })
+      }
+
+      if (generationSettings.doubleSided && cardType !== 'cloze') {
+        const swapped = stagedImages.map((img) => ({ ...img, face: img.face === 'front' ? ('back' as const) : ('front' as const) }))
+        await createCard({
+          front: finalCard.back,
+          back: finalCard.front,
+          cardType,
+          revealImageOnFlip: createHideUntilFlip,
+          sources: sourcesForStaged(swapped)
+        })
+      }
+
+      resetCreateModal()
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : String(err))
+    } finally {
+      if (withAi) setCreateGenerating(false)
+      else setCreateSaving(false)
     }
   }
 
@@ -306,21 +492,95 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
           🔖 {showCardSources ? 'Hide' : 'Show'} flashcards{cardSourcesOnPage.length > 0 ? ` (${cardSourcesOnPage.length})` : ''}
         </button>
 
-        {canOccludeExact && (
+        <div style={{ position: 'relative' }} ref={pictureMenuRef}>
           <button
-            style={quietButtonStyle}
-            onClick={() =>
-              setOcclusionSource({ imagePath: selectedElements[0].imagePath!, bbox: selectedElements[0].bbox })
-            }
+            disabled={capturingScreenshot}
+            onClick={() => {
+              // Mid-drag, clicking the toggle again cancels the drag instead of reopening the menu
+              // underneath it — the menu itself already closed the moment a free mode was picked.
+              if (freeSelectTarget) {
+                setFreeSelectTarget(null)
+                return
+              }
+              setPictureMenuOpen((v) => !v)
+            }}
+            title="Create a picture card or image occlusion — free screenshot, or from the current selection"
+            style={{
+              border: pictureMenuOpen || freeSelectTarget ? '1px solid var(--accent)' : '1px solid transparent',
+              background: pictureMenuOpen || freeSelectTarget ? 'var(--accent-soft)' : 'transparent',
+              color: pictureMenuOpen || freeSelectTarget ? 'var(--accent)' : 'var(--fg-muted)'
+            }}
           >
-            Occlude image
+            {capturingScreenshot
+              ? 'Capturing…'
+              : freeSelectTarget === 'occlusion'
+                ? '📸 Drag to capture…'
+                : freeSelectTarget === 'picture'
+                  ? '📷 Drag to capture…'
+                  : '🖼️ Picture card'}
           </button>
-        )}
-        {selectedElements.length > 0 && (
-          <button disabled={capturingScreenshot} onClick={handleScreenshotOcclusion} style={quietButtonStyle}>
-            {capturingScreenshot ? 'Capturing…' : '📸 Occlude region'}
-          </button>
-        )}
+
+          {pictureMenuOpen && (
+            <div style={pictureMenuStyle} onClick={(e) => e.stopPropagation()}>
+              <button
+                style={pictureMenuItemStyle}
+                onClick={() => {
+                  setFreeSelectTarget('picture')
+                  setSelectedElementIds(new Set())
+                  setPictureMenuOpen(false)
+                }}
+              >
+                📷 Free screenshot
+                <span style={pictureMenuHintStyle}>Drag anywhere on the slide</span>
+              </button>
+              <button
+                style={pictureMenuItemStyle}
+                onClick={() => {
+                  setFreeSelectTarget('occlusion')
+                  setSelectedElementIds(new Set())
+                  setPictureMenuOpen(false)
+                }}
+              >
+                📸 Free occlusion
+                <span style={pictureMenuHintStyle}>Drag anywhere on the slide</span>
+              </button>
+              <button
+                disabled={selectedElements.length === 0 || capturingScreenshot}
+                style={pictureMenuItemStyle}
+                onClick={() => {
+                  handleScreenshotPictureCard()
+                  setPictureMenuOpen(false)
+                }}
+              >
+                🖼️ Picture card from selection
+                <span style={pictureMenuHintStyle}>
+                  {selectedElements.length === 0 ? 'Select something on the slide first' : 'Uses the current selection'}
+                </span>
+              </button>
+              <button
+                disabled={!canOccludeExact}
+                style={pictureMenuItemStyle}
+                onClick={() => {
+                  setOcclusionSource({ imagePath: selectedElements[0].imagePath!, bbox: selectedElements[0].bbox })
+                  setPictureMenuOpen(false)
+                }}
+              >
+                Occlude selected image
+                <span style={pictureMenuHintStyle}>
+                  {canOccludeExact ? 'Uses the selected image element directly' : 'Select a single detected image element first'}
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={() => setCreateModalOpen(true)}
+          style={quietButtonStyle}
+          title="Open the full flashcard editor — front/back text, generation settings, and multiple screenshots placed on the front or back"
+        >
+          🗂️ Advanced Flashcard
+        </button>
 
         <div style={{ flex: 1 }} />
 
@@ -348,6 +608,8 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
           flashBBox={flashBBox}
           cardSources={showCardSources ? cardSourcesOnPage : []}
           onNavigateToCard={(card) => focusCard(card.id, card.folderId)}
+          freeSelectMode={freeSelectTarget !== null}
+          onFreeCapture={handleFreeCapture}
         />
       </div>
 
@@ -364,6 +626,46 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
             setOcclusionSource(null)
             setSelectedElementIds(new Set())
           }}
+        />
+      )}
+
+      {pictureCardSource && page && (
+        <PictureCardEditor
+          documentId={document.id}
+          pageId={page.id}
+          documentLabel={document.filename}
+          sourceLabel={`Slide ${page.pageIndex + 1}`}
+          sourceImagePath={pictureCardSource.imagePath}
+          sourceBBox={pictureCardSource.bbox}
+          onClose={() => setPictureCardSource(null)}
+          onSaved={() => {
+            setPictureCardSource(null)
+            setSelectedElementIds(new Set())
+          }}
+        />
+      )}
+
+      {/* Hidden (not unmounted just via a CSS toggle — genuinely not rendered) while a screenshot
+          capture is in flight for it, so the free-select overlay over the actual page underneath
+          isn't covered by the modal's own backdrop. All its form state lives in this component, not
+          inside the modal, so hiding/reopening it this way never loses anything typed or arranged. */}
+      {createModalOpen && freeSelectTarget !== 'multi' && (
+        <CreateFlashcardModal
+          front={createFront}
+          onFrontChange={setCreateFront}
+          back={createBack}
+          onBackChange={setCreateBack}
+          hideUntilFlip={createHideUntilFlip}
+          onHideUntilFlipChange={setCreateHideUntilFlip}
+          images={stagedImages}
+          onImagesChange={setStagedImages}
+          onRequestScreenshot={handleRequestScreenshotForModal}
+          saving={createSaving}
+          generating={createGenerating}
+          error={createError}
+          onClose={resetCreateModal}
+          onSave={() => saveCreateModal(false)}
+          onGenerateWithAi={() => saveCreateModal(true)}
         />
       )}
     </div>

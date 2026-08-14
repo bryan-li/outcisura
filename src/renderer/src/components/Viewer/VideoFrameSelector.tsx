@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { BBox } from '../../../../shared/types'
 
 /** Screen-space pixels of mouse movement before a mousedown counts as a drag — mirrors PageView's
@@ -6,30 +6,54 @@ import type { BBox } from '../../../../shared/types'
 const DRAG_THRESHOLD = 4
 
 interface VideoFrameSelectorProps {
-  /** The video's true pixel dimensions (videoWidth/videoHeight) — the overlay itself is sized to
-   *  match the video's rendered (possibly scaled-down) on-screen box via CSS `inset: 0` on its
-   *  wrapper; this is only needed to convert drag coordinates back to native pixel space. */
+  /** The video's true pixel dimensions (videoWidth/videoHeight) — or, when reused over a PDF/PPTX
+   *  page (see PageView), that page's own width/height. Used both to derive the live on-screen
+   *  scale from this overlay's own rendered rect, and as the coordinate space the returned bbox is
+   *  expressed in. */
   nativeWidth: number
   nativeHeight: number
-  /** A drag past the threshold finished — bbox is in the video's own native pixel space, ready to
-   *  feed straight into a canvas crop at native resolution. */
+  /** A drag past the threshold finished — bbox is in the native/page coordinate space passed in,
+   *  ready to feed straight into a canvas crop at native resolution. */
   onCapture: (bbox: BBox) => void
 }
 
-/** A plain absolutely-positioned drag layer on top of a paused <video> — deliberately not reusing
- *  PageView's element-hit-test drag-select (there are no parsed `elements` on a video frame to hit)
- *  and not Konva (nothing needs compositing over an image; the <video> renders itself underneath).
- *  The drag rectangle itself becomes the bbox directly. */
+/** A plain absolutely-positioned drag layer over whatever's rendering underneath (a paused <video>,
+ *  or a PDF/PPTX page image in PageView) — deliberately not reusing PageView's element-hit-test
+ *  drag-select (nothing here depends on parsed `elements`) and not Konva (nothing needs compositing;
+ *  the content renders itself underneath). The drag rectangle itself becomes the returned bbox.
+ *
+ *  Uses the same dual-scale split as SelectableElementsOverlay, for the same reason (see that
+ *  component's own comments for the full rationale): `renderScale` — transform-UNAWARE, read via
+ *  ResizeObserver's contentRect — is what actually shrinks the rendered drag box, and comes out to 1
+ *  when an ancestor CSS transform already does the one shrink needed (PageView) or the real ratio
+ *  when nothing upstream transforms (VideoPlayer, sized directly). `screenScale` — transform-AWARE,
+ *  via getBoundingClientRect, computed fresh per event — is used only to convert a real mouse
+ *  position back into this component's own local coordinate space. Conflating the two (this
+ *  component's original implementation, before it had a second consumer) is exactly what made the
+ *  drag box render shrunk-and-offset toward the top-left once reused inside PageView's ancestor-
+ *  transform layout — VideoPlayer's own layout has no such ancestor transform, so the two factors
+ *  happened to coincide there and the bug never showed up in that context. */
 export function VideoFrameSelector({ nativeWidth, nativeHeight, onCapture }: VideoFrameSelectorProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const dragStartRef = useRef<{ x: number; y: number } | null>(null)
   const [dragRect, setDragRect] = useState<BBox | null>(null)
+  const [renderScale, setRenderScale] = useState(1)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const renderedWidth = entries[0]?.contentRect.width
+      if (renderedWidth) setRenderScale(renderedWidth / nativeWidth || 1)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [nativeWidth])
 
   function toNativeCoords(e: React.MouseEvent): { x: number; y: number } {
     const rect = containerRef.current!.getBoundingClientRect()
-    const scaleX = nativeWidth / rect.width
-    const scaleY = nativeHeight / rect.height
-    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY }
+    const screenScale = rect.width / nativeWidth || 1
+    return { x: (e.clientX - rect.left) / screenScale, y: (e.clientY - rect.top) / screenScale }
   }
 
   function handleMouseDown(e: React.MouseEvent): void {
@@ -41,12 +65,13 @@ export function VideoFrameSelector({ nativeWidth, nativeHeight, onCapture }: Vid
     const start = dragStartRef.current
     if (!start) return
     const current = toNativeCoords(e)
-    const rect = containerRef.current!.getBoundingClientRect()
-    const screenDist = Math.hypot(
-      (current.x - start.x) * (rect.width / nativeWidth),
-      (current.y - start.y) * (rect.height / nativeHeight)
-    )
-    if (!dragRect && screenDist < DRAG_THRESHOLD) return
+    // Back to real screen pixels for the threshold check — current/start are native-space
+    // coordinates, so this must multiply by the same screenScale toNativeCoords divided by, not
+    // renderScale (a different factor whenever an ancestor transform is involved).
+    const screenScale = containerRef.current!.getBoundingClientRect().width / nativeWidth || 1
+    if (!dragRect && Math.hypot((current.x - start.x) * screenScale, (current.y - start.y) * screenScale) < DRAG_THRESHOLD) {
+      return
+    }
     setDragRect({
       x: Math.min(start.x, current.x),
       y: Math.min(start.y, current.y),
@@ -66,20 +91,6 @@ export function VideoFrameSelector({ nativeWidth, nativeHeight, onCapture }: Vid
     setDragRect(null)
   }
 
-  // dragRect is in native pixel space; the visible box needs to be drawn back in the overlay's own
-  // rendered space, so it's scaled by the container's own rect on each render rather than stored
-  // pre-converted (simpler than threading the inverse scale through state).
-  const rect = containerRef.current?.getBoundingClientRect()
-  const displayRect =
-    dragRect && rect
-      ? {
-          x: dragRect.x * (rect.width / nativeWidth),
-          y: dragRect.y * (rect.height / nativeHeight),
-          w: dragRect.w * (rect.width / nativeWidth),
-          h: dragRect.h * (rect.height / nativeHeight)
-        }
-      : null
-
   return (
     <div
       ref={containerRef}
@@ -89,20 +100,25 @@ export function VideoFrameSelector({ nativeWidth, nativeHeight, onCapture }: Vid
       onMouseLeave={handleMouseLeave}
       style={overlayStyle}
     >
-      {displayRect && (
-        <div
-          style={{
-            position: 'absolute',
-            left: displayRect.x,
-            top: displayRect.y,
-            width: displayRect.w,
-            height: displayRect.h,
-            border: '1px dashed #e86b0f',
-            background: '#e86b0f1a',
-            pointerEvents: 'none'
-          }}
-        />
-      )}
+      {/* Raw native-space coordinates below are only correct once shrunk by this transform — see the
+          `renderScale` comment above. transform-origin: top left matches how PageView's own ancestor
+          transform already anchors, so both contexts agree on which corner is fixed. */}
+      <div style={{ position: 'absolute', top: 0, left: 0, width: nativeWidth, height: nativeHeight, transform: `scale(${renderScale})`, transformOrigin: 'top left' }}>
+        {dragRect && (
+          <div
+            style={{
+              position: 'absolute',
+              left: dragRect.x,
+              top: dragRect.y,
+              width: dragRect.w,
+              height: dragRect.h,
+              border: '1px dashed #e86b0f',
+              background: '#e86b0f1a',
+              pointerEvents: 'none'
+            }}
+          />
+        )}
+      </div>
     </div>
   )
 }

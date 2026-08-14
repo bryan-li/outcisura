@@ -9,6 +9,7 @@ import { allCardsInScope, dueCards, upcomingCards } from '../../utils/srsQueue'
 import { computeReviewStats } from '../../utils/reviewStats'
 import { getChildren } from '../../utils/folderTree'
 import { StatTile } from '../Home/HomePage'
+import { ReviewHeatmap } from './ReviewHeatmap'
 
 function formatDueIn(dueAt: string, now: Date): string {
   const diffDays = (new Date(dueAt).getTime() - now.getTime()) / 86400000
@@ -76,6 +77,11 @@ export function ReviewDashboard(): JSX.Element {
         <StatTile label="Total cards" value={stats.totalCards} />
         <StatTile label="Reviewed today" value={stats.reviewedToday} />
         <StatTile label="🔥 Day streak" value={stats.streakDays} />
+      </div>
+
+      <div>
+        <h2 style={sectionHeaderStyle}>Review activity</h2>
+        <ReviewHeatmap log={logEntries} now={now} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-5)' }}>

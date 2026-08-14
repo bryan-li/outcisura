@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { BBox, CardRecord, CardSourceRecord, ElementRecord, PageRecord } from '../../../../shared/types'
 import { useResolvedImage } from '../../hooks/useResolvedImage'
 import { SelectableElementsOverlay } from './SelectableElementsOverlay'
+import { VideoFrameSelector } from './VideoFrameSelector'
 
 interface PageViewProps {
   page: PageRecord
@@ -17,6 +18,12 @@ interface PageViewProps {
    *  "show flashcards" toggle is on, empty otherwise (see DocumentViewer). */
   cardSources?: { card: CardRecord; source: CardSourceRecord }[]
   onNavigateToCard?: (card: CardRecord) => void
+  /** When true, replaces the normal element marquee-select with a free hand-drawn rectangle (same
+   *  mechanism VideoFrameSelector already uses for a paused video frame) — for capturing an
+   *  arbitrary screenshot region with no dependency on the page's parsed elements at all. Mutually
+   *  exclusive with element selection: only one overlay is ever mounted at a time. */
+  freeSelectMode?: boolean
+  onFreeCapture?: (bbox: BBox) => void
 }
 
 export function PageView({
@@ -28,7 +35,9 @@ export function PageView({
   onClearSelection,
   flashBBox,
   cardSources = [],
-  onNavigateToCard
+  onNavigateToCard,
+  freeSelectMode = false,
+  onFreeCapture
 }: PageViewProps): JSX.Element {
   const backgroundSrc = useResolvedImage(page.backgroundImagePath)
 
@@ -81,15 +90,19 @@ export function PageView({
               top, so an existing flashcard's own box (and its hover thumbnail) always stays
               clickable/hoverable above this overlay's full-page hit area, with no manual
               tagName-check needed to arbitrate between them (they're siblings now, not nested). */}
-          <SelectableElementsOverlay
-            width={page.width}
-            height={page.height}
-            elements={elements}
-            selectedIds={selectedIds}
-            onToggleSelect={onToggleSelect}
-            onDragSelect={onDragSelect}
-            onClearSelection={onClearSelection}
-          />
+          {freeSelectMode ? (
+            <VideoFrameSelector nativeWidth={page.width} nativeHeight={page.height} onCapture={(bbox) => onFreeCapture?.(bbox)} />
+          ) : (
+            <SelectableElementsOverlay
+              width={page.width}
+              height={page.height}
+              elements={elements}
+              selectedIds={selectedIds}
+              onToggleSelect={onToggleSelect}
+              onDragSelect={onDragSelect}
+              onClearSelection={onClearSelection}
+            />
+          )}
 
           {cardSources.map(({ card, source }) => (
             <CardSourceOverlay

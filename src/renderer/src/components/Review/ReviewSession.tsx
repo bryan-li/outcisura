@@ -6,7 +6,7 @@ import { useFoldersStore } from '../../state/foldersStore'
 import { useUiStore, type MainView, type ReviewScope } from '../../state/uiStore'
 import { allCardsInScope, dueCards, requeueAfterAgain } from '../../utils/srsQueue'
 import { backTextToLines } from '../../utils/blockCard'
-import { firstImageSourcePath, maskBBoxesFor } from '../../utils/occlusion'
+import { firstImageSourcePath, maskBBoxesFor, hasFaceTaggedImages, imageSourcesForFace } from '../../utils/occlusion'
 import { parseCloze } from '../../utils/cloze'
 import { OcclusionImage } from '../CardBrowser/OcclusionImage'
 
@@ -282,6 +282,17 @@ function CardFace({
   const imagePath = firstImageSourcePath(card)
   const [zoomed, setZoomed] = useState(false)
   const isCloze = card.cardType === 'cloze'
+  // 'picture' cards can opt into hiding the image entirely until flipped (a guess-what-this-is
+  // card), unlike every other image-bearing type (including image_occlusion, whose mask boxes
+  // toggle but whose underlying image is always visible) — see CardRecord.revealImageOnFlip. Also
+  // gates the front gallery below — a multi-image card is cardType 'picture' too (see
+  // CreateFlashcardModal), so this same flag covers "hide the front images until flipped" there.
+  const imageHiddenForNow = card.cardType === 'picture' && card.revealImageOnFlip && !revealed
+  // A card assembled via the multi-image modal has its images explicitly tagged front/back — render
+  // a gallery per face instead of the single shared-image path every other card type uses.
+  const faceTagged = hasFaceTaggedImages(card)
+  const frontImages = faceTagged ? imageSourcesForFace(card, 'front') : []
+  const backImages = faceTagged ? imageSourcesForFace(card, 'back') : []
 
   return (
     <div style={cardFaceStyle} onClick={!revealed ? onReveal : undefined}>
@@ -314,8 +325,9 @@ function CardFace({
       )}
 
       {/* Same image throughout — only the mask boxes toggle with `revealed`, so answering doesn't
-          swap in a second, previously-unmasked copy of the picture. */}
-      {imagePath && (
+          swap in a second, previously-unmasked copy of the picture. Picture cards with
+          revealImageOnFlip are the one exception: the image doesn't render at all until flipped. */}
+      {!faceTagged && imagePath && !imageHiddenForNow && (
         <div
           style={{ marginTop: 'var(--space-3)', cursor: 'zoom-in' }}
           title="Click to enlarge"
@@ -330,7 +342,25 @@ function CardFace({
         </div>
       )}
 
-      {imagePath && zoomed && (
+      {/* Multi-image cards: a gallery per face instead of one shared image. No lightbox here —
+          a click-to-enlarge that must arbitrate against N thumbnails at once isn't worth the
+          complexity for a first cut; each thumbnail already renders full-size, just small. */}
+      {faceTagged && frontImages.length > 0 && !imageHiddenForNow && (
+        <div style={{ marginTop: 'var(--space-3)', display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
+          {frontImages.map((path, i) => (
+            <OcclusionImage key={`${path}-${i}`} imagePath={path} maskBBoxes={[]} revealed maxWidth={160} />
+          ))}
+        </div>
+      )}
+      {faceTagged && revealed && backImages.length > 0 && (
+        <div style={{ marginTop: 'var(--space-3)', display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
+          {backImages.map((path, i) => (
+            <OcclusionImage key={`${path}-${i}`} imagePath={path} maskBBoxes={[]} revealed maxWidth={160} />
+          ))}
+        </div>
+      )}
+
+      {imagePath && !imageHiddenForNow && zoomed && (
         <ImageLightbox imagePath={imagePath} maskBBoxes={maskBBoxesFor(card, imagePath)} revealed={revealed} onClose={() => setZoomed(false)} />
       )}
 

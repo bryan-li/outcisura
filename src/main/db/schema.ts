@@ -186,6 +186,74 @@ const MIGRATIONS: string[] = [
   -- since 0 is itself a meaningful page index.
   ALTER TABLE documents ADD COLUMN last_page_index INTEGER;
   ALTER TABLE documents ADD COLUMN last_playback_seconds REAL;
+  `,
+  `
+  -- One row per already-transcribed [start,end) range on a video, per engine — lets a new range
+  -- request reuse whatever's already been transcribed instead of re-running Whisper over audio it's
+  -- already seen, while keeping engines tracked separately (switching engines gets no free reuse,
+  -- by design — see repository.ts's getTranscriptCoverage).
+  CREATE TABLE transcript_segments (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    engine TEXT NOT NULL CHECK (engine IN ('whisper-local', 'openai-whisper')),
+    start_seconds REAL NOT NULL,
+    end_seconds REAL NOT NULL,
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_transcript_segments_document_engine ON transcript_segments(document_id, engine);
+  `,
+  `
+  -- Widen cards.card_type to allow 'picture' (front shows an image + a question, back reveals the
+  -- answer — distinct from image_occlusion, which masks a REGION of an image rather than hiding the
+  -- whole thing). Also adds reveal_image_on_flip so a picture card's image can optionally stay
+  -- hidden until flipped instead of showing on both faces like every other image-bearing card type
+  -- (the default for everything else, including image_occlusion's own unmasked areas). SQLite can't
+  -- ALTER a CHECK constraint in place, so this rebuilds the table the same way migrations 8/9 did —
+  -- see the FK_OFF_MIGRATIONS handling below.
+  CREATE TABLE cards_new (
+    id TEXT PRIMARY KEY,
+    front TEXT NOT NULL,
+    back TEXT NOT NULL,
+    card_type TEXT NOT NULL CHECK (card_type IN ('basic', 'image_occlusion', 'cloze', 'picture')),
+    ai_generated INTEGER NOT NULL DEFAULT 0,
+    prev_front TEXT,
+    prev_back TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    due_at TEXT NOT NULL DEFAULT '',
+    interval_days REAL NOT NULL DEFAULT 0,
+    ease_factor REAL NOT NULL DEFAULT 2.5,
+    repetitions INTEGER NOT NULL DEFAULT 0,
+    lapses INTEGER NOT NULL DEFAULT 0,
+    last_reviewed_at TEXT,
+    reveal_image_on_flip INTEGER NOT NULL DEFAULT 0
+  );
+  INSERT INTO cards_new SELECT
+    id, front, back, card_type, ai_generated, prev_front, prev_back, created_at, updated_at,
+    folder_id, sort_order, due_at, interval_days, ease_factor, repetitions, lapses, last_reviewed_at, 0
+  FROM cards;
+  DROP TABLE cards;
+  ALTER TABLE cards_new RENAME TO cards;
+  `,
+  `
+  -- The end of a transcribed [start,end) range, alongside pages.timestamp_seconds (its start) — a
+  -- transcript-range card's backlink can then highlight the whole span it came from on the
+  -- timeline, not just flash a single point. NULL for every other kind of page (ordinary pdf/pptx
+  -- pages, and single-frame OCR/region-select video captures, none of which have a range). A plain
+  -- additive column, not a CHECK constraint, so no table rebuild needed here.
+  ALTER TABLE pages ADD COLUMN timestamp_end_seconds REAL;
+  `,
+  `
+  -- Which side of the card an image source belongs to — lets a card assembled via the multi-image
+  -- "Create Flashcard" modal carry several images on its front and several (possibly different) on
+  -- its back. NULL for every other kind of source (occlusion crops, parsed-element sources, a
+  -- single picture-card image), which have no "which face" concept — the CHECK explicitly allows
+  -- NULL so it validates cleanly against every existing row. A plain additive column, not a
+  -- constraint change on an existing column, so no FK_OFF table rebuild needed here.
+  ALTER TABLE card_sources ADD COLUMN image_face TEXT CHECK (image_face IS NULL OR image_face IN ('front', 'back'));
   `
 ]
 
@@ -198,7 +266,7 @@ const MIGRATIONS: string[] = [
 // these back into the normal transaction loop below — PRAGMA foreign_keys is also a silent no-op
 // when set inside an already-open transaction, so that mistake would reintroduce the cascade-delete
 // data loss with no error raised anywhere.
-const FK_OFF_MIGRATIONS = new Set([8, 9])
+const FK_OFF_MIGRATIONS = new Set([8, 9, 12])
 
 export function openDatabase(filePath: string): Database.Database {
   const db = new Database(filePath)

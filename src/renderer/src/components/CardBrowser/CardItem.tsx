@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
 import type { CardRecord } from '../../../../shared/types'
 import { useCardsStore } from '../../state/cardsStore'
+import { useReviewLogStore } from '../../state/reviewLogStore'
 import { useUiStore } from '../../state/uiStore'
 import { backTextToLines, blockTextToCard, cardToBlockText } from '../../utils/blockCard'
 import { computeCardReorder } from '../../utils/cardOrder'
-import { firstImageSourcePath, maskBBoxesFor } from '../../utils/occlusion'
+import { firstImageSourcePath, maskBBoxesFor, hasFaceTaggedImages, imageSourcesForFace } from '../../utils/occlusion'
 import { parseCloze } from '../../utils/cloze'
 import { OcclusionImage } from './OcclusionImage'
 
@@ -72,6 +73,29 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
 
   const backLines = backTextToLines(card.back)
   const imagePath = firstImageSourcePath(card)
+  // Same "don't spoil the quiz while browsing" reasoning as occlusion's masks/cloze's blanks below
+  // — for a picture card with revealImageOnFlip, the whole image IS the thing being tested, so it
+  // stays hidden here regardless of expanded state (there's no flip gesture in browse view to
+  // reveal it through). Applies the same way to a multi-image card's front images, since those are
+  // also cardType 'picture' (see CreateFlashcardModal).
+  const imageHiddenInBrowse = card.cardType === 'picture' && card.revealImageOnFlip
+  // A card assembled via the multi-image modal has explicit front/back image tagging — gallery
+  // rendering below instead of the single shared-image path every other card type uses. Back images
+  // are shown whenever expanded (not spoiler-hidden), same precedent as plain back TEXT below —
+  // only revealImageOnFlip (checked above) actually hides anything from browsing.
+  const faceTagged = hasFaceTaggedImages(card)
+  const frontImages = faceTagged ? imageSourcesForFace(card, 'front') : []
+  const backImages = faceTagged ? imageSourcesForFace(card, 'back') : []
+  const smallPreviewPath = faceTagged ? (frontImages[0] ?? backImages[0] ?? null) : imagePath
+
+  // Total grade events, not just the successful-streak `card.repetitions` — every time this card
+  // was shown in review, regardless of how it was graded. reviewLogStore already loads the whole
+  // log (small enough for a personal deck), so this is a client-side derive, no new IPC/query.
+  const reviewLogEntries = useReviewLogStore((s) => s.entries)
+  const reviewCount = useMemo(
+    () => reviewLogEntries.reduce((n, e) => (e.cardId === card.id ? n + 1 : n), 0),
+    [reviewLogEntries, card.id]
+  )
 
   useEffect(() => {
     if (!focused) return
@@ -216,9 +240,14 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
             what each card is about without opening every one. Never revealed here (masked stays
             masked): browsing a folder shouldn't spoil an occlusion card's answer. Hidden once
             expanded so it isn't shown twice alongside the larger copy below. */}
-        {imagePath && !expanded && (
+        {smallPreviewPath && !expanded && !imageHiddenInBrowse && (
           <span style={{ flexShrink: 0, marginTop: 1 }}>
-            <OcclusionImage imagePath={imagePath} maskBBoxes={maskBBoxesFor(card, imagePath)} revealed={false} maxWidth={32} />
+            <OcclusionImage
+              imagePath={smallPreviewPath}
+              maskBBoxes={faceTagged ? [] : maskBBoxesFor(card, smallPreviewPath)}
+              revealed={false}
+              maxWidth={32}
+            />
           </span>
         )}
 
@@ -288,10 +317,40 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
                   Wrap the hidden answer in {'{{double braces}}'} — everything wrapped is hidden together.
                 </p>
               )}
-              {expanded && imagePath && (
+              {expanded && !faceTagged && imagePath && !imageHiddenInBrowse && (
                 <div style={{ marginTop: 6 }}>
                   <OcclusionImage imagePath={imagePath} maskBBoxes={maskBBoxesFor(card, imagePath)} revealed={false} maxWidth={260} />
                 </div>
+              )}
+              {expanded && faceTagged && !imageHiddenInBrowse && frontImages.length > 0 && (
+                <div style={{ marginTop: 6 }}>
+                  <p style={imageGalleryLabelStyle}>Front</p>
+                  <div style={imageGalleryRowStyle}>
+                    {frontImages.map((path, i) => (
+                      <OcclusionImage key={`${path}-${i}`} imagePath={path} maskBBoxes={[]} revealed maxWidth={90} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {expanded && faceTagged && !imageHiddenInBrowse && backImages.length > 0 && (
+                <div style={{ marginTop: 6 }}>
+                  <p style={imageGalleryLabelStyle}>Back</p>
+                  <div style={imageGalleryRowStyle}>
+                    {backImages.map((path, i) => (
+                      <OcclusionImage key={`${path}-${i}`} imagePath={path} maskBBoxes={[]} revealed maxWidth={90} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {expanded && imageHiddenInBrowse && (frontImages.length > 0 || backImages.length > 0 || imagePath) && (
+                <p style={{ margin: '6px 0 0', fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>
+                  🖼 Image{faceTagged && frontImages.length + backImages.length > 1 ? 's' : ''} hidden until flipped in review
+                </p>
+              )}
+              {expanded && (
+                <p style={{ margin: '4px 0 0', fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>
+                  {reviewCount > 0 ? `Reviewed ${reviewCount} time${reviewCount === 1 ? '' : 's'}` : 'Not reviewed yet'}
+                </p>
               )}
             </div>
           )}
@@ -357,6 +416,21 @@ const clozeBlankStyle: CSSProperties = {
   color: 'var(--accent)',
   fontWeight: 700,
   cursor: 'default'
+}
+
+const imageGalleryLabelStyle: CSSProperties = {
+  margin: '0 0 3px',
+  fontSize: 'var(--font-xs)',
+  color: 'var(--fg-faint)',
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.03em'
+}
+
+const imageGalleryRowStyle: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 4
 }
 
 const folderBadgeStyle: CSSProperties = {

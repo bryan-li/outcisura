@@ -17,8 +17,12 @@ import type {
   PageRecord,
   ParsedDocument,
   ReviewLogEntry,
+  SaveTranscriptSegmentInput,
   SrsSnapshot,
-  TranscribeAudioInput
+  TranscribeAudioInput,
+  TranscriptCoverageInput,
+  TranscriptCoverageResult,
+  TranscriptSegmentRecord
 } from './types'
 import type { ReviewGrade } from './srs'
 
@@ -51,6 +55,8 @@ export const IpcChannels = {
   aiGenerateFromSources: 'ai:generateFromSources',
   ocrRecognizePage: 'ocr:recognizePage',
   transcriptionTranscribe: 'transcription:transcribe',
+  transcriptionGetCoverage: 'transcription:getCoverage',
+  transcriptionSaveSegment: 'transcription:saveSegment',
   settingsGetApiKeyStatus: 'settings:getApiKeyStatus',
   settingsSetApiKey: 'settings:setApiKey',
   settingsGetOpenAiKeyStatus: 'settings:getOpenAiKeyStatus',
@@ -125,9 +131,15 @@ export interface FlashcardApi {
   }
   transcription: {
     /** Transcribes an already-sliced, already-resampled audio clip (see utils/audioSlice.ts) and
-     *  returns the raw text — no persistence here, unlike ocr.recognizePage, since there's no
-     *  page/element to attach a transcript to until the caller decides to make a card from it. */
+     *  returns the raw text. Pure compute, no persistence — callers doing range-based transcription
+     *  use this per-gap (see getCoverage/saveSegment below) rather than for a whole requested range. */
     transcribe(input: TranscribeAudioInput): Promise<string>
+    /** Diffs a requested range against what's already been transcribed for this document+engine.
+     *  Reuse existingSegments verbatim; call transcribe() + saveSegment() for each gap. */
+    getCoverage(input: TranscriptCoverageInput): Promise<TranscriptCoverageResult>
+    /** Persists one newly-transcribed gap so a future overlapping range can reuse it instead of
+     *  re-transcribing the same audio. */
+    saveSegment(input: SaveTranscriptSegmentInput): Promise<TranscriptSegmentRecord>
   }
   ui: {
     /** Scales the whole interface via real browser zoom (1 = 100%). */

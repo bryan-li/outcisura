@@ -43,7 +43,9 @@ const api: FlashcardApi = {
     recognizePage: (input) => ipcRenderer.invoke(IpcChannels.ocrRecognizePage, input)
   },
   transcription: {
-    transcribe: (input) => ipcRenderer.invoke(IpcChannels.transcriptionTranscribe, input)
+    transcribe: (input) => ipcRenderer.invoke(IpcChannels.transcriptionTranscribe, input),
+    getCoverage: (input) => ipcRenderer.invoke(IpcChannels.transcriptionGetCoverage, input),
+    saveSegment: (input) => ipcRenderer.invoke(IpcChannels.transcriptionSaveSegment, input)
   },
   ui: {
     // Real browser zoom rather than a CSS transform: layout stays in CSS pixels, so pointer

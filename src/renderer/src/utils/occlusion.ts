@@ -15,3 +15,18 @@ export function firstImageSourcePath(card: CardRecord): string | null {
 export function maskBBoxesFor(card: CardRecord, imagePath: string): BBox[] {
   return card.sources.filter((s) => s.imagePath === imagePath && s.maskBBox).map((s) => s.maskBBox!)
 }
+
+/** Every image path explicitly tagged for one face of the card, in source order — only ever
+ *  populated for cards assembled via the multi-image "Create Flashcard" modal (see
+ *  CreateFlashcardModal). Empty for every other card, including single-image picture cards and
+ *  occlusion cards, which have no imageFace tagging at all — callers should fall back to
+ *  firstImageSourcePath's single-image behavior when this returns []. */
+export function imageSourcesForFace(card: CardRecord, face: 'front' | 'back'): string[] {
+  return card.sources.filter((s) => s.imageFace === face && s.imagePath).map((s) => s.imagePath!)
+}
+
+/** True for any card with at least one face-tagged image source — the signal callers use to
+ *  switch from the single-image rendering path to the multi-image gallery path. */
+export function hasFaceTaggedImages(card: CardRecord): boolean {
+  return card.sources.some((s) => s.imageFace !== null)
+}

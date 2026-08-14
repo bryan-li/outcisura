@@ -11,8 +11,10 @@ import type {
   NewCardInput,
   OcrRecognizePageInput,
   ParsedDocument,
+  SaveTranscriptSegmentInput,
   SrsSnapshot,
-  TranscribeAudioInput
+  TranscribeAudioInput,
+  TranscriptCoverageInput
 } from '../../shared/types'
 import type { ReviewGrade } from '../../shared/srs'
 import type { AiService } from '../aiService'
@@ -87,6 +89,12 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
   ipcMain.handle(IpcChannels.transcriptionTranscribe, async (_event, input: TranscribeAudioInput) => {
     return transcription.transcribe(new Float32Array(input.audioData), input.engine)
   })
+  ipcMain.handle(IpcChannels.transcriptionGetCoverage, (_event, input: TranscriptCoverageInput) =>
+    repo.getTranscriptCoverage(input.documentId, input.engine, input.range)
+  )
+  ipcMain.handle(IpcChannels.transcriptionSaveSegment, (_event, input: SaveTranscriptSegmentInput) =>
+    repo.insertTranscriptSegment(input)
+  )
 
   ipcMain.handle(IpcChannels.settingsGetApiKeyStatus, () => getApiKeyStatus())
   ipcMain.handle(IpcChannels.settingsSetApiKey, (_event, apiKey: string | null) => {

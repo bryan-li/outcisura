@@ -12,7 +12,6 @@ export function HomePage(): JSX.Element {
   const openDocument = useDocumentsStore((s) => s.openDocument)
   const setView = useUiStore((s) => s.setView)
 
-  const aiGeneratedCount = cards.filter((c) => c.aiGenerated).length
   const occlusionCount = cards.filter((c) => c.cardType === 'image_occlusion').length
   const dueCount = dueCards(cards, { kind: 'all' }, new Date()).length
 
@@ -50,7 +49,6 @@ export function HomePage(): JSX.Element {
         <StatTile label="Flashcards" value={cards.length} onClick={() => setView({ type: 'cards' })} />
         <StatTile label="Documents" value={documents.length} onClick={() => setView({ type: 'library-index' })} />
         <StatTile label="Folders" value={folders.length} onClick={() => setView({ type: 'folders-index' })} />
-        <StatTile label="AI-generated" value={aiGeneratedCount} />
         <StatTile label="Image occlusion" value={occlusionCount} />
       </div>
 
