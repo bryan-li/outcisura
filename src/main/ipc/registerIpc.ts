@@ -1,16 +1,24 @@
 import { ipcMain } from 'electron'
 import { IpcChannels } from '../../shared/ipc'
 import type {
+  AiJudgeFreeTextRequest,
   AiRegenerateRequest,
+  AiRegenerateResult,
+  AiSharePrepRequest,
+  CardRecord,
   CardReorderItem,
   CreateVideoFramePageInput,
   DocumentPositionPatch,
+  FolderRecord,
   FolderReorderItem,
   FolderUpdatePatch,
   ImportVideoInput,
   NewCardInput,
   OcrRecognizePageInput,
   ParsedDocument,
+  RecaptureOrphanedSourceInput,
+  ReplaceOrphanedSourceInput,
+  ReviewLogEntry,
   SaveTranscriptSegmentInput,
   SrsSnapshot,
   TranscribeAudioInput,
@@ -58,6 +66,18 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
   ipcMain.handle(IpcChannels.cardsDelete, (_event, id: string) => {
     repo.deleteCard(id)
   })
+  ipcMain.handle(IpcChannels.cardsApplyAiRegeneration, (_event, id: string, next: AiRegenerateResult) => repo.applyAiRegeneration(id, next))
+  ipcMain.handle(IpcChannels.cardsGetOrphanedSources, () => repo.getOrphanedSources())
+  ipcMain.handle(IpcChannels.cardsReplaceOrphanedSource, (_event, orphanId: string, input: ReplaceOrphanedSourceInput) =>
+    repo.replaceOrphanedSource(orphanId, input)
+  )
+  ipcMain.handle(IpcChannels.cardsRecaptureOrphanedSource, (_event, orphanId: string, input: RecaptureOrphanedSourceInput) =>
+    repo.recaptureOrphanedSource(orphanId, input)
+  )
+  ipcMain.handle(IpcChannels.cardsDismissOrphanedSource, (_event, orphanId: string) => repo.dismissOrphanedSource(orphanId))
+  ipcMain.handle(IpcChannels.cardsResyncAllLocalData, (_event, existingRemoteFolderIds: string[], existingRemoteCardIds: string[]) =>
+    repo.resyncMissingLocalData(existingRemoteFolderIds, existingRemoteCardIds)
+  )
 
   ipcMain.handle(IpcChannels.foldersCreate, (_event, name: string, parentId?: string | null) =>
     repo.createFolder(name, parentId ?? null)
@@ -71,12 +91,37 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
     repo.deleteFolder(id)
   })
 
+  // Purely a compute call now, not compute-and-persist — cards live in Supabase, not here, so
+  // main can't apply the result itself. cardsStore does that via cardsApi once this resolves.
   ipcMain.handle(IpcChannels.aiRegenerate, async (_event, req: AiRegenerateRequest) => {
-    const result = await ai.regenerate(req)
-    return repo.applyAiRegeneration(req.cardId, result)
+    return ai.regenerate(req)
+  })
+
+  // Same "pure compute, caller persists" shape as aiRegenerate above — sharePrep.ts writes the
+  // result to the card's Supabase-only share_* columns itself.
+  ipcMain.handle(IpcChannels.aiPrepareForSharing, async (_event, req: AiSharePrepRequest) => {
+    return ai.prepareForSharing(req)
+  })
+
+  // Same "pure compute, caller persists" shape — hostSessionStore writes the judgments to
+  // live_session_answers itself once this resolves.
+  ipcMain.handle(IpcChannels.aiJudgeFreeTextAnswers, async (_event, req: AiJudgeFreeTextRequest) => {
+    return ai.judgeFreeTextAnswers(req)
   })
 
   ipcMain.handle(IpcChannels.reviewLogList, () => repo.listReviewLog())
+
+  ipcMain.handle(IpcChannels.syncGetPendingOps, () => repo.getPendingSyncOps())
+  ipcMain.handle(IpcChannels.syncRemoveOps, (_event, ids: number[]) => repo.removeSyncOps(ids))
+  ipcMain.handle(IpcChannels.syncGetMeta, (_event, key: string) => repo.getSyncMeta(key))
+  ipcMain.handle(IpcChannels.syncSetMeta, (_event, key: string, value: string) => repo.setSyncMeta(key, value))
+  ipcMain.handle(IpcChannels.syncGetOriginLinkedCards, () => repo.getOriginLinkedCards())
+  ipcMain.handle(IpcChannels.syncGetOriginLinkedFolders, () => repo.getOriginLinkedFolders())
+  ipcMain.handle(IpcChannels.syncRekeyCardId, (_event, oldId: string, newId: string) => repo.rekeyCardId(oldId, newId))
+  ipcMain.handle(IpcChannels.syncRekeyFolderId, (_event, oldId: string, newId: string) => repo.rekeyFolderId(oldId, newId))
+  ipcMain.handle(IpcChannels.syncApplyCardUpsert, (_event, card: CardRecord) => repo.applyRemoteCardUpsert(card))
+  ipcMain.handle(IpcChannels.syncApplyFolderUpsert, (_event, folder: FolderRecord) => repo.applyRemoteFolderUpsert(folder))
+  ipcMain.handle(IpcChannels.syncApplyReviewLogInsert, (_event, entry: ReviewLogEntry) => repo.applyRemoteReviewLogInsert(entry))
 
   ipcMain.handle(IpcChannels.ocrRecognizePage, async (_event, input: OcrRecognizePageInput) => {
     const detections = await ocr.recognize(input.imagePath, input.engine, { width: input.width, height: input.height })

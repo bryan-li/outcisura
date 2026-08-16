@@ -24,7 +24,14 @@ const api: FlashcardApi = {
     reorder: (items) => ipcRenderer.invoke(IpcChannels.cardsReorder, items),
     grade: (id, grade) => ipcRenderer.invoke(IpcChannels.cardsGrade, id, grade),
     setSrsState: (id, srs) => ipcRenderer.invoke(IpcChannels.cardsSetSrsState, id, srs),
-    delete: (id) => ipcRenderer.invoke(IpcChannels.cardsDelete, id)
+    delete: (id) => ipcRenderer.invoke(IpcChannels.cardsDelete, id),
+    applyAiRegeneration: (id, next) => ipcRenderer.invoke(IpcChannels.cardsApplyAiRegeneration, id, next),
+    getOrphanedSources: () => ipcRenderer.invoke(IpcChannels.cardsGetOrphanedSources),
+    replaceOrphanedSource: (orphanId, input) => ipcRenderer.invoke(IpcChannels.cardsReplaceOrphanedSource, orphanId, input),
+    recaptureOrphanedSource: (orphanId, input) => ipcRenderer.invoke(IpcChannels.cardsRecaptureOrphanedSource, orphanId, input),
+    dismissOrphanedSource: (orphanId) => ipcRenderer.invoke(IpcChannels.cardsDismissOrphanedSource, orphanId),
+    resyncMissingLocalData: (existingRemoteFolderIds, existingRemoteCardIds) =>
+      ipcRenderer.invoke(IpcChannels.cardsResyncAllLocalData, existingRemoteFolderIds, existingRemoteCardIds)
   },
   folders: {
     create: (name, parentId) => ipcRenderer.invoke(IpcChannels.foldersCreate, name, parentId),
@@ -34,10 +41,25 @@ const api: FlashcardApi = {
     delete: (id) => ipcRenderer.invoke(IpcChannels.foldersDelete, id)
   },
   ai: {
-    regenerate: (req) => ipcRenderer.invoke(IpcChannels.aiRegenerate, req)
+    regenerate: (req) => ipcRenderer.invoke(IpcChannels.aiRegenerate, req),
+    prepareForSharing: (req) => ipcRenderer.invoke(IpcChannels.aiPrepareForSharing, req),
+    judgeFreeTextAnswers: (req) => ipcRenderer.invoke(IpcChannels.aiJudgeFreeTextAnswers, req)
   },
   reviewLog: {
     list: () => ipcRenderer.invoke(IpcChannels.reviewLogList)
+  },
+  sync: {
+    getPendingOps: () => ipcRenderer.invoke(IpcChannels.syncGetPendingOps),
+    removeOps: (ids) => ipcRenderer.invoke(IpcChannels.syncRemoveOps, ids),
+    getMeta: (key) => ipcRenderer.invoke(IpcChannels.syncGetMeta, key),
+    setMeta: (key, value) => ipcRenderer.invoke(IpcChannels.syncSetMeta, key, value),
+    getOriginLinkedCards: () => ipcRenderer.invoke(IpcChannels.syncGetOriginLinkedCards),
+    getOriginLinkedFolders: () => ipcRenderer.invoke(IpcChannels.syncGetOriginLinkedFolders),
+    rekeyCardId: (oldId, newId) => ipcRenderer.invoke(IpcChannels.syncRekeyCardId, oldId, newId),
+    rekeyFolderId: (oldId, newId) => ipcRenderer.invoke(IpcChannels.syncRekeyFolderId, oldId, newId),
+    applyCardUpsert: (card) => ipcRenderer.invoke(IpcChannels.syncApplyCardUpsert, card),
+    applyFolderUpsert: (folder) => ipcRenderer.invoke(IpcChannels.syncApplyFolderUpsert, folder),
+    applyReviewLogInsert: (entry) => ipcRenderer.invoke(IpcChannels.syncApplyReviewLogInsert, entry)
   },
   ocr: {
     recognizePage: (input) => ipcRenderer.invoke(IpcChannels.ocrRecognizePage, input)

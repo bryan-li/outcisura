@@ -129,7 +129,8 @@ function buildGraph(
   }
 
   for (const card of cards) {
-    const documentIds = new Set(card.sources.map((s) => s.documentId))
+    // Standalone-uploaded replacement sources have no document to graph against.
+    const documentIds = new Set(card.sources.map((s) => s.documentId).filter((id): id is string => id !== null))
     for (const documentId of documentIds) {
       const nodeId = documentNodeId(documentId)
       if (!meta.has(nodeId)) meta.set(nodeId, { kind: 'document', label: '', folderId: null })

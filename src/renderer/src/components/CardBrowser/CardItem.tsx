@@ -187,10 +187,16 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
     if (items.length > 0) void reorderCards(items)
   }
 
+  // Standalone-uploaded replacement sources (see the missing-source recovery flow) have no
+  // document/page to jump to — filtered out here rather than in every render site downstream.
+  const jumpableSources = card.sources.filter(
+    (s): s is typeof s & { documentId: string; pageId: string } => s.documentId !== null && s.pageId !== null
+  )
+
   function handleLinkClick(): void {
-    if (card.sources.length === 0) return
-    if (card.sources.length === 1) {
-      const s = card.sources[0]
+    if (jumpableSources.length === 0) return
+    if (jumpableSources.length === 1) {
+      const s = jumpableSources[0]
       goToSource({ documentId: s.documentId, pageId: s.pageId, bbox: s.bbox })
       return
     }
@@ -362,7 +368,7 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
           <IconButton title="Regenerate with AI" onClick={handleRegenerate} disabled={regenerating}>
             {regenerating ? '…' : '✨'}
           </IconButton>
-          <IconButton title="Jump to source" onClick={handleLinkClick} disabled={card.sources.length === 0}>
+          <IconButton title="Jump to source" onClick={handleLinkClick} disabled={jumpableSources.length === 0}>
             🔗
           </IconButton>
           <IconButton title="Delete" onClick={handleDelete}>
@@ -373,7 +379,7 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
 
       {sourceMenuOpen && (
         <div ref={menuRef} style={sourceMenuStyle}>
-          {card.sources.map((s) => (
+          {jumpableSources.map((s) => (
             <button
               key={s.id}
               onClick={() => {

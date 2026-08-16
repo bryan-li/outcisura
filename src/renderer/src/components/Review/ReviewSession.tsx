@@ -96,6 +96,22 @@ export function ReviewSession({ scope, returnTo, force = false }: ReviewSessionP
     }
   }
 
+  /** Moves the current card to the end of the queue without grading it — no gradeCard call, so
+   *  its SRS fields (and dueAt) are untouched and it's still due whenever this session ends. Pushed
+   *  to the end (not just skipped over) rather than dropped from the session entirely, so it's
+   *  still reachable again before this review is done — except when it's already the last card,
+   *  where "push to the end" would just put it right back at the same spot; there, skipping simply
+   *  ends the session instead of looping on it forever. */
+  function handleSkip(): void {
+    if (!card || grading) return
+    if (index === queue.length - 1) {
+      setIndex(index + 1)
+    } else {
+      setQueue([...queue.slice(0, index), ...queue.slice(index + 1), card])
+    }
+    setRevealed(false)
+  }
+
   async function handleUndo(): Promise<void> {
     if (!lastGrade || grading) return
     setGrading(true)
@@ -133,6 +149,11 @@ export function ReviewSession({ scope, returnTo, force = false }: ReviewSessionP
         return
       }
       if (!card) return
+      if (e.key === 's' || e.key === 'S') {
+        e.preventDefault()
+        handleSkip()
+        return
+      }
       if ((e.key === ' ' || e.key === 'Enter') && !revealed) {
         e.preventDefault()
         setRevealed(true)
@@ -259,10 +280,15 @@ export function ReviewSession({ scope, returnTo, force = false }: ReviewSessionP
         )}
 
         <div style={footerRowStyle}>
-          <span>{revealed ? 'Press 1–4 to grade' : 'Space to reveal'} · U to undo · Esc to exit</span>
-          <button disabled={!lastGrade || grading} onClick={handleUndo} style={{ ...smallTextButton }}>
-            ↩ Undo
-          </button>
+          <span>{revealed ? 'Press 1–4 to grade' : 'Space to reveal'} · S to skip · U to undo · Esc to exit</span>
+          <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+            <button disabled={grading} onClick={handleSkip} title="Skip this card without grading it — it stays due (S)" style={{ ...smallTextButton }}>
+              ⏭ Skip
+            </button>
+            <button disabled={!lastGrade || grading} onClick={handleUndo} style={{ ...smallTextButton }}>
+              ↩ Undo
+            </button>
+          </div>
         </div>
       </div>
     </div>

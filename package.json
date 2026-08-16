@@ -50,6 +50,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
+    "@supabase/supabase-js": "^2.112.3",
     "@xenova/transformers": "^2.17.2",
     "better-sqlite3": "^11.5.0",
     "konva": "^9.3.16",
@@ -71,6 +72,7 @@
     "electron": "^32.2.5",
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
+    "supabase": "^2.114.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.10"
   }

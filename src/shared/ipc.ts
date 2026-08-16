@@ -1,5 +1,10 @@
 import type {
+  AiJudgeFreeTextRequest,
+  AiJudgeFreeTextResult,
   AiRegenerateRequest,
+  AiRegenerateResult,
+  AiSharePrepRequest,
+  AiSharePrepResult,
   ApiKeyStatus,
   CardRecord,
   CardReorderItem,
@@ -14,11 +19,15 @@ import type {
   ImportVideoInput,
   NewCardInput,
   OcrRecognizePageInput,
+  OrphanedSourceRecord,
   PageRecord,
   ParsedDocument,
+  RecaptureOrphanedSourceInput,
+  ReplaceOrphanedSourceInput,
   ReviewLogEntry,
   SaveTranscriptSegmentInput,
   SrsSnapshot,
+  SyncOp,
   TranscribeAudioInput,
   TranscriptCoverageInput,
   TranscriptCoverageResult,
@@ -45,14 +54,33 @@ export const IpcChannels = {
   cardsGrade: 'cards:grade',
   cardsSetSrsState: 'cards:setSrsState',
   cardsDelete: 'cards:delete',
+  cardsApplyAiRegeneration: 'cards:applyAiRegeneration',
+  cardsGetOrphanedSources: 'cards:getOrphanedSources',
+  cardsReplaceOrphanedSource: 'cards:replaceOrphanedSource',
+  cardsRecaptureOrphanedSource: 'cards:recaptureOrphanedSource',
+  cardsDismissOrphanedSource: 'cards:dismissOrphanedSource',
+  cardsResyncAllLocalData: 'cards:resyncAllLocalData',
   foldersCreate: 'folders:create',
   foldersList: 'folders:list',
   foldersUpdate: 'folders:update',
   foldersReorder: 'folders:reorder',
   foldersDelete: 'folders:delete',
   reviewLogList: 'reviewLog:list',
+  syncGetPendingOps: 'sync:getPendingOps',
+  syncRemoveOps: 'sync:removeOps',
+  syncGetMeta: 'sync:getMeta',
+  syncSetMeta: 'sync:setMeta',
+  syncGetOriginLinkedCards: 'sync:getOriginLinkedCards',
+  syncGetOriginLinkedFolders: 'sync:getOriginLinkedFolders',
+  syncRekeyCardId: 'sync:rekeyCardId',
+  syncRekeyFolderId: 'sync:rekeyFolderId',
+  syncApplyCardUpsert: 'sync:applyCardUpsert',
+  syncApplyFolderUpsert: 'sync:applyFolderUpsert',
+  syncApplyReviewLogInsert: 'sync:applyReviewLogInsert',
   aiRegenerate: 'ai:regenerate',
   aiGenerateFromSources: 'ai:generateFromSources',
+  aiPrepareForSharing: 'ai:prepareForSharing',
+  aiJudgeFreeTextAnswers: 'ai:judgeFreeTextAnswers',
   ocrRecognizePage: 'ocr:recognizePage',
   transcriptionTranscribe: 'transcription:transcribe',
   transcriptionGetCoverage: 'transcription:getCoverage',
@@ -104,6 +132,26 @@ export interface FlashcardApi {
     /** Direct overwrite of a card's SRS fields — used only by review-session undo, never normal grading. */
     setSrsState(id: string, srs: SrsSnapshot): Promise<CardRecord>
     delete(id: string): Promise<void>
+    /** Overwrites front/back with an AI suggestion, stashing the previous pair for undo — the
+     *  local-IPC equivalent of cardsApi's own applyAiRegeneration. Re-fetches the existing card
+     *  itself server-side for the prev_front/prev_back stash, so unlike the cloud version this
+     *  doesn't need the caller to pass the current front/back in. */
+    applyAiRegeneration(id: string, next: AiRegenerateResult): Promise<CardRecord>
+    /** Sources the sync engine's pull couldn't resolve locally, still awaiting a fix — see the
+     *  missing-source recovery view. */
+    getOrphanedSources(): Promise<OrphanedSourceRecord[]>
+    /** Attaches a freshly saved local image in place of whatever couldn't be resolved. */
+    replaceOrphanedSource(orphanId: string, input: ReplaceOrphanedSourceInput): Promise<CardRecord>
+    /** Attaches a region drag-selected on a real local document/page — see
+     *  RecaptureOrphanedSourceInput's own doc comment for how this differs from a plain upload. */
+    recaptureOrphanedSource(orphanId: string, input: RecaptureOrphanedSourceInput): Promise<CardRecord>
+    /** Accepts the card as-is on this device with one fewer source, instead of replacing it. */
+    dismissOrphanedSource(orphanId: string): Promise<CardRecord>
+    /** One-time maintenance: pushes folders/cards that don't exist on Supabase at all yet
+     *  (caller supplies what already does, via a direct Supabase query — see repository.ts's own
+     *  doc comment on why this must never blindly re-push a row that's already there). Also
+     *  refreshes every card's sources, to backfill columns added after some rows already existed. */
+    resyncMissingLocalData(existingRemoteFolderIds: string[], existingRemoteCardIds: string[]): Promise<void>
   }
   folders: {
     create(name: string, parentId?: string | null): Promise<FolderRecord>
@@ -115,13 +163,49 @@ export interface FlashcardApi {
     delete(id: string): Promise<void>
   }
   ai: {
-    /** Regenerates a card's front/back via Claude and persists the result (previous pair kept for undo). */
-    regenerate(req: AiRegenerateRequest): Promise<CardRecord>
+    /** Computes a card's regenerated front/back via Claude — pure compute, doesn't persist.
+     *  Cards live in Supabase now, not here, so the caller (cardsStore, via cardsApi) applies
+     *  the result itself once this resolves. */
+    regenerate(req: AiRegenerateRequest): Promise<AiRegenerateResult>
+    /** Live-session ("Kahoot-style") question prep — pure compute, doesn't persist. The caller
+     *  (sharePrep.ts) writes the result to the card's Supabase-only share_* columns itself. */
+    prepareForSharing(req: AiSharePrepRequest): Promise<AiSharePrepResult>
+    /** Batched free-text grading for one live-session question — pure compute. Called only from
+     *  the host's own machine (hostSessionStore's revealResults), which persists the results
+     *  itself via Supabase. */
+    judgeFreeTextAnswers(req: AiJudgeFreeTextRequest): Promise<AiJudgeFreeTextResult>
   }
   reviewLog: {
     /** Every review grade ever logged — small enough for a personal deck to fetch whole and
      *  compute stats (reviewed-today, streak) from client-side. */
     list(): Promise<ReviewLogEntry[]>
+  }
+  /** The local-first bidirectional sync engine's primitives (see renderer/src/lib/syncEngine.ts) —
+   *  read/drain the local operation log and apply pulled remote rows, without moving the actual
+   *  Supabase calls into the main process (those stay in the renderer, per the existing "renderer
+   *  talks to Supabase directly" decision from Phase 0). */
+  sync: {
+    /** All pending local operations not yet pushed, oldest first. */
+    getPendingOps(): Promise<SyncOp[]>
+    /** Drops ops from the queue — for ones that pushed successfully, or ones classified as a
+     *  permanent (non-retryable) failure; either way they're done being tracked. */
+    removeOps(ids: number[]): Promise<void>
+    getMeta(key: string): Promise<string | null>
+    setMeta(key: string, value: string): Promise<void>
+    /** Local rows still linked to a cloud origin via the now-otherwise-unused origin_backend/
+     *  origin_id columns — used only by the one-time bootstrap re-key pass. */
+    getOriginLinkedCards(): Promise<{ id: string; originId: string }[]>
+    getOriginLinkedFolders(): Promise<{ id: string; originId: string }[]>
+    /** One-time bootstrap only — re-keys a local row's id to match its already-existing cloud
+     *  counterpart, collapsing what would otherwise become a duplicate pair. */
+    rekeyCardId(oldId: string, newId: string): Promise<void>
+    rekeyFolderId(oldId: string, newId: string): Promise<void>
+    /** Writes a pulled remote row into local SQLite directly — does not log a new outgoing sync
+     *  op (that would create an infinite push/pull loop) and does not go through the normal
+     *  create/update methods. */
+    applyCardUpsert(card: CardRecord): Promise<void>
+    applyFolderUpsert(folder: FolderRecord): Promise<void>
+    applyReviewLogInsert(entry: ReviewLogEntry): Promise<void>
   }
   ocr: {
     /** Runs OCR on an already-captured page image and persists the detected regions as elements on

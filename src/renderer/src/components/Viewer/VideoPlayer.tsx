@@ -128,7 +128,7 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
     const grouped = new Map<string, { count: number; label: string }>()
     for (const card of cards) {
       for (const source of card.sources) {
-        if (source.documentId !== document.id) continue
+        if (source.documentId !== document.id || source.pageId === null) continue
         const page = byPageId.get(source.pageId)
         if (!page || page.timestampSeconds === null) continue
         const existing = grouped.get(source.pageId)

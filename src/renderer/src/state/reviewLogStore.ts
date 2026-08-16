@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { ReviewLogEntry } from '../../../shared/types'
+import { localReviewLogApi } from '../lib/api/localReviewLog'
 
 interface ReviewLogState {
   entries: ReviewLogEntry[]
@@ -10,7 +11,6 @@ export const useReviewLogStore = create<ReviewLogState>((set) => ({
   entries: [],
 
   loadReviewLog: async () => {
-    const entries = await window.api.reviewLog.list()
-    set({ entries })
+    set({ entries: await localReviewLogApi.list() })
   }
 }))

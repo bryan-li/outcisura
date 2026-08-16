@@ -31,6 +31,17 @@ export type MainView =
   | { type: 'review-dashboard' }
   /** The Obsidian-style force-directed graph of cards/folders/documents. */
   | { type: 'graph' }
+  /** Sources the sync engine's pull couldn't resolve locally, awaiting a fix. */
+  | { type: 'missing-sources' }
+  /** Decks ready to host (your own prepped folders + public premade decks). Always shown in the
+   *  sidebar, unlike missing-sources' count-gated visibility — see HostableDecksView.tsx. */
+  | { type: 'hostable-decks' }
+  /** The host's lobby for a just-created live session — join code + live participant list, before
+   *  starting. See HostLobbyView.tsx/hostSessionStore.ts. */
+  | { type: 'host-lobby'; sessionId: string }
+  /** The host's live control panel once a session is running — current question, countdown,
+   *  answered-count ticker, reveal/next/end controls. See HostControlView.tsx. */
+  | { type: 'host-control'; sessionId: string }
   /** A spaced-repetition study session. `returnTo` is set by the caller (not inferred from scope)
    *  so Exit/Esc always lands back wherever the session was actually launched from. `force` skips
    *  the due-date filter entirely — every card in scope, regardless of schedule ("cram" mode). */
@@ -65,6 +76,19 @@ interface FlashTarget {
   bbox: BBox
 }
 
+/** A pending "recapture a region for this orphaned source" intent (see MissingSourcesView.tsx and
+ *  DocumentViewer.tsx's free-select 'recapture' mode) — deliberately NOT built on FlashTarget
+ *  above, which assumes the target document is already open and self-clears 2.4s after applying
+ *  (the wrong lifecycle here: this needs to survive the user navigating missing-sources → the
+ *  library index → a document → possibly several pages, until they finish or explicitly cancel). */
+interface RecaptureTarget {
+  orphanId: string
+  cardId: string
+  /** Shown in the persistent banner while this is active, so the user remembers what they're
+   *  recapturing partway through picking a document/page. */
+  label: string
+}
+
 interface UiState {
   view: MainView
   flashTarget: FlashTarget | null
@@ -76,6 +100,20 @@ interface UiState {
   /** Switches to the Library view and asks the viewer to jump to + flash-highlight this source region. */
   goToSource: (target: FlashTarget) => void
   clearFlashTarget: () => void
+
+  recaptureTarget: RecaptureTarget | null
+  /** Switches to the library index (letting the user pick any document) — MissingSourcesView
+   *  calls this, or bypasses it entirely with a direct openDocument() when it finds exactly one
+   *  local document matching the orphan's filename snapshot. */
+  startRecapture: (target: RecaptureTarget) => void
+  /** Explicit Cancel only — never auto-clears. */
+  clearRecaptureTarget: () => void
+
+  /** The global search palette (Cmd/Ctrl+K, or the sidebar's Search item) — a single boolean since
+   *  it's a modal overlay, not a view; opening it doesn't disturb whatever view is underneath. */
+  searchOpen: boolean
+  openSearch: () => void
+  closeSearch: () => void
 
   /** Cards picked out by marquee drag (in the sidebar tree or a card list), moved together. */
   selectedCardIds: string[]
@@ -109,6 +147,14 @@ export const useUiStore = create<UiState>((set, get) => ({
   clearFocusedCard: () => set({ focusedCardId: null }),
   goToSource: (target) => set({ view: { type: 'library' }, flashTarget: target }),
   clearFlashTarget: () => set({ flashTarget: null }),
+
+  recaptureTarget: null,
+  startRecapture: (target) => set({ view: { type: 'library-index' }, recaptureTarget: target }),
+  clearRecaptureTarget: () => set({ recaptureTarget: null }),
+
+  searchOpen: false,
+  openSearch: () => set({ searchOpen: true }),
+  closeSearch: () => set({ searchOpen: false }),
 
   selectedCardIds: [],
   setSelectedCardIds: (ids) => set({ selectedCardIds: ids }),

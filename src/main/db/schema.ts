@@ -254,6 +254,125 @@ const MIGRATIONS: string[] = [
   -- NULL so it validates cleanly against every existing row. A plain additive column, not a
   -- constraint change on an existing column, so no FK_OFF table rebuild needed here.
   ALTER TABLE card_sources ADD COLUMN image_face TEXT CHECK (image_face IS NULL OR image_face IN ('front', 'back'));
+  `,
+  `
+  -- Tags a migrated record with where it came from, so switching data-storage mode back and forth
+  -- doesn't recreate it as a duplicate every time — see dataMigration.ts's dedup logic. NULL means
+  -- native to whichever backend the row currently lives in (never migrated). Plain additive columns,
+  -- no CHECK constraint, no FK_OFF table-rebuild needed.
+  ALTER TABLE cards ADD COLUMN origin_backend TEXT;
+  ALTER TABLE cards ADD COLUMN origin_id TEXT;
+  ALTER TABLE folders ADD COLUMN origin_backend TEXT;
+  ALTER TABLE folders ADD COLUMN origin_id TEXT;
+  `,
+  `
+  -- Local-first bidirectional cloud sync (see renderer/src/lib/syncEngine.ts). sync_ops is the
+  -- operation log that replaces the old localStorage-backed outbox — colocated in the same
+  -- transaction as the mutation it tracks (see repository.ts), so the log and the actual data can
+  -- never drift apart the way a separate storage engine (localStorage) could. id is
+  -- AUTOINCREMENT, not created_at, because it's the replay-order key: a card and its card_sources
+  -- rows are created in the same millisecond by one transaction, so string-timestamp ordering
+  -- isn't reliable and pushing sources before their parent card would fail Supabase's FK
+  -- constraint. sync_meta holds small engine state as key/value (bootstrap-complete flag,
+  -- review_log pull watermark) instead of one-off columns scattered elsewhere.
+  CREATE TABLE sync_ops (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    table_name TEXT NOT NULL,
+    op TEXT NOT NULL CHECK (op IN ('insert', 'update', 'delete')),
+    record_id TEXT NOT NULL,
+    payload TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE sync_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  -- folders had no updated_at at all — needed for the sync engine's last-write-wins comparison
+  -- against Supabase's copy. Backfilled from created_at for existing rows.
+  ALTER TABLE folders ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';
+  UPDATE folders SET updated_at = created_at WHERE updated_at = '';
+  `,
+  `
+  -- Missing-source detection + replace (see repository.ts's applyRemoteCardUpsert/
+  -- replaceOrphanedSource). document_id/page_id can no longer be NOT NULL: a standalone-uploaded
+  -- replacement image has no real document/page to point at. SQLite can't drop NOT NULL in place,
+  -- so this rebuilds the table — but unlike the cards/documents rebuilds above, card_sources has
+  -- no INCOMING foreign keys from any other table (nothing references card_sources.id), so this
+  -- doesn't need the heavier FK_OFF_MIGRATIONS/foreign_keys=OFF dance; a plain transaction-wrapped
+  -- rebuild is safe. Does need its own two indices recreated explicitly, though — DROP TABLE drops
+  -- them with it, and unlike the cards/documents rebuilds (which have no indices of their own to
+  -- lose), missing this here would silently fall back to full table scans with no error anywhere.
+  --
+  -- source_document_filename/source_page_index are new: a denormalized snapshot of
+  -- documents.filename/pages.pageIndex, captured once at creation time (or backfilled here via
+  -- LEFT JOIN for existing rows) and never re-derived. Without this, a source that turns out to be
+  -- unresolvable on another device carries zero human-readable context — the real document/page
+  -- never syncs, so this snapshot is the only thing left to show the user.
+  CREATE TABLE card_sources_new (
+    id TEXT PRIMARY KEY,
+    card_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    document_id TEXT REFERENCES documents(id) ON DELETE CASCADE,
+    page_id TEXT REFERENCES pages(id) ON DELETE CASCADE,
+    element_id TEXT REFERENCES elements(id) ON DELETE SET NULL,
+    x REAL NOT NULL,
+    y REAL NOT NULL,
+    w REAL NOT NULL,
+    h REAL NOT NULL,
+    label TEXT NOT NULL,
+    image_path TEXT,
+    mask_x REAL,
+    mask_y REAL,
+    mask_w REAL,
+    mask_h REAL,
+    image_face TEXT CHECK (image_face IS NULL OR image_face IN ('front', 'back')),
+    source_document_filename TEXT,
+    source_page_index INTEGER
+  );
+  INSERT INTO card_sources_new (
+    id, card_id, document_id, page_id, element_id, x, y, w, h, label, image_path,
+    mask_x, mask_y, mask_w, mask_h, image_face, source_document_filename, source_page_index
+  )
+  SELECT
+    cs.id, cs.card_id, cs.document_id, cs.page_id, cs.element_id, cs.x, cs.y, cs.w, cs.h, cs.label,
+    cs.image_path, cs.mask_x, cs.mask_y, cs.mask_w, cs.mask_h, cs.image_face, d.filename, p.page_index
+  FROM card_sources cs
+  LEFT JOIN documents d ON d.id = cs.document_id
+  LEFT JOIN pages p ON p.id = cs.page_id;
+  DROP TABLE card_sources;
+  ALTER TABLE card_sources_new RENAME TO card_sources;
+  CREATE INDEX idx_card_sources_card ON card_sources(card_id);
+  CREATE INDEX idx_card_sources_page ON card_sources(page_id);
+
+  -- What's broken on THIS device, per source — never synced (each device discovers its own gaps
+  -- independently). Keyed by the dangling source's own id (not a fresh one) so re-detecting the
+  -- same still-broken source on a later pull is a harmless no-op (see the INSERT OR IGNORE this is
+  -- paired with in repository.ts), not a duplicate. resolved_at (not row deletion) tracks a fix —
+  -- the origin device's own dangling card_sources row is never edited or removed, so without this
+  -- a "fixed" orphan would silently reappear the next time that card updates anywhere.
+  CREATE TABLE orphaned_sources (
+    id TEXT PRIMARY KEY,
+    card_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    reason TEXT NOT NULL CHECK (reason IN ('unresolved_document', 'missing_file')),
+    document_id TEXT,
+    page_id TEXT,
+    element_id TEXT,
+    x REAL NOT NULL,
+    y REAL NOT NULL,
+    w REAL NOT NULL,
+    h REAL NOT NULL,
+    label TEXT NOT NULL,
+    image_path TEXT,
+    mask_x REAL,
+    mask_y REAL,
+    mask_w REAL,
+    mask_h REAL,
+    image_face TEXT,
+    source_document_filename TEXT,
+    source_page_index INTEGER,
+    detected_at TEXT NOT NULL,
+    resolved_at TEXT
+  );
+  CREATE INDEX idx_orphaned_sources_card ON orphaned_sources(card_id);
   `
 ]
 

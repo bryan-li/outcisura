@@ -2,9 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- connect-src's https://*.supabase.co covers REST/Auth/Storage; wss://*.supabase.co is the
+         live-session Realtime Broadcast transport (see lib/liveSession/realtime.ts) — a plain
+         CHANNEL_ERROR "transport failure" with no other detail is the signature of this being
+         missing, confirmed live before adding it. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:; media-src ocvideo: blob:; connect-src 'self' ocvideo:;"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:; media-src ocvideo: blob:; connect-src 'self' ocvideo: https://*.supabase.co wss://*.supabase.co;"
     />
     <title>Outcisura</title>
   </head>

@@ -4,6 +4,7 @@ import { useDocumentsStore } from '../../state/documentsStore'
 import { useCardsStore } from '../../state/cardsStore'
 import { useFoldersStore } from '../../state/foldersStore'
 import { useUiStore, type MainView } from '../../state/uiStore'
+import { useConnectivityStore } from '../../state/connectivityStore'
 import { parsePdf } from '../../parsers/pdfParser'
 import { parsePptx } from '../../parsers/pptxParser'
 import { parseVideoFile } from '../../parsers/videoParser'
@@ -30,6 +31,7 @@ export function Sidebar(): JSX.Element {
   const view = useUiStore((s) => s.view)
   const setView = useUiStore((s) => s.setView)
   const focusCard = useUiStore((s) => s.focusCard)
+  const openSearch = useUiStore((s) => s.openSearch)
 
   const documents = useDocumentsStore((s) => s.documents)
   const activeDocumentId = useDocumentsStore((s) => s.activeDocumentId)
@@ -44,6 +46,15 @@ export function Sidebar(): JSX.Element {
   // Recomputed whenever `cards` changes, not on a live clock — a card crossing its due threshold
   // purely from time passing won't tick the badge down until something else refreshes the store.
   const dueCount = dueCards(cards, { kind: 'all' }, new Date()).length
+
+  // Refetched whenever a sync cycle finishes (idle<->syncing transitions) — orphans are only ever
+  // discovered during a pull, so this is a cheap, good-enough trigger rather than a live subscription.
+  const syncStatus = useConnectivityStore((s) => s.status)
+  const [orphanCount, setOrphanCount] = useState(0)
+  useEffect(() => {
+    window.api.cards.getOrphanedSources().then((orphans) => setOrphanCount(orphans.length))
+  }, [syncStatus])
+
   const createFolder = useFoldersStore((s) => s.createFolder)
   const updateFolder = useFoldersStore((s) => s.updateFolder)
   const reorderFolders = useFoldersStore((s) => s.reorderFolders)
@@ -177,6 +188,7 @@ export function Sidebar(): JSX.Element {
 
       <div style={sidebarScrollStyle}>
       <div style={{ padding: '0 var(--space-2)' }}>
+        <NavItem label="🔍 Search" active={false} onClick={openSearch} title="Search cards and documents (⌘K)" />
         <NavItem label="🏠 Home" active={isView(view, { type: 'home' })} onClick={() => setView({ type: 'home' })} />
         <NavItem label="🗂 All Cards" active={isView(view, { type: 'cards' })} onClick={() => setView({ type: 'cards' })} />
         <NavItem
@@ -185,6 +197,18 @@ export function Sidebar(): JSX.Element {
           onClick={() => setView({ type: 'review-dashboard' })}
         />
         <NavItem label="🕸️ Graph" active={isView(view, { type: 'graph' })} onClick={() => setView({ type: 'graph' })} />
+        <NavItem
+          label="📡 Hostable Decks"
+          active={isView(view, { type: 'hostable-decks' })}
+          onClick={() => setView({ type: 'hostable-decks' })}
+        />
+        {orphanCount > 0 && (
+          <NavItem
+            label={`⚠️ Missing Sources (${orphanCount})`}
+            active={isView(view, { type: 'missing-sources' })}
+            onClick={() => setView({ type: 'missing-sources' })}
+          />
+        )}
       </div>
 
       <div style={sectionStyle}>
@@ -386,10 +410,23 @@ function NewlyCreatedSection(): JSX.Element | null {
   )
 }
 
-function NavItem({ label, active, onClick, grow }: { label: string; active: boolean; onClick: () => void; grow?: boolean }): JSX.Element {
+function NavItem({
+  label,
+  active,
+  onClick,
+  grow,
+  title
+}: {
+  label: string
+  active: boolean
+  onClick: () => void
+  grow?: boolean
+  title?: string
+}): JSX.Element {
   return (
     <button
       onClick={onClick}
+      title={title}
       style={{
         display: 'block',
         width: grow ? undefined : '100%',

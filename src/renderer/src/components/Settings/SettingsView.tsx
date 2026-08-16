@@ -1,7 +1,20 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import type { ApiKeyStatus } from '../../../../shared/types'
+import { useAuthStore } from '../../state/authStore'
 import { useUiStore, type Theme } from '../../state/uiStore'
+import { useSyncEnabledStore } from '../../state/syncEnabledStore'
+import { useConnectivityStore } from '../../state/connectivityStore'
+import { runSyncCycle } from '../../lib/syncEngine'
 import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useZoomFactor } from '../../hooks/useZoomFactor'
+
+function formatSyncedAt(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const mins = Math.round(diffMs / 60000)
+  if (mins < 1) return 'moments ago'
+  if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`
+  const hours = Math.round(mins / 60)
+  return `${hours} hour${hours === 1 ? '' : 's'} ago`
+}
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: 'system', label: 'System' },
@@ -25,6 +38,26 @@ export function SettingsView(): JSX.Element {
   const [openaiKeyInput, setOpenaiKeyInput] = useState('')
   const [openaiSaving, setOpenaiSaving] = useState(false)
   const [openaiKeyError, setOpenaiKeyError] = useState<string | null>(null)
+
+  const session = useAuthStore((s) => s.session)
+  const signOut = useAuthStore((s) => s.signOut)
+
+  const syncEnabled = useSyncEnabledStore((s) => s.enabled)
+  const setSyncEnabled = useSyncEnabledStore((s) => s.setEnabled)
+  const syncStatus = useConnectivityStore((s) => s.status)
+  const lastSyncedAt = useConnectivityStore((s) => s.lastSyncedAt)
+  const lastSyncError = useConnectivityStore((s) => s.lastError)
+  const pendingCount = useConnectivityStore((s) => s.pendingCount)
+  const [manualSyncing, setManualSyncing] = useState(false)
+
+  async function handleManualSync(): Promise<void> {
+    setManualSyncing(true)
+    try {
+      await runSyncCycle()
+    } finally {
+      setManualSyncing(false)
+    }
+  }
 
   useEffect(() => {
     window.api.settings.getApiKeyStatus().then(setKeyStatus)
@@ -96,6 +129,44 @@ export function SettingsView(): JSX.Element {
       </header>
 
       <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0 }}>Settings</h1>
+
+      <section style={sectionStyle}>
+        <h2 style={sectionTitleStyle}>Account</h2>
+        <p style={hintStyle}>Signed in as {session?.user.email}</p>
+        <button onClick={() => signOut()} style={quietTextButtonStyle}>
+          Sign out
+        </button>
+      </section>
+
+      <section style={sectionStyle}>
+        <h2 style={sectionTitleStyle}>Cloud sync</h2>
+        <p style={hintStyle}>
+          Cards, folders, and review history always live on this device — instant, no network wait.
+          When on, changes also sync to your account in the background, and anything from other
+          devices signed into the same account gets pulled in too.
+        </p>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', fontSize: 'var(--font-sm)' }}>
+          <input type="checkbox" checked={syncEnabled} onChange={(e) => setSyncEnabled(e.target.checked)} />
+          Sync to cloud
+        </label>
+        {syncEnabled && (
+          <>
+            <p style={hintStyle}>
+              {syncStatus === 'syncing'
+                ? 'Syncing…'
+                : syncStatus === 'error'
+                  ? `Sync error: ${lastSyncError}`
+                  : lastSyncedAt
+                    ? `Synced ${formatSyncedAt(lastSyncedAt)}`
+                    : 'Not synced yet'}
+              {pendingCount > 0 ? ` — ${pendingCount} change${pendingCount === 1 ? '' : 's'} waiting to sync` : ''}
+            </p>
+            <button disabled={manualSyncing} onClick={handleManualSync} style={quietTextButtonStyle}>
+              {manualSyncing ? 'Syncing…' : 'Sync now'}
+            </button>
+          </>
+        )}
+      </section>
 
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Appearance</h2>

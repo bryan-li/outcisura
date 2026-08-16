@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { BBox, CardRecord, CardType, DocumentRecord, ElementRecord, NewCardSourceInput } from '../../../../shared/types'
 import { useDocumentsStore } from '../../state/documentsStore'
 import { useCardsStore } from '../../state/cardsStore'
+import { localCardsApi } from '../../lib/api/localCards'
 import { useUiStore } from '../../state/uiStore'
 import { PageView } from './PageView'
 import { VideoPlayer } from './VideoPlayer'
@@ -101,6 +102,19 @@ const pictureMenuHintStyle: CSSProperties = {
   fontWeight: 400
 }
 
+const recaptureBannerStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 'var(--space-3)',
+  border: '1px solid var(--accent)',
+  borderRadius: 'var(--radius-md)',
+  padding: 'var(--space-2) var(--space-3)',
+  fontSize: 'var(--font-sm)',
+  color: 'var(--accent)',
+  background: 'var(--accent-soft)'
+}
+
 export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
   const pagesByDocument = useDocumentsStore((s) => s.pagesByDocument)
   const elementsByPage = useDocumentsStore((s) => s.elementsByPage)
@@ -109,6 +123,9 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
 
   const flashTarget = useUiStore((s) => s.flashTarget)
   const clearFlashTarget = useUiStore((s) => s.clearFlashTarget)
+  const recaptureTarget = useUiStore((s) => s.recaptureTarget)
+  const clearRecaptureTarget = useUiStore((s) => s.clearRecaptureTarget)
+  const setView = useUiStore((s) => s.setView)
   const combineMode = useUiStore((s) => s.combineMode)
   const toggleCombineMode = useUiStore((s) => s.toggleCombineMode)
   const addToBasket = useUiStore((s) => s.addToBasket)
@@ -125,7 +142,7 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
   // free-select overlay isn't active at all (ordinary element marquee-select is showing instead).
   // 'multi' feeds a captured region into the advanced modal's staged-images list instead of opening
   // a dedicated editor for it.
-  const [freeSelectTarget, setFreeSelectTarget] = useState<'picture' | 'occlusion' | 'multi' | null>(null)
+  const [freeSelectTarget, setFreeSelectTarget] = useState<'picture' | 'occlusion' | 'multi' | 'recapture' | null>(null)
   const [capturingScreenshot, setCapturingScreenshot] = useState(false)
   const [creatingCard, setCreatingCard] = useState(false)
   const [cardError, setCardError] = useState<string | null>(null)
@@ -184,6 +201,13 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flashTarget, pages])
+
+  // Re-armed on every document change (not just once) — switching documents while staying on the
+  // 'library' view type does NOT remount DocumentViewer, so a plain init wouldn't survive the user
+  // picking a different document than whatever MissingSourcesView auto-opened.
+  useEffect(() => {
+    if (recaptureTarget) setFreeSelectTarget('recapture')
+  }, [recaptureTarget, document.id])
 
   const selectedElements = useMemo(
     () => elements.filter((e) => selectedElementIds.has(e.id)),
@@ -317,7 +341,18 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
     try {
       const source = await cropAndSave(bbox)
       if (source) {
-        if (target === 'occlusion') setOcclusionSource(source)
+        if (target === 'recapture' && recaptureTarget && page) {
+          await window.api.cards.recaptureOrphanedSource(recaptureTarget.orphanId, {
+            documentId: document.id,
+            pageId: page.id,
+            bbox: source.bbox,
+            imagePath: source.imagePath,
+            sourceDocumentFilename: document.filename,
+            sourcePageIndex: activePageIndex
+          })
+          clearRecaptureTarget()
+          setView({ type: 'missing-sources' })
+        } else if (target === 'occlusion') setOcclusionSource(source)
         else if (target === 'multi') {
           setStagedImages((prev) => [...prev, { id: crypto.randomUUID(), imagePath: source.imagePath, bbox: source.bbox, face: 'front' }])
           setCreateModalOpen(true)
@@ -377,13 +412,17 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
 
       let finalCard = card
       if (withAi) {
-        finalCard = await window.api.ai.regenerate({
+        const result = await window.api.ai.regenerate({
           cardId: card.id,
+          front: card.front,
+          back: card.back,
+          sources: card.sources,
           instruction: generationSettings.customPrompt ?? undefined,
           complexity: generationSettings.complexity,
           cloze: cardType === 'cloze'
         })
-        useCardsStore.setState({ cards: useCardsStore.getState().cards.map((c) => (c.id === card.id ? finalCard : c)) })
+        finalCard = await localCardsApi.applyAiRegeneration(card.id, { front: card.front, back: card.back }, result)
+        useCardsStore.getState().setCards(useCardsStore.getState().cards.map((c) => (c.id === card.id ? finalCard : c)))
       }
 
       if (generationSettings.doubleSided && cardType !== 'cloze') {
@@ -429,6 +468,23 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
           {document.filename}
         </h1>
       </header>
+
+      {recaptureTarget && (
+        <div style={recaptureBannerStyle}>
+          <span>
+            Recapturing source for "{recaptureTarget.label}" — drag a region on this page.
+          </span>
+          <button
+            onClick={() => {
+              clearRecaptureTarget()
+              setFreeSelectTarget(null)
+            }}
+            style={quietButtonStyle}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       <div style={toolbarStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>

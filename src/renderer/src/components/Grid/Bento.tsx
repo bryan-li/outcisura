@@ -20,7 +20,10 @@ export function BentoGrid({ children }: { children: ReactNode }): JSX.Element {
 }
 
 interface BentoTileProps {
-  onClick: () => void
+  /** Omit for a non-interactive tile (e.g. a public deck preview with no owner-only actions
+   *  available) — renders as a plain div, not a button, rather than an interactive-looking element
+   *  with nothing to do. */
+  onClick?: () => void
   children: ReactNode
   /** Make this tile occupy two grid columns/rows where space allows. */
   wide?: boolean
@@ -28,14 +31,16 @@ interface BentoTileProps {
 }
 
 export function BentoTile({ onClick, children, wide, tall }: BentoTileProps): JSX.Element {
+  const gridStyle: CSSProperties = { gridColumn: wide ? 'span 2' : undefined, gridRow: tall ? 'span 2' : undefined }
+
+  if (!onClick) {
+    return <div style={{ ...tileStyle, ...gridStyle, cursor: 'default' }}>{children}</div>
+  }
+
   return (
     <button
       onClick={onClick}
-      style={{
-        ...tileStyle,
-        gridColumn: wide ? 'span 2' : undefined,
-        gridRow: tall ? 'span 2' : undefined
-      }}
+      style={{ ...tileStyle, ...gridStyle }}
       onMouseEnter={(e) => {
         e.currentTarget.style.borderColor = 'var(--accent)'
         e.currentTarget.style.background = 'var(--bg-hover)'

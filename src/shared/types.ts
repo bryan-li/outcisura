@@ -127,8 +127,10 @@ export interface CreateVideoFramePageInput {
 export interface CardSourceRecord {
   id: string
   cardId: string
-  documentId: string
-  pageId: string
+  /** Null for a standalone-uploaded replacement image with no real document/page context (see
+   *  the missing-source recovery flow) — every other source still has a real one. */
+  documentId: string | null
+  pageId: string | null
   elementId: string | null
   bbox: BBox
   label: string
@@ -144,18 +146,89 @@ export interface CardSourceRecord {
    *  Null for every other kind of source (occlusion crops, parsed-element sources, a single
    *  picture-card image) — those have no "which face" concept at all. */
   imageFace: 'front' | 'back' | null
+  /** A denormalized snapshot of documents.filename/pages.pageIndex at creation time, never
+   *  re-derived — documents/pages are local-only and never sync, so if this source turns out
+   *  unresolvable on another device, this is the only human-readable context left to show
+   *  ("this came from page 5 of Biology.pdf") in the missing-source recovery view. Null when
+   *  documentId/pageId are (a standalone upload has no document to snapshot from). */
+  sourceDocumentFilename: string | null
+  sourcePageIndex: number | null
 }
+
+/** What's broken on THIS device about one of a card's sources — never synced (see
+ *  repository.ts's applyRemoteCardUpsert/replaceOrphanedSource and the local-only orphaned_sources
+ *  table). `unresolvedDocument`: documentId/pageId didn't resolve locally, so the source itself
+ *  couldn't even be inserted (would violate the local FK). `missingFile`: the source WAS inserted
+ *  (imagePath has no DB constraint), but the file it points at doesn't exist on this device. */
+export type OrphanedSourceReason = 'unresolved_document' | 'missing_file'
+
+export interface OrphanedSourceRecord {
+  /** Shares an id with the dangling card_sources row it came from (or, for unresolved_document,
+   *  the id the source WOULD have had) — re-detecting the same still-broken source on a later
+   *  pull is then a harmless no-op instead of piling up duplicates. */
+  id: string
+  cardId: string
+  reason: OrphanedSourceReason
+  documentId: string | null
+  pageId: string | null
+  elementId: string | null
+  bbox: BBox
+  label: string
+  imagePath: string | null
+  maskBBox: BBox | null
+  imageFace: 'front' | 'back' | null
+  sourceDocumentFilename: string | null
+  sourcePageIndex: number | null
+  detectedAt: string
+  /** Null while still open. Kept (not deleted) on resolve — nothing on the origin device ever
+   *  edits its own dangling source, so a future pull of that same card would otherwise rediscover
+   *  and re-flag an already-fixed orphan indefinitely. */
+  resolvedAt: string | null
+}
+
+/** What the missing-source recovery view submits to fix one orphan via a fresh standalone upload —
+ *  no document/page context, just a freshly saved local image file. */
+export interface ReplaceOrphanedSourceInput {
+  imagePath: string
+}
+
+/** What the missing-source recovery view submits to fix one orphan via recapture — a real
+ *  document/page-linked region drag-selected on a local document (typically a re-imported copy of
+ *  whatever the orphan originally came from), unlike ReplaceOrphanedSourceInput's standalone
+ *  upload. sourceDocumentFilename/sourcePageIndex are the same kind of snapshot createCard already
+ *  takes, captured fresh from wherever the region was actually selected this time. */
+export interface RecaptureOrphanedSourceInput {
+  documentId: string
+  pageId: string
+  bbox: BBox
+  imagePath: string
+  sourceDocumentFilename: string | null
+  sourcePageIndex: number | null
+}
+
+/** Where a record came from, for cross-backend migration dedup (see dataMigration.ts) — null means
+ *  native to whichever backend it currently lives in (never migrated). Shared by CardRecord and
+ *  FolderRecord; review_log is deliberately NOT origin-tracked (see dataMigration.ts's own comment
+ *  on why its dedup is content-based instead). */
+export type OriginBackend = 'cloud' | 'local' | null
 
 export interface FolderRecord {
   id: string
   name: string
   createdAt: string
+  /** Bumped on create/update only, not reorder (manual drag order is cosmetic/per-device, doesn't
+   *  need cross-device consistency) — the sync engine's last-write-wins signal for pull conflicts. */
+  updatedAt: string
   parentId: string | null
   sortOrder: number
   collapsed: boolean
+  originBackend: OriginBackend
+  originId: string | null
 }
 
-export type FolderUpdatePatch = Partial<Pick<FolderRecord, 'name' | 'parentId' | 'sortOrder' | 'collapsed'>>
+export type FolderUpdatePatch = Partial<
+  Pick<FolderRecord, 'name' | 'parentId' | 'sortOrder' | 'collapsed' | 'originBackend' | 'originId'>
+>
 
 /** One folder's new position, as computed client-side after a drag-drop move. */
 export interface FolderReorderItem {
@@ -190,9 +263,13 @@ export interface CardRecord {
    *  and only appears once flipped, instead of showing on both faces like every other image-bearing
    *  card type. Always false for non-picture cards. */
   revealImageOnFlip: boolean
+  originBackend: OriginBackend
+  originId: string | null
 }
 
-export type CardUpdatePatch = Partial<Pick<CardRecord, 'front' | 'back' | 'folderId'>>
+export type CardUpdatePatch = Partial<
+  Pick<CardRecord, 'front' | 'back' | 'folderId' | 'originBackend' | 'originId'>
+>
 
 /** A card's full SRS state, for the direct-overwrite restore path used by review-session undo. */
 export type SrsSnapshot = Pick<
@@ -236,8 +313,15 @@ export interface NewCardInput {
   revealImageOnFlip?: boolean
 }
 
+/** Carries the card's own content rather than just its id — main no longer looks the card up
+ *  itself (see aiService.ts), since cards live in Supabase now while this IPC call stays local
+ *  (bring-your-own-key, nothing here needs to move). The caller (cardsStore) already has the
+ *  card in its own state and is the one that persists the result afterward via cardsApi. */
 export interface AiRegenerateRequest {
   cardId: string
+  front: string
+  back: string
+  sources: CardSourceRecord[]
   instruction?: string
   complexity?: GenerationComplexity
   /** Ask for cloze-deletion output (`CLOZE: <text with {{blanks}}>`) instead of FRONT/BACK. */
@@ -247,6 +331,36 @@ export interface AiRegenerateRequest {
 export interface AiRegenerateResult {
   front: string
   back: string
+}
+
+/** A card's live-session ("Kahoot-style") question format — see aiService.ts's prepareForSharing.
+ *  Cached on the Postgres `cards` row only (share_format et al.); no local-SQLite counterpart, since
+ *  a live session reads decks via Supabase directly, same as syncEngine.ts already does. */
+export type ShareFormat = 'mcq' | 'free_text'
+
+export interface AiSharePrepRequest {
+  front: string
+  back: string
+}
+
+export interface AiSharePrepResult {
+  recommendedFormat: ShareFormat
+  /** Always exactly 3, generated regardless of recommendedFormat so a host's per-card override
+   *  never needs a fresh AI call. */
+  mcqDistractors: string[]
+  freeTextRubric: string
+}
+
+/** Batched free-text grading for one live-session question — every submitted answer judged against
+ *  the same cached rubric in a single AI call, not one call per answer (see aiService.ts's own
+ *  docblock on judgeFreeTextAnswers). Runs only on the host's machine, host-only per RLS. */
+export interface AiJudgeFreeTextRequest {
+  rubric: string
+  answers: { answerId: string; text: string }[]
+}
+
+export interface AiJudgeFreeTextResult {
+  judgments: { answerId: string; isCorrect: boolean }[]
 }
 
 export type OcrEngine = 'tesseract' | 'claude-vision'
@@ -323,4 +437,21 @@ export interface SaveTranscriptSegmentInput {
   engine: TranscriptionEngine
   range: TimeRange
   text: string
+}
+
+/** The local-first bidirectional sync engine's operation log (see syncEngine.ts and repository.ts's
+ *  sync_ops table) — every mutating repository.ts method appends one of these, in the same
+ *  transaction as the mutation itself, so the log can never drift from what actually happened
+ *  locally. `payload` carries the full post-mutation record (a hydrated CardRecord/FolderRecord/
+ *  ReviewLogEntry, or a CardSourceRecord[] for a card's sources) for insert/update — both push as a
+ *  single Postgres `upsert`, so there's no need to distinguish a partial patch from a full row.
+ *  `payload` is null for delete (record_id alone is enough). `id` (not `created_at`) is the replay-
+ *  order key — a card and its sources can be created in the same millisecond. */
+export interface SyncOp {
+  id: number
+  table: 'cards' | 'card_sources' | 'folders' | 'review_log'
+  op: 'insert' | 'update' | 'delete'
+  recordId: string
+  payload: unknown
+  createdAt: string
 }
