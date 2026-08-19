@@ -1,7 +1,7 @@
 {
   "name": "outcisura",
   "productName": "Outcisura",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Outcisura — flashcards cut straight out of your PDF/PPTX slides",
   "main": "./out/main/index.js",
   "author": "",
