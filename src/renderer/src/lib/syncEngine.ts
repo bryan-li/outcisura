@@ -93,7 +93,10 @@ function hydrateCardRow(row: RemoteCardRow): CardRecord {
     maskBBox: s.mask_x !== null ? ({ x: s.mask_x, y: s.mask_y!, w: s.mask_w!, h: s.mask_h! } satisfies BBox) : null,
     imageFace: s.image_face,
     sourceDocumentFilename: s.source_document_filename,
-    sourcePageIndex: s.source_page_index
+    sourcePageIndex: s.source_page_index,
+    // Not yet a column on the remote card_sources table — see repository.ts schema migration 18.
+    // Falls back to null (same as a source with no document context) until the cloud side adds it.
+    sourceTimestampSeconds: null
   }))
   return {
     id: row.id,

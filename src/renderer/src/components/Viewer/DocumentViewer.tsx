@@ -348,7 +348,8 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
             bbox: source.bbox,
             imagePath: source.imagePath,
             sourceDocumentFilename: document.filename,
-            sourcePageIndex: activePageIndex
+            sourcePageIndex: activePageIndex,
+            sourceTimestampSeconds: null
           })
           clearRecaptureTarget()
           setView({ type: 'missing-sources' })

@@ -153,6 +153,11 @@ export interface CardSourceRecord {
    *  documentId/pageId are (a standalone upload has no document to snapshot from). */
   sourceDocumentFilename: string | null
   sourcePageIndex: number | null
+  /** A denormalized snapshot of pages.timestampSeconds, alongside sourcePageIndex — only meaningful
+   *  when the source document is a video (sourcePageIndex there is just a capture-order counter, no
+   *  use for finding the same moment again on another device). Null for pdf/pptx sources and for a
+   *  standalone upload with no document context. See resolveOrphanSource.ts's video recapture path. */
+  sourceTimestampSeconds: number | null
 }
 
 /** What's broken on THIS device about one of a card's sources — never synced (see
@@ -179,6 +184,7 @@ export interface OrphanedSourceRecord {
   imageFace: 'front' | 'back' | null
   sourceDocumentFilename: string | null
   sourcePageIndex: number | null
+  sourceTimestampSeconds: number | null
   detectedAt: string
   /** Null while still open. Kept (not deleted) on resolve — nothing on the origin device ever
    *  edits its own dangling source, so a future pull of that same card would otherwise rediscover
@@ -204,6 +210,7 @@ export interface RecaptureOrphanedSourceInput {
   imagePath: string
   sourceDocumentFilename: string | null
   sourcePageIndex: number | null
+  sourceTimestampSeconds: number | null
 }
 
 /** Where a record came from, for cross-backend migration dedup (see dataMigration.ts) — null means

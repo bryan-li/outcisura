@@ -7,6 +7,7 @@ export function CombineBasketBar(): JSX.Element {
   const basket = useUiStore((s) => s.combineBasket)
   const removeFromBasket = useUiStore((s) => s.removeFromBasket)
   const clearBasket = useUiStore((s) => s.clearBasket)
+  const toggleCombineMode = useUiStore((s) => s.toggleCombineMode)
   const createFromSources = useCardsStore((s) => s.createFromSources)
   const generationSettings = useUiStore((s) => s.generationSettings)
 
@@ -18,8 +19,16 @@ export function CombineBasketBar(): JSX.Element {
     setCreating(true)
     try {
       const { errors } = await createFromSources(basket, generationSettings)
-      if (errors.length > 0) setError(`Card saved, but AI generation failed: ${errors.join('; ')}`)
       clearBasket()
+      if (errors.length > 0) {
+        // The card was still saved either way — only the AI regeneration step failed — but leave
+        // combine mode on so this bar (and the error) stays visible instead of vanishing with it.
+        setError(`Card saved, but AI generation failed: ${errors.join('; ')}`)
+      } else {
+        // Exit combine mode too, not just empty the basket — otherwise this bar stays mounted
+        // afterward showing an empty basket instead of disappearing.
+        toggleCombineMode()
+      }
     } finally {
       setCreating(false)
     }

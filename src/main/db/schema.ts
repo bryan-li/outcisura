@@ -373,6 +373,25 @@ const MIGRATIONS: string[] = [
     resolved_at TEXT
   );
   CREATE INDEX idx_orphaned_sources_card ON orphaned_sources(card_id);
+  `,
+  `
+  -- Denormalized snapshot of a video source's captured moment (pages.timestamp_seconds), alongside
+  -- the existing source_document_filename/source_page_index snapshot. page_index alone means "page
+  -- N of the file" for pdf/pptx — deterministic no matter which device parsed it — but for a video
+  -- document it's only ever "however many frames had been captured on THAT device before this one"
+  -- (see createVideoFramePage's plain COUNT(*)), which carries no meaning anywhere else. Recapturing
+  -- a video-sourced orphan needs the actual moment in the video, not a meaningless capture-order
+  -- counter — and since the original page/document never sync, this snapshot is the only place that
+  -- moment survives. Plain additive columns, not a CHECK/NOT NULL change, so no table rebuild needed.
+  ALTER TABLE card_sources ADD COLUMN source_timestamp_seconds REAL;
+  ALTER TABLE orphaned_sources ADD COLUMN source_timestamp_seconds REAL;
+
+  -- Backfill for existing rows whose page still resolves locally (same pattern as migration 12's
+  -- source_document_filename/source_page_index backfill). orphaned_sources gets no equivalent
+  -- backfill — an orphan's page never resolves locally by definition, that's what makes it an orphan.
+  UPDATE card_sources
+  SET source_timestamp_seconds = (SELECT timestamp_seconds FROM pages WHERE pages.id = card_sources.page_id)
+  WHERE page_id IS NOT NULL;
   `
 ]
 

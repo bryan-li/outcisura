@@ -5,9 +5,11 @@ import { useDocumentsStore } from '../../state/documentsStore'
 import { useUiStore } from '../../state/uiStore'
 import { useConnectivityStore } from '../../state/connectivityStore'
 import { triggerSync } from '../../lib/syncEngine'
-import { resolveOrphanAgainstPages } from '../../lib/resolveOrphanSource'
+import { resolveOrphanAgainstPages, resolveOrphanAgainstVideo } from '../../lib/resolveOrphanSource'
 import { parsePdf } from '../../parsers/pdfParser'
 import { parsePptx } from '../../parsers/pptxParser'
+import { parseVideoFile } from '../../parsers/videoParser'
+import { formatDuration } from '../../utils/formatDuration'
 
 /** Sources a cross-device pull couldn't resolve locally (see repository.ts's applyRemoteCardUpsert/
  *  replaceOrphanedSource/recaptureOrphanedSource/dismissOrphanedSource). Three ways to resolve one:
@@ -26,6 +28,7 @@ export function MissingSourcesView(): JSX.Element {
   const documents = useDocumentsStore((s) => s.documents)
   const loadDocuments = useDocumentsStore((s) => s.loadDocuments)
   const openDocument = useDocumentsStore((s) => s.openDocument)
+  const registerPage = useDocumentsStore((s) => s.registerPage)
 
   const [orphans, setOrphans] = useState<OrphanedSourceRecord[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -74,17 +77,27 @@ export function MissingSourcesView(): JSX.Element {
     }
   }
 
-  /** The actual crop-and-attach step, shared by every recapture path below. Applies the orphan's
-   *  already-synced bbox/sourcePageIndex snapshot against a document that's already imported and
-   *  open locally — no manual page-hunting or re-drawing a selection, since that data already
-   *  exists (page ordering is fully deterministic for a given file: parsePdf/parsePptx always
-   *  assign pageIndex in file order, on any device). Returns false (no side effects beyond opening
-   *  the document) rather than throwing when the expected page just isn't there, so callers can
-   *  keep trying other candidate documents before giving up. */
-  async function tryResolveAgainstDocument(orphan: OrphanedSourceRecord, documentId: string, documentLabel: string): Promise<boolean> {
-    await openDocument(documentId)
-    const pages = useDocumentsStore.getState().pagesByDocument[documentId] ?? []
-    const updatedCard = await resolveOrphanAgainstPages(orphan, documentId, documentLabel, pages)
+  /** The actual crop-and-attach step, shared by every recapture path below. For a pdf/pptx document
+   *  this applies the orphan's already-synced bbox/sourcePageIndex snapshot against a page that's
+   *  already there (page ordering is fully deterministic for a given file, on any device). A video
+   *  document has no such pre-existing indexed pages — resolveOrphanAgainstVideo captures a brand
+   *  new frame at the orphan's saved timestamp instead, and the freshly minted page needs
+   *  registering with documentsStore since it never went through openDocument. Returns false (no
+   *  side effects beyond opening the document / capturing the frame) rather than throwing when
+   *  resolution just doesn't land, so callers can try another candidate document before giving up. */
+  async function tryResolveAgainstDocument(orphan: OrphanedSourceRecord, doc: DocumentRecord): Promise<boolean> {
+    if (doc.type === 'video') {
+      const result = await resolveOrphanAgainstVideo(orphan, doc)
+      if (!result) return false
+      registerPage(doc.id, result.page)
+      setCards(useCardsStore.getState().cards.map((c) => (c.id === result.card.id ? result.card : c)))
+      setOrphans((prev) => (prev ? prev.filter((o) => o.id !== orphan.id) : prev))
+      triggerSync()
+      return true
+    }
+    await openDocument(doc.id)
+    const pages = useDocumentsStore.getState().pagesByDocument[doc.id] ?? []
+    const updatedCard = await resolveOrphanAgainstPages(orphan, doc.id, doc.filename, pages)
     if (!updatedCard) return false
     setCards(useCardsStore.getState().cards.map((c) => (c.id === updatedCard.id ? updatedCard : c)))
     setOrphans((prev) => (prev ? prev.filter((o) => o.id !== orphan.id) : prev))
@@ -103,11 +116,11 @@ export function MissingSourcesView(): JSX.Element {
     try {
       const candidates = orphan.sourceDocumentFilename ? documents.filter((d) => d.filename === orphan.sourceDocumentFilename) : []
       for (const doc of candidates) {
-        if (await tryResolveAgainstDocument(orphan, doc.id, doc.filename)) return
+        if (await tryResolveAgainstDocument(orphan, doc)) return
       }
       setError(
         candidates.length > 0
-          ? `Found "${orphan.sourceDocumentFilename}" in your library, but couldn't locate the right page automatically — pick manually below.`
+          ? `Found "${orphan.sourceDocumentFilename}" in your library, but couldn't locate the right ${candidates[0].type === 'video' ? 'moment' : 'page'} automatically — pick manually below.`
           : orphan.sourceDocumentFilename
             ? `No local document matches "${orphan.sourceDocumentFilename}" yet — pick one below or import it.`
             : `No source document info available for this card — pick a document below or import it.`
@@ -121,16 +134,23 @@ export function MissingSourcesView(): JSX.Element {
   }
 
   /** Manual fallback: the user picked a specific existing Library document themselves (the
-   *  automatic filename match above either found nothing or picked the wrong copy). */
-  async function handleRecaptureExisting(orphan: OrphanedSourceRecord, documentId: string, filename: string): Promise<void> {
+   *  automatic filename match above either found nothing or picked the wrong copy). The
+   *  "open it and select manually" recovery only exists for pdf/pptx today (see DocumentViewer's
+   *  recaptureTarget handling) — VideoPlayer has no equivalent recapture mode, so a video document
+   *  that doesn't auto-resolve just points at Upload replacement instead. */
+  async function handleRecaptureExisting(orphan: OrphanedSourceRecord, doc: DocumentRecord): Promise<void> {
     setBusyId(orphan.id)
     setError(null)
     try {
-      const resolved = await tryResolveAgainstDocument(orphan, documentId, filename)
+      const resolved = await tryResolveAgainstDocument(orphan, doc)
       if (!resolved) {
-        setError(`Couldn't find page ${(orphan.sourcePageIndex ?? 0) + 1} in "${filename}" — opening it so you can select the region manually.`)
-        startRecapture({ orphanId: orphan.id, cardId: orphan.cardId, label: orphan.label })
-        setView({ type: 'library' })
+        if (doc.type === 'video') {
+          setError(`Couldn't automatically find that moment in "${doc.filename}" — try "Upload replacement" instead.`)
+        } else {
+          setError(`Couldn't find page ${(orphan.sourcePageIndex ?? 0) + 1} in "${doc.filename}" — opening it so you can select the region manually.`)
+          startRecapture({ orphanId: orphan.id, cardId: orphan.cardId, label: orphan.label })
+          setView({ type: 'library' })
+        }
       } else {
         setMenuOrphanId(null)
       }
@@ -141,24 +161,36 @@ export function MissingSourcesView(): JSX.Element {
     }
   }
 
-  /** Manual fallback: the user imports a fresh file (the source document isn't in the Library at all). */
+  /** Manual fallback: the user imports a fresh file (the source document isn't in the Library at
+   *  all) — .pdf/.pptx or, now, .mp4. Same "no manual video recapture mode" caveat as
+   *  handleRecaptureExisting above applies if the automatic timestamp capture doesn't land. */
   async function handleRecaptureFile(orphan: OrphanedSourceRecord, file: File): Promise<void> {
     setBusyId(orphan.id)
     setError(null)
     try {
       const ext = file.name.split('.').pop()?.toLowerCase()
-      const parsed = ext === 'pdf' ? await parsePdf(file) : ext === 'pptx' ? await parsePptx(file) : null
-      if (!parsed) throw new Error('Choose a .pdf or .pptx file')
-
-      const record = await window.api.documents.import(parsed)
+      let record: DocumentRecord
+      if (ext === 'mp4') {
+        record = await window.api.documents.importVideo(await parseVideoFile(file))
+      } else if (ext === 'pdf') {
+        record = await window.api.documents.import(await parsePdf(file))
+      } else if (ext === 'pptx') {
+        record = await window.api.documents.import(await parsePptx(file))
+      } else {
+        throw new Error('Choose a .pdf, .pptx, or .mp4 file')
+      }
       await loadDocuments()
-      const resolved = await tryResolveAgainstDocument(orphan, record.id, record.filename)
+      const resolved = await tryResolveAgainstDocument(orphan, record)
       if (!resolved) {
-        setError(
-          `Couldn't automatically find page ${(orphan.sourcePageIndex ?? 0) + 1} of "${file.name}" — opening it so you can select the region manually.`
-        )
-        startRecapture({ orphanId: orphan.id, cardId: orphan.cardId, label: orphan.label })
-        setView({ type: 'library' })
+        if (record.type === 'video') {
+          setError(`Imported "${file.name}", but couldn't automatically capture the right moment — try "Upload replacement" instead.`)
+        } else {
+          setError(
+            `Couldn't automatically find page ${(orphan.sourcePageIndex ?? 0) + 1} of "${file.name}" — opening it so you can select the region manually.`
+          )
+          startRecapture({ orphanId: orphan.id, cardId: orphan.cardId, label: orphan.label })
+          setView({ type: 'library' })
+        }
       } else {
         setMenuOrphanId(null)
       }
@@ -232,7 +264,7 @@ export function MissingSourcesView(): JSX.Element {
                   onCloseMenu={() => setMenuOrphanId(null)}
                   onUpload={(file) => handleUpload(orphan, file)}
                   onAutoRecapture={() => handleAutoRecapture(orphan)}
-                  onRecaptureExisting={(documentId, filename) => handleRecaptureExisting(orphan, documentId, filename)}
+                  onRecaptureExisting={(doc) => handleRecaptureExisting(orphan, doc)}
                   onRecaptureFile={(file) => handleRecaptureFile(orphan, file)}
                   onDismiss={() => handleDismiss(orphan)}
                 />
@@ -264,7 +296,7 @@ function OrphanRow({
   onCloseMenu: () => void
   onUpload: (file: File) => void
   onAutoRecapture: () => void
-  onRecaptureExisting: (documentId: string, filename: string) => void
+  onRecaptureExisting: (doc: DocumentRecord) => void
   onRecaptureFile: (file: File) => void
   onDismiss: () => void
 }): JSX.Element {
@@ -284,9 +316,11 @@ function OrphanRow({
   const hint =
     orphan.reason === 'missing_file'
       ? 'Image file missing on this device'
-      : orphan.sourceDocumentFilename
-        ? `From page ${(orphan.sourcePageIndex ?? 0) + 1} of "${orphan.sourceDocumentFilename}"`
-        : 'Source document not found on this device'
+      : orphan.sourceTimestampSeconds !== null
+        ? `From ${formatDuration(orphan.sourceTimestampSeconds)} of "${orphan.sourceDocumentFilename}"`
+        : orphan.sourceDocumentFilename
+          ? `From page ${(orphan.sourcePageIndex ?? 0) + 1} of "${orphan.sourceDocumentFilename}"`
+          : 'Source document not found on this device'
 
   // Documents likely to actually contain this page — same filename first, everything else after,
   // so a shared-source deck the user already imported for a different card shows up front.
@@ -316,7 +350,7 @@ function OrphanRow({
       <input
         ref={recaptureInputRef}
         type="file"
-        accept=".pdf,.pptx"
+        accept=".pdf,.pptx,.mp4"
         style={{ display: 'none' }}
         onChange={(e) => {
           const file = e.target.files?.[0]
@@ -344,10 +378,10 @@ function OrphanRow({
                     style={recaptureMenuItemStyle}
                     onClick={() => {
                       onCloseMenu()
-                      onRecaptureExisting(doc.id, doc.filename)
+                      onRecaptureExisting(doc)
                     }}
                   >
-                    📄 {doc.filename}
+                    {doc.type === 'pdf' ? '📕' : doc.type === 'pptx' ? '📽' : '🎬'} {doc.filename}
                   </button>
                 ))}
                 <div style={recaptureMenuDividerStyle} />

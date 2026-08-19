@@ -300,12 +300,14 @@ export class Repository {
     const insertSource = this.db.prepare(
       `INSERT INTO card_sources (
          id, card_id, document_id, page_id, element_id, x, y, w, h, label, image_path,
-         mask_x, mask_y, mask_w, mask_h, image_face, source_document_filename, source_page_index
+         mask_x, mask_y, mask_w, mask_h, image_face, source_document_filename, source_page_index,
+         source_timestamp_seconds
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     const documentFilename = this.db.prepare(`SELECT filename FROM documents WHERE id = ?`)
     const pageIndex = this.db.prepare(`SELECT page_index FROM pages WHERE id = ?`)
+    const pageTimestamp = this.db.prepare(`SELECT timestamp_seconds FROM pages WHERE id = ?`)
 
     const sourceRows: CardSourceRecord[] = []
     const run = this.db.transaction(() => {
@@ -318,6 +320,7 @@ export class Repository {
         // device carries).
         const sourceDocumentFilename = (documentFilename.get(src.documentId) as { filename: string } | undefined)?.filename ?? null
         const sourcePageIndex = (pageIndex.get(src.pageId) as { page_index: number } | undefined)?.page_index ?? null
+        const sourceTimestampSeconds = (pageTimestamp.get(src.pageId) as { timestamp_seconds: number | null } | undefined)?.timestamp_seconds ?? null
         insertSource.run(
           sourceId,
           cardId,
@@ -336,7 +339,8 @@ export class Repository {
           src.maskBBox?.h ?? null,
           src.imageFace ?? null,
           sourceDocumentFilename,
-          sourcePageIndex
+          sourcePageIndex,
+          sourceTimestampSeconds
         )
         sourceRows.push({
           id: sourceId,
@@ -350,7 +354,8 @@ export class Repository {
           maskBBox: src.maskBBox ?? null,
           imageFace: src.imageFace ?? null,
           sourceDocumentFilename,
-          sourcePageIndex
+          sourcePageIndex,
+          sourceTimestampSeconds
         })
       }
 
@@ -645,7 +650,8 @@ export class Repository {
       maskBBox: s.mask_x !== null ? ({ x: s.mask_x, y: s.mask_y!, w: s.mask_w!, h: s.mask_h! } satisfies BBox) : null,
       imageFace: s.image_face,
       sourceDocumentFilename: s.source_document_filename,
-      sourcePageIndex: s.source_page_index
+      sourcePageIndex: s.source_page_index,
+      sourceTimestampSeconds: s.source_timestamp_seconds
     }))
     return {
       id: row.id,
@@ -892,9 +898,10 @@ export class Repository {
       const insertSource = this.db.prepare(
         `INSERT INTO card_sources (
            id, card_id, document_id, page_id, element_id, x, y, w, h, label, image_path,
-           mask_x, mask_y, mask_w, mask_h, image_face, source_document_filename, source_page_index
+           mask_x, mask_y, mask_w, mask_h, image_face, source_document_filename, source_page_index,
+           source_timestamp_seconds
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       const documentExists = this.db.prepare(`SELECT 1 FROM documents WHERE id = ?`)
       const pageExists = this.db.prepare(`SELECT 1 FROM pages WHERE id = ?`)
@@ -902,9 +909,10 @@ export class Repository {
       const insertOrphan = this.db.prepare(
         `INSERT OR IGNORE INTO orphaned_sources (
            id, card_id, reason, document_id, page_id, element_id, x, y, w, h, label, image_path,
-           mask_x, mask_y, mask_w, mask_h, image_face, source_document_filename, source_page_index, detected_at
+           mask_x, mask_y, mask_w, mask_h, image_face, source_document_filename, source_page_index,
+           source_timestamp_seconds, detected_at
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       const detectedAt = new Date().toISOString()
       const resolvesLocally = (s: CardSourceRecord): boolean =>
@@ -983,6 +991,7 @@ export class Repository {
             src.imageFace,
             src.sourceDocumentFilename,
             src.sourcePageIndex,
+            src.sourceTimestampSeconds,
             detectedAt
           )
           return
@@ -1006,7 +1015,8 @@ export class Repository {
           src.maskBBox?.h ?? null,
           src.imageFace,
           src.sourceDocumentFilename,
-          src.sourcePageIndex
+          src.sourcePageIndex,
+          src.sourceTimestampSeconds
         )
         if (src.imagePath && !existsSync(src.imagePath)) {
           insertOrphan.run(
@@ -1029,6 +1039,7 @@ export class Repository {
             src.imageFace,
             src.sourceDocumentFilename,
             src.sourcePageIndex,
+            src.sourceTimestampSeconds,
             detectedAt
           )
         }
@@ -1179,7 +1190,8 @@ export class Repository {
       maskBBox: null,
       imageFace: orphan.image_face as 'front' | 'back' | null,
       sourceDocumentFilename: input.sourceDocumentFilename,
-      sourcePageIndex: input.sourcePageIndex
+      sourcePageIndex: input.sourcePageIndex,
+      sourceTimestampSeconds: input.sourceTimestampSeconds
     }
 
     const run = this.db.transaction(() => {
@@ -1189,7 +1201,7 @@ export class Repository {
             `UPDATE card_sources SET
                document_id = ?, page_id = ?, element_id = NULL, x = ?, y = ?, w = ?, h = ?,
                image_path = ?, mask_x = NULL, mask_y = NULL, mask_w = NULL, mask_h = NULL,
-               source_document_filename = ?, source_page_index = ?
+               source_document_filename = ?, source_page_index = ?, source_timestamp_seconds = ?
              WHERE id = ?`
           )
           .run(
@@ -1202,6 +1214,7 @@ export class Repository {
             input.imagePath,
             input.sourceDocumentFilename,
             input.sourcePageIndex,
+            input.sourceTimestampSeconds,
             orphanId
           )
         this.logSyncOp('card_sources', 'update', orphanId, [recapturedSource])
@@ -1211,12 +1224,16 @@ export class Repository {
         // *other* device (that device's own recapture would independently mint its own new source
         // pointing at its own document, which can never resolve here). Inserting another row for
         // the same content would just be a redundant duplicate; resolving the orphan is enough.
+        // sourcePageIndex alone identifies "same page" for pdf/pptx, but is a meaningless per-device
+        // capture-order counter for video — matching on sourceTimestampSeconds too (when set) covers
+        // the same-video-moment case pageIndex alone would miss.
         const alreadyCovered = card.sources.some(
           (existing) =>
             existing.sourceDocumentFilename !== null &&
             existing.sourceDocumentFilename === input.sourceDocumentFilename &&
-            existing.sourcePageIndex === input.sourcePageIndex &&
-            bboxEquals(existing.bbox, input.bbox)
+            bboxEquals(existing.bbox, input.bbox) &&
+            (existing.sourcePageIndex === input.sourcePageIndex ||
+              (existing.sourceTimestampSeconds !== null && existing.sourceTimestampSeconds === input.sourceTimestampSeconds))
         )
         if (!alreadyCovered) {
           const newId = randomUUID()
@@ -1224,8 +1241,9 @@ export class Repository {
             .prepare(
               `INSERT INTO card_sources (
                  id, card_id, document_id, page_id, element_id, x, y, w, h, label, image_path,
-                 mask_x, mask_y, mask_w, mask_h, image_face, source_document_filename, source_page_index
-               ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?)`
+                 mask_x, mask_y, mask_w, mask_h, image_face, source_document_filename, source_page_index,
+                 source_timestamp_seconds
+               ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?)`
             )
             .run(
               newId,
@@ -1240,7 +1258,8 @@ export class Repository {
               input.imagePath,
               orphan.image_face,
               input.sourceDocumentFilename,
-              input.sourcePageIndex
+              input.sourcePageIndex,
+              input.sourceTimestampSeconds
             )
           this.logSyncOp('card_sources', 'insert', orphan.card_id, [{ ...recapturedSource, id: newId }])
         }
@@ -1343,6 +1362,7 @@ interface CardSourceRow {
   image_face: 'front' | 'back' | null
   source_document_filename: string | null
   source_page_index: number | null
+  source_timestamp_seconds: number | null
 }
 
 interface FolderRow {
@@ -1400,6 +1420,7 @@ interface OrphanedSourceRow {
   image_face: string | null
   source_document_filename: string | null
   source_page_index: number | null
+  source_timestamp_seconds: number | null
   detected_at: string
   resolved_at: string | null
 }
@@ -1419,6 +1440,7 @@ function hydrateOrphanedSource(row: OrphanedSourceRow): OrphanedSourceRecord {
     imageFace: row.image_face as 'front' | 'back' | null,
     sourceDocumentFilename: row.source_document_filename,
     sourcePageIndex: row.source_page_index,
+    sourceTimestampSeconds: row.source_timestamp_seconds,
     detectedAt: row.detected_at,
     resolvedAt: row.resolved_at
   }
@@ -1439,6 +1461,7 @@ function orphanToCardSourceRecord(orphan: OrphanedSourceRow, imagePath: string):
     maskBBox: orphan.mask_x !== null ? { x: orphan.mask_x, y: orphan.mask_y!, w: orphan.mask_w!, h: orphan.mask_h! } : null,
     imageFace: orphan.image_face as 'front' | 'back' | null,
     sourceDocumentFilename: orphan.source_document_filename,
-    sourcePageIndex: orphan.source_page_index
+    sourcePageIndex: orphan.source_page_index,
+    sourceTimestampSeconds: orphan.source_timestamp_seconds
   }
 }
