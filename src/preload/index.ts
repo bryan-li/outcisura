@@ -66,6 +66,10 @@ const api: FlashcardApi = {
     delete: (id) => ipcRenderer.invoke(IpcChannels.tagsDelete, id),
     setCardTags: (cardId, tagIds) => ipcRenderer.invoke(IpcChannels.tagsSetCardTags, cardId, tagIds)
   },
+  cardImages: {
+    add: (cardId, imagePaths) => ipcRenderer.invoke(IpcChannels.cardImagesAdd, cardId, imagePaths),
+    remove: (cardId, sourceId) => ipcRenderer.invoke(IpcChannels.cardImagesRemove, cardId, sourceId)
+  },
   sync: {
     getPendingOps: () => ipcRenderer.invoke(IpcChannels.syncGetPendingOps),
     removeOps: (ids) => ipcRenderer.invoke(IpcChannels.syncRemoveOps, ids),

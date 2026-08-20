@@ -84,6 +84,8 @@ export const IpcChannels = {
   tagsList: 'tags:list',
   tagsDelete: 'tags:delete',
   tagsSetCardTags: 'tags:setCardTags',
+  cardImagesAdd: 'cardImages:add',
+  cardImagesRemove: 'cardImages:remove',
   syncGetPendingOps: 'sync:getPendingOps',
   syncRemoveOps: 'sync:removeOps',
   syncGetMeta: 'sync:getMeta',
@@ -222,6 +224,13 @@ export interface FlashcardApi {
     delete(id: string): Promise<void>
     /** Replaces a card's full tag set in one call. */
     setCardTags(cardId: string, tagIds: string[]): Promise<void>
+  }
+  /** Freely-attached images on a card (paste-from-clipboard, drag-drop) — independent of the
+   *  structured slide/video source-selection flow. Each path should already be a saved local file
+   *  (see documents.saveImage for turning a pasted/dropped image into one). */
+  cardImages: {
+    add(cardId: string, imagePaths: string[]): Promise<CardRecord>
+    remove(cardId: string, sourceId: string): Promise<CardRecord>
   }
   /** The local-first bidirectional sync engine's primitives (see renderer/src/lib/syncEngine.ts) —
    *  read/drain the local operation log and apply pulled remote rows, without moving the actual

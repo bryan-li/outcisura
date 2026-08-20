@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
 import type { CardRecord } from '../../../../shared/types'
 import { useCardsStore } from '../../state/cardsStore'
 import { useReviewLogStore } from '../../state/reviewLogStore'
@@ -48,6 +48,7 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
   const deleteCard = useCardsStore((s) => s.deleteCard)
   const regenerate = useCardsStore((s) => s.regenerate)
   const reorderCards = useCardsStore((s) => s.reorderCards)
+  const removeCardImage = useCardsStore((s) => s.removeCardImage)
   const goToSource = useUiStore((s) => s.goToSource)
 
   const [expanded, setExpanded] = useState(false)
@@ -88,6 +89,11 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
   const frontImages = faceTagged ? imageSourcesForFace(card, 'front') : []
   const backImages = faceTagged ? imageSourcesForFace(card, 'back') : []
   const smallPreviewPath = faceTagged ? (frontImages[0] ?? backImages[0] ?? null) : imagePath
+  // Same data as frontImages/backImages but keeping each source's id — needed for the per-image
+  // remove button (freely-attached images via ImageAttachControl land here with imageFace: 'back',
+  // reusing this same gallery rather than a separate one).
+  const frontImageSources = faceTagged ? card.sources.filter((s) => s.imageFace === 'front' && s.imagePath) : []
+  const backImageSources = faceTagged ? card.sources.filter((s) => s.imageFace === 'back' && s.imagePath) : []
 
   // Total grade events, not just the successful-streak `card.repetitions` — every time this card
   // was shown in review, regardless of how it was graded. reviewLogStore already loads the whole
@@ -335,22 +341,32 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
                   <OcclusionImage imagePath={imagePath} maskBBoxes={maskBBoxesFor(card, imagePath)} revealed={false} maxWidth={260} />
                 </div>
               )}
-              {expanded && faceTagged && !imageHiddenInBrowse && frontImages.length > 0 && (
+              {expanded && faceTagged && !imageHiddenInBrowse && frontImageSources.length > 0 && (
                 <div style={{ marginTop: 6 }}>
                   <p style={imageGalleryLabelStyle}>Front</p>
                   <div style={imageGalleryRowStyle}>
-                    {frontImages.map((path, i) => (
-                      <OcclusionImage key={`${path}-${i}`} imagePath={path} maskBBoxes={[]} revealed maxWidth={90} />
+                    {frontImageSources.map((s) => (
+                      <div key={s.id} style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+                        <OcclusionImage imagePath={s.imagePath!} maskBBoxes={[]} revealed maxWidth={90} />
+                        <button onClick={() => removeCardImage(card.id, s.id)} title="Remove image" style={imageRemoveButtonStyle}>
+                          ×
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </div>
               )}
-              {expanded && faceTagged && !imageHiddenInBrowse && backImages.length > 0 && (
+              {expanded && faceTagged && !imageHiddenInBrowse && backImageSources.length > 0 && (
                 <div style={{ marginTop: 6 }}>
                   <p style={imageGalleryLabelStyle}>Back</p>
                   <div style={imageGalleryRowStyle}>
-                    {backImages.map((path, i) => (
-                      <OcclusionImage key={`${path}-${i}`} imagePath={path} maskBBoxes={[]} revealed maxWidth={90} />
+                    {backImageSources.map((s) => (
+                      <div key={s.id} style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+                        <OcclusionImage imagePath={s.imagePath!} maskBBoxes={[]} revealed maxWidth={90} />
+                        <button onClick={() => removeCardImage(card.id, s.id)} title="Remove image" style={imageRemoveButtonStyle}>
+                          ×
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -366,6 +382,7 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
                 </p>
               )}
               {expanded && <TagRow cardId={card.id} tagIds={card.tagIds} />}
+              {expanded && <ImageAttachControl cardId={card.id} />}
             </div>
           )}
         </div>
@@ -490,6 +507,79 @@ function TagRow({ cardId, tagIds }: { cardId: string; tagIds: string[] }): JSX.E
           + tag
         </button>
       )}
+    </div>
+  )
+}
+
+/** Reads a File as a `data:` URL, then persists it to disk via the same saveImage path every
+ *  other locally-captured image already uses (see main/imageStore.ts). */
+async function fileToImagePath(file: File): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+  return window.api.documents.saveImage(dataUrl)
+}
+
+/** Paste-from-clipboard or drag-drop entry point for freely attaching images to a card,
+ *  independent of the structured slide/video source-selection flow — see
+ *  repository.ts's addCardImages for how these land as imageFace: 'back' sources, rendered by the
+ *  same gallery as any other multi-image card's back face. */
+function ImageAttachControl({ cardId }: { cardId: string }): JSX.Element {
+  const addCardImages = useCardsStore((s) => s.addCardImages)
+  const [dragOver, setDragOver] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function attachFiles(files: File[]): Promise<void> {
+    const images = files.filter((f) => f.type.startsWith('image/'))
+    if (images.length === 0) return
+    setBusy(true)
+    try {
+      const paths = await Promise.all(images.map(fileToImagePath))
+      await addCardImages(cardId, paths)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function handlePaste(e: ClipboardEvent<HTMLDivElement>): void {
+    const files = Array.from(e.clipboardData.items)
+      .map((item) => item.getAsFile())
+      .filter((f): f is File => !!f && f.type.startsWith('image/'))
+    if (files.length > 0) {
+      e.preventDefault()
+      void attachFiles(files)
+    }
+  }
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>): void {
+    if (!Array.from(e.dataTransfer.types).includes('Files')) return
+    e.preventDefault()
+    setDragOver(true)
+  }
+
+  function handleDrop(e: DragEvent<HTMLDivElement>): void {
+    if (e.dataTransfer.files.length === 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+    void attachFiles(Array.from(e.dataTransfer.files))
+  }
+
+  return (
+    <div
+      tabIndex={0}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onPaste={handlePaste}
+      onDragOver={handleDragOver}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+      style={{ ...imageDropZoneStyle, borderColor: dragOver ? 'var(--accent)' : 'var(--border)' }}
+    >
+      {busy ? 'Attaching image…' : '🖼 Click, then ⌘V to paste an image — or drop one here'}
     </div>
   )
 }
@@ -622,6 +712,35 @@ const sourceMenuItemStyle: CSSProperties = {
   cursor: 'pointer',
   fontSize: 'var(--font-sm)',
   color: 'inherit'
+}
+
+const imageDropZoneStyle: CSSProperties = {
+  marginTop: 6,
+  padding: '5px 8px',
+  border: '1px dashed var(--border)',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 'var(--font-xs)',
+  color: 'var(--fg-faint)',
+  cursor: 'text',
+  outline: 'none',
+  transition: 'border-color 100ms ease'
+}
+
+const imageRemoveButtonStyle: CSSProperties = {
+  position: 'absolute',
+  top: -4,
+  right: -4,
+  width: 16,
+  height: 16,
+  lineHeight: '14px',
+  textAlign: 'center',
+  border: '1px solid var(--border)',
+  borderRadius: '50%',
+  background: 'var(--bg)',
+  color: 'var(--fg-muted)',
+  cursor: 'pointer',
+  fontSize: 11,
+  padding: 0
 }
 
 const tagRowStyle: CSSProperties = {

@@ -490,6 +490,59 @@ export class Repository {
     run()
   }
 
+  /** Appends one or more freely-attached images to an existing card — paste-from-clipboard and
+   *  drag-drop both land here, independent of the structured slide/video source-selection flow
+   *  (see DocumentViewer's sourcesForStaged). Always document/page-less, same shape as
+   *  replaceOrphanedSource's unresolved_document branch, and tagged imageFace: 'back' so they
+   *  reuse the existing multi-image gallery rendering — revealed alongside the answer rather than
+   *  spoiling it up front. Only ever inserts new rows — never touches a card's existing sources,
+   *  so this can't clobber real document-linked ones. Bumps + pushes cards.updated_at like every
+   *  other card_sources-only mutation, since pull only re-fetches a card when its own updated_at
+   *  is newer. Sources already sync (see createCard), so this rides the same push/pull path. */
+  addCardImages(cardId: string, imagePaths: string[]): CardRecord {
+    const card = this.getCard(cardId)
+    if (!card) throw new Error(`Card ${cardId} not found`)
+    const now = new Date().toISOString()
+    const insertSource = this.db.prepare(
+      `INSERT INTO card_sources (
+         id, card_id, document_id, page_id, element_id, x, y, w, h, label, image_path,
+         mask_x, mask_y, mask_w, mask_h, image_face, source_document_filename, source_page_index,
+         source_timestamp_seconds
+       ) VALUES (?, ?, NULL, NULL, NULL, 0, 0, 1, 1, 'Attached image', ?, NULL, NULL, NULL, NULL, 'back', NULL, NULL, NULL)`
+    )
+    const newIds: string[] = []
+    const run = this.db.transaction(() => {
+      for (const imagePath of imagePaths) {
+        const id = randomUUID()
+        insertSource.run(id, cardId, imagePath)
+        newIds.push(id)
+      }
+      this.db.prepare(`UPDATE cards SET updated_at = ? WHERE id = ?`).run(now, cardId)
+    })
+    run()
+    const updated = this.getCard(cardId)!
+    const newSourceRows = updated.sources.filter((s) => newIds.includes(s.id))
+    this.logSyncOp('card_sources', 'insert', cardId, newSourceRows)
+    this.logSyncOp('cards', 'update', cardId, updated)
+    return updated
+  }
+
+  /** Removes one freely-attached image (see addCardImages). */
+  removeCardImage(cardId: string, sourceId: string): CardRecord {
+    const card = this.getCard(cardId)
+    if (!card) throw new Error(`Card ${cardId} not found`)
+    const now = new Date().toISOString()
+    const run = this.db.transaction(() => {
+      this.db.prepare(`DELETE FROM card_sources WHERE id = ?`).run(sourceId)
+      this.db.prepare(`UPDATE cards SET updated_at = ? WHERE id = ?`).run(now, cardId)
+    })
+    run()
+    this.logSyncOp('card_sources', 'delete', sourceId, null)
+    const updated = this.getCard(cardId)!
+    this.logSyncOp('cards', 'update', cardId, updated)
+    return updated
+  }
+
   getCard(cardId: string): CardRecord | null {
     const row = this.db.prepare(`SELECT * FROM cards WHERE id = ?`).get(cardId) as
       | CardRow

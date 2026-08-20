@@ -35,6 +35,10 @@ interface CardsState {
   regenerate: (cardId: string, instruction?: string) => Promise<void>
   /** Local-only, like tags themselves — no triggerSync. Replaces the card's full tag set. */
   setCardTags: (cardId: string, tagIds: string[]) => Promise<void>
+  /** Freely-attached images (paste/drop) — unlike tags, card_sources already syncs, so this does
+   *  triggerSync like the rest of the card mutations above. */
+  addCardImages: (cardId: string, imagePaths: string[]) => Promise<void>
+  removeCardImage: (cardId: string, sourceId: string) => Promise<void>
 }
 
 export const useCardsStore = create<CardsState>((set, get) => {
@@ -164,6 +168,18 @@ export const useCardsStore = create<CardsState>((set, get) => {
     setCardTags: async (cardId, tagIds) => {
       await window.api.tags.setCardTags(cardId, tagIds)
       persist(get().cards.map((c) => (c.id === cardId ? { ...c, tagIds } : c)))
+    },
+
+    addCardImages: async (cardId, imagePaths) => {
+      const updated = await window.api.cardImages.add(cardId, imagePaths)
+      persist(get().cards.map((c) => (c.id === cardId ? updated : c)))
+      triggerSync()
+    },
+
+    removeCardImage: async (cardId, sourceId) => {
+      const updated = await window.api.cardImages.remove(cardId, sourceId)
+      persist(get().cards.map((c) => (c.id === cardId ? updated : c)))
+      triggerSync()
     },
 
     regenerate: async (cardId, instruction) => {
