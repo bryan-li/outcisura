@@ -29,6 +29,8 @@ import { HostableDecksView } from './components/CardBrowser/HostableDecksView'
 import { HostPrepToast } from './components/Toast/HostPrepToast'
 import { HostLobbyView } from './components/LiveSession/HostLobbyView'
 import { HostControlView } from './components/LiveSession/HostControlView'
+import { JoinLiveSessionView } from './components/LiveSession/JoinLiveSessionView'
+import { PlayLiveSessionView } from './components/LiveSession/PlayLiveSessionView'
 import { useDeleteSelectedCardsShortcut } from './hooks/useDeleteSelectedCardsShortcut'
 import { useSearchShortcut } from './hooks/useSearchShortcut'
 
@@ -132,6 +134,8 @@ function AppShell(): JSX.Element {
           {view.type === 'hostable-decks' && <HostableDecksView />}
           {view.type === 'host-lobby' && <HostLobbyView sessionId={view.sessionId} />}
           {view.type === 'host-control' && <HostControlView sessionId={view.sessionId} />}
+          {view.type === 'live-session-join' && <JoinLiveSessionView />}
+          {view.type === 'live-session-play' && <PlayLiveSessionView sessionId={view.sessionId} />}
           {view.type === 'settings' && <SettingsView />}
         </div>
       </main>

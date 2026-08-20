@@ -42,6 +42,12 @@ export type MainView =
   /** The host's live control panel once a session is running — current question, countdown,
    *  answered-count ticker, reveal/next/end controls. See HostControlView.tsx. */
   | { type: 'host-control'; sessionId: string }
+  /** A signed-in user joining a live session as themselves (not as an anonymous guest) — the
+   *  join-code entry form. See JoinLiveSessionView.tsx. */
+  | { type: 'live-session-join' }
+  /** A signed-in user's live-session play loop, once joined — shares LiveSessionPlayer.tsx with
+   *  the anonymous guest path. See PlayLiveSessionView.tsx. */
+  | { type: 'live-session-play'; sessionId: string }
   /** A spaced-repetition study session. `returnTo` is set by the caller (not inferred from scope)
    *  so Exit/Esc always lands back wherever the session was actually launched from. `force` skips
    *  the due-date filter entirely — every card in scope, regardless of schedule ("cram" mode). */

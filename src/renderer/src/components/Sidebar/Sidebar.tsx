@@ -202,6 +202,11 @@ export function Sidebar(): JSX.Element {
           active={isView(view, { type: 'hostable-decks' })}
           onClick={() => setView({ type: 'hostable-decks' })}
         />
+        <NavItem
+          label="🎮 Join a session"
+          active={view.type === 'live-session-join' || view.type === 'live-session-play'}
+          onClick={() => setView({ type: 'live-session-join' })}
+        />
         {orphanCount > 0 && (
           <NavItem
             label={`⚠️ Missing Sources (${orphanCount})`}
