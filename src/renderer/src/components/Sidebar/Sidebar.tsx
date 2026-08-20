@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
 import type { CardRecord, DocumentFolderRecord, DocumentRecord, FolderRecord } from '../../../../shared/types'
 import { useDocumentsStore } from '../../state/documentsStore'
 import { useCardsStore } from '../../state/cardsStore'
@@ -859,6 +859,28 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
   const hasContent = children.length > 0 || ownCards.length > 0
   const dueCount = dueCards(cards, { kind: 'folder', folderId: folder.id }, new Date()).length
   const active = view.type === 'folder' && view.folderId === folder.id
+  // Classic Finder "spring-loading": hovering a drag over a collapsed folder auto-opens it after a
+  // beat, so you can drop deeper without a separate expand-then-drag-again step. Ref (not state) —
+  // dragover fires continuously while hovering, and re-arming the timer every time would mean it
+  // never actually fires.
+  const springLoadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function armSpringLoad(): void {
+    if (springLoadTimer.current || !folder.collapsed || !hasContent) return
+    springLoadTimer.current = setTimeout(() => {
+      springLoadTimer.current = null
+      props.onToggleCollapse()
+    }, 600)
+  }
+
+  function disarmSpringLoad(): void {
+    if (springLoadTimer.current) {
+      clearTimeout(springLoadTimer.current)
+      springLoadTimer.current = null
+    }
+  }
+
+  useEffect(() => disarmSpringLoad, [])
 
   function handleDragOver(e: DragEvent<HTMLDivElement>): void {
     e.preventDefault()
@@ -866,16 +888,21 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
     // A dragged card always lands *in* the folder; only folder drags get before/inside/after zones.
     if (e.dataTransfer.types.includes(CARD_DRAG_MIME)) {
       setCardDropActive(true)
+      armSpringLoad()
       return
     }
     const rect = e.currentTarget.getBoundingClientRect()
     const relY = (e.clientY - rect.top) / rect.height
-    setDropIndicator(relY < 0.25 ? 'before' : relY > 0.75 ? 'after' : 'inside')
+    const position = relY < 0.25 ? 'before' : relY > 0.75 ? 'after' : 'inside'
+    setDropIndicator(position)
+    if (position === 'inside') armSpringLoad()
+    else disarmSpringLoad()
   }
 
   function clearDropState(): void {
     setDropIndicator(null)
     setCardDropActive(false)
+    disarmSpringLoad()
   }
 
   function handleDrop(e: DragEvent<HTMLDivElement>): void {
@@ -892,6 +919,16 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
     clearDropState()
   }
 
+  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>): void {
+    if (e.key === 'ArrowRight' && folder.collapsed && hasContent) {
+      e.preventDefault()
+      props.onToggleCollapse()
+    } else if (e.key === 'ArrowLeft' && !folder.collapsed && hasContent) {
+      e.preventDefault()
+      props.onToggleCollapse()
+    }
+  }
+
   return (
     <div>
       {renamingId === folder.id ? (
@@ -899,6 +936,10 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
       ) : (
         <div
           draggable
+          tabIndex={0}
+          role="treeitem"
+          aria-expanded={hasContent ? !folder.collapsed : undefined}
+          onKeyDown={handleKeyDown}
           onDragStart={(e) => {
             e.dataTransfer.setData('text/plain', folder.id)
             e.dataTransfer.effectAllowed = 'move'
@@ -1045,22 +1086,56 @@ function DocumentFolderNode(props: DocumentFolderNodeProps): JSX.Element {
   const children = getChildren(documentFolders, folder.id)
   const ownDocuments = documents.filter((d) => d.folderId === folder.id)
   const hasContent = children.length > 0 || ownDocuments.length > 0
+  // Same spring-loading as FolderNode above — see its own comment on why a ref, not state.
+  const springLoadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function armSpringLoad(): void {
+    if (springLoadTimer.current || !folder.collapsed || !hasContent) return
+    springLoadTimer.current = setTimeout(() => {
+      springLoadTimer.current = null
+      props.onToggleCollapse()
+    }, 600)
+  }
+
+  function disarmSpringLoad(): void {
+    if (springLoadTimer.current) {
+      clearTimeout(springLoadTimer.current)
+      springLoadTimer.current = null
+    }
+  }
+
+  useEffect(() => disarmSpringLoad, [])
 
   function handleDragOver(e: DragEvent<HTMLDivElement>): void {
     e.preventDefault()
     e.stopPropagation()
     if (e.dataTransfer.types.includes(DOCUMENT_DRAG_MIME)) {
       setDocumentDropActive(true)
+      armSpringLoad()
       return
     }
     const rect = e.currentTarget.getBoundingClientRect()
     const relY = (e.clientY - rect.top) / rect.height
-    setDropIndicator(relY < 0.25 ? 'before' : relY > 0.75 ? 'after' : 'inside')
+    const position = relY < 0.25 ? 'before' : relY > 0.75 ? 'after' : 'inside'
+    setDropIndicator(position)
+    if (position === 'inside') armSpringLoad()
+    else disarmSpringLoad()
   }
 
   function clearDropState(): void {
     setDropIndicator(null)
     setDocumentDropActive(false)
+    disarmSpringLoad()
+  }
+
+  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>): void {
+    if (e.key === 'ArrowRight' && folder.collapsed && hasContent) {
+      e.preventDefault()
+      props.onToggleCollapse()
+    } else if (e.key === 'ArrowLeft' && !folder.collapsed && hasContent) {
+      e.preventDefault()
+      props.onToggleCollapse()
+    }
   }
 
   function handleDrop(e: DragEvent<HTMLDivElement>): void {
@@ -1084,6 +1159,10 @@ function DocumentFolderNode(props: DocumentFolderNodeProps): JSX.Element {
       ) : (
         <div
           draggable
+          tabIndex={0}
+          role="treeitem"
+          aria-expanded={hasContent ? !folder.collapsed : undefined}
+          onKeyDown={handleKeyDown}
           onDragStart={(e) => {
             e.dataTransfer.setData('text/plain', folder.id)
             e.dataTransfer.effectAllowed = 'move'
