@@ -4,10 +4,12 @@ import { formatInterval } from '../../../../shared/srs'
 import { useCardsStore } from '../../state/cardsStore'
 import { useFoldersStore } from '../../state/foldersStore'
 import { useReviewLogStore } from '../../state/reviewLogStore'
+import { useReviewSessionsStore } from '../../state/reviewSessionsStore'
 import { useUiStore, type ReviewScope } from '../../state/uiStore'
 import { allCardsInScope, dueCards, upcomingCards } from '../../utils/srsQueue'
 import { computeReviewStats } from '../../utils/reviewStats'
 import { getChildren } from '../../utils/folderTree'
+import { formatDuration } from '../../utils/formatDuration'
 import { StatTile } from '../Home/HomePage'
 import { ReviewHeatmap } from './ReviewHeatmap'
 
@@ -21,14 +23,20 @@ export function ReviewDashboard(): JSX.Element {
   const folders = useFoldersStore((s) => s.folders)
   const logEntries = useReviewLogStore((s) => s.entries)
   const loadReviewLog = useReviewLogStore((s) => s.loadReviewLog)
+  const reviewSessions = useReviewSessionsStore((s) => s.sessions)
+  const loadReviewSessions = useReviewSessionsStore((s) => s.loadReviewSessions)
   const setView = useUiStore((s) => s.setView)
   const focusCard = useUiStore((s) => s.focusCard)
 
-  // Re-fetch every time the dashboard is landed on, so its stats reflect anything graded since
-  // the app booted — the log doesn't otherwise live-update mid-session (see reviewLogStore).
+  // Re-fetch every time the dashboard is landed on, so its stats reflect anything graded/reviewed
+  // since the app booted — neither log otherwise live-updates mid-session (see reviewLogStore).
   useEffect(() => {
     loadReviewLog()
-  }, [loadReviewLog])
+    loadReviewSessions()
+  }, [loadReviewLog, loadReviewSessions])
+
+  const avgSessionSeconds =
+    reviewSessions.length > 0 ? reviewSessions.reduce((sum, s) => sum + s.durationSeconds, 0) / reviewSessions.length : null
 
   const [selectedFolderIds, setSelectedFolderIds] = useState<Set<string>>(new Set())
 
@@ -77,6 +85,7 @@ export function ReviewDashboard(): JSX.Element {
         <StatTile label="Total cards" value={stats.totalCards} />
         <StatTile label="Reviewed today" value={stats.reviewedToday} />
         <StatTile label="🔥 Day streak" value={stats.streakDays} />
+        <StatTile label="⏱ Avg session" value={avgSessionSeconds !== null ? formatDuration(avgSessionSeconds) : '—'} />
       </div>
 
       <div>

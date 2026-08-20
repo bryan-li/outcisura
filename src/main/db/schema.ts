@@ -414,6 +414,21 @@ const MIGRATIONS: string[] = [
   CREATE INDEX idx_document_folders_parent ON document_folders(parent_id);
 
   ALTER TABLE documents ADD COLUMN folder_id TEXT REFERENCES document_folders(id) ON DELETE SET NULL;
+  `,
+  `
+  -- One row per completed review session (start to finish), for a "how long did I actually study"
+  -- stat — review_log only ever logged individual grade *events*, with no notion of the session
+  -- they happened within. Local-only, like document_folders: this is a personal habit-tracking
+  -- stat, not something that needs cross-device aggregation, so it doesn't need the sync_ops
+  -- plumbing review_log itself has.
+  CREATE TABLE review_sessions (
+    id TEXT PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    ended_at TEXT NOT NULL,
+    duration_seconds REAL NOT NULL,
+    cards_reviewed INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX idx_review_sessions_started ON review_sessions(started_at);
   `
 ]
 

@@ -323,6 +323,23 @@ export interface ReviewLogEntry {
   reviewedAt: string
 }
 
+/** One completed review session (start to finish) — see review_sessions' own schema comment on why
+ *  this is separate from ReviewLogEntry (session-level duration vs. per-card grade events). */
+export interface ReviewSessionRecord {
+  id: string
+  startedAt: string
+  endedAt: string
+  durationSeconds: number
+  cardsReviewed: number
+}
+
+export interface NewReviewSessionInput {
+  startedAt: string
+  endedAt: string
+  durationSeconds: number
+  cardsReviewed: number
+}
+
 export interface NewCardSourceInput {
   documentId: string
   pageId: string

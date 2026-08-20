@@ -101,7 +101,7 @@ export function HomePage(): JSX.Element {
   )
 }
 
-export function StatTile({ label, value, onClick }: { label: string; value: number; onClick?: () => void }): JSX.Element {
+export function StatTile({ label, value, onClick }: { label: string; value: number | string; onClick?: () => void }): JSX.Element {
   const Tag = onClick ? 'button' : 'div'
   return (
     <Tag

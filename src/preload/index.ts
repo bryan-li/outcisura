@@ -56,6 +56,10 @@ const api: FlashcardApi = {
   reviewLog: {
     list: () => ipcRenderer.invoke(IpcChannels.reviewLogList)
   },
+  reviewSessions: {
+    log: (input) => ipcRenderer.invoke(IpcChannels.reviewSessionsLog, input),
+    list: () => ipcRenderer.invoke(IpcChannels.reviewSessionsList)
+  },
   sync: {
     getPendingOps: () => ipcRenderer.invoke(IpcChannels.syncGetPendingOps),
     removeOps: (ids) => ipcRenderer.invoke(IpcChannels.syncRemoveOps, ids),

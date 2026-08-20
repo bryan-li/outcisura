@@ -20,12 +20,14 @@ import type {
   FolderUpdatePatch,
   ImportVideoInput,
   NewCardInput,
+  NewReviewSessionInput,
   OrphanedSourceRecord,
   PageRecord,
   ParsedDocument,
   RecaptureOrphanedSourceInput,
   ReplaceOrphanedSourceInput,
   ReviewLogEntry,
+  ReviewSessionRecord,
   SaveTranscriptSegmentInput,
   SrsSnapshot,
   SyncOp,
@@ -596,6 +598,33 @@ export class Repository {
       cardId: r.card_id,
       grade: r.grade as ReviewGrade,
       reviewedAt: r.reviewed_at
+    }))
+  }
+
+  logReviewSession(input: NewReviewSessionInput): ReviewSessionRecord {
+    const id = randomUUID()
+    this.db
+      .prepare(`INSERT INTO review_sessions (id, started_at, ended_at, duration_seconds, cards_reviewed) VALUES (?, ?, ?, ?, ?)`)
+      .run(id, input.startedAt, input.endedAt, input.durationSeconds, input.cardsReviewed)
+    return { id, ...input }
+  }
+
+  /** For dashboard stats only (avg session length) — same "whole table, compute in the renderer"
+   *  reasoning as listReviewLog, and this table only ever grows by one row per review session. */
+  listReviewSessions(): ReviewSessionRecord[] {
+    const rows = this.db.prepare(`SELECT * FROM review_sessions ORDER BY started_at DESC`).all() as {
+      id: string
+      started_at: string
+      ended_at: string
+      duration_seconds: number
+      cards_reviewed: number
+    }[]
+    return rows.map((r) => ({
+      id: r.id,
+      startedAt: r.started_at,
+      endedAt: r.ended_at,
+      durationSeconds: r.duration_seconds,
+      cardsReviewed: r.cards_reviewed
     }))
   }
 

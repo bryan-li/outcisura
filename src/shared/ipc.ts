@@ -21,6 +21,7 @@ import type {
   FolderUpdatePatch,
   ImportVideoInput,
   NewCardInput,
+  NewReviewSessionInput,
   OcrRecognizePageInput,
   OrphanedSourceRecord,
   PageRecord,
@@ -28,6 +29,7 @@ import type {
   RecaptureOrphanedSourceInput,
   ReplaceOrphanedSourceInput,
   ReviewLogEntry,
+  ReviewSessionRecord,
   SaveTranscriptSegmentInput,
   SrsSnapshot,
   SyncOp,
@@ -75,6 +77,8 @@ export const IpcChannels = {
   foldersReorder: 'folders:reorder',
   foldersDelete: 'folders:delete',
   reviewLogList: 'reviewLog:list',
+  reviewSessionsLog: 'reviewSessions:log',
+  reviewSessionsList: 'reviewSessions:list',
   syncGetPendingOps: 'sync:getPendingOps',
   syncRemoveOps: 'sync:removeOps',
   syncGetMeta: 'sync:getMeta',
@@ -199,6 +203,11 @@ export interface FlashcardApi {
     /** Every review grade ever logged — small enough for a personal deck to fetch whole and
      *  compute stats (reviewed-today, streak) from client-side. */
     list(): Promise<ReviewLogEntry[]>
+  }
+  reviewSessions: {
+    /** Records one completed review session (start to finish) for the "avg session length" stat. */
+    log(input: NewReviewSessionInput): Promise<ReviewSessionRecord>
+    list(): Promise<ReviewSessionRecord[]>
   }
   /** The local-first bidirectional sync engine's primitives (see renderer/src/lib/syncEngine.ts) —
    *  read/drain the local operation log and apply pulled remote rows, without moving the actual

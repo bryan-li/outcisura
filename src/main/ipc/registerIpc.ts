@@ -16,6 +16,7 @@ import type {
   FolderUpdatePatch,
   ImportVideoInput,
   NewCardInput,
+  NewReviewSessionInput,
   OcrRecognizePageInput,
   ParsedDocument,
   RecaptureOrphanedSourceInput,
@@ -129,6 +130,8 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
   })
 
   ipcMain.handle(IpcChannels.reviewLogList, () => repo.listReviewLog())
+  ipcMain.handle(IpcChannels.reviewSessionsLog, (_event, input: NewReviewSessionInput) => repo.logReviewSession(input))
+  ipcMain.handle(IpcChannels.reviewSessionsList, () => repo.listReviewSessions())
 
   ipcMain.handle(IpcChannels.syncGetPendingOps, () => repo.getPendingSyncOps())
   ipcMain.handle(IpcChannels.syncRemoveOps, (_event, ids: number[]) => repo.removeSyncOps(ids))

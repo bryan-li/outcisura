@@ -1,8 +1,9 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { BBox, CardRecord, SrsSnapshot } from '../../../../shared/types'
 import { nextSrsState, formatInterval, type ReviewGrade } from '../../../../shared/srs'
 import { useCardsStore } from '../../state/cardsStore'
 import { useFoldersStore } from '../../state/foldersStore'
+import { useReviewSessionsStore } from '../../state/reviewSessionsStore'
 import { useUiStore, type MainView, type ReviewScope } from '../../state/uiStore'
 import { allCardsInScope, dueCards, requeueAfterAgain } from '../../utils/srsQueue'
 import { backTextToLines } from '../../utils/blockCard'
@@ -52,6 +53,7 @@ export function ReviewSession({ scope, returnTo, force = false }: ReviewSessionP
   const setView = useUiStore((s) => s.setView)
   const gradeCard = useCardsStore((s) => s.gradeCard)
   const restoreCardSrs = useCardsStore((s) => s.restoreCardSrs)
+  const logReviewSession = useReviewSessionsStore((s) => s.logReviewSession)
 
   const [queue, setQueue] = useState<CardRecord[]>(() => (force ? allCardsInScope(cards, scope) : dueCards(cards, scope, new Date())))
   const [index, setIndex] = useState(0)
@@ -60,11 +62,29 @@ export function ReviewSession({ scope, returnTo, force = false }: ReviewSessionP
   const [lastGrade, setLastGrade] = useState<LastGrade | null>(null)
   const [grading, setGrading] = useState(false)
 
+  // Captured once per mount (a fresh ReviewSession instance per session, never reused across
+  // navigations) — startedAt for the "how long did this session take" stat. loggedRef guards
+  // against double-logging: exit() is reachable from several places (Esc, the Done screen, the
+  // empty-queue screen's Back button), and each only ever calls exit() once, but a guard here means
+  // that stays true even if a future change adds another path that calls it twice.
+  const startedAtRef = useRef(new Date().toISOString())
+  const loggedRef = useRef(false)
+
   const folder = scope.kind === 'folder' ? folders.find((f) => f.id === scope.folderId) : null
   const card = queue[index]
   const done = index >= queue.length
 
   function exit(): void {
+    if (!loggedRef.current) {
+      loggedRef.current = true
+      const startedAt = startedAtRef.current
+      const endedAt = new Date().toISOString()
+      const durationSeconds = (new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000
+      const cardsReviewed = counts.again + counts.hard + counts.good + counts.easy
+      // Skip near-instant no-op exits (e.g. opened and immediately backed out) rather than
+      // polluting the average with a session that wasn't really a session.
+      if (durationSeconds >= 1) void logReviewSession({ startedAt, endedAt, durationSeconds, cardsReviewed })
+    }
     setView(returnTo)
   }
 
