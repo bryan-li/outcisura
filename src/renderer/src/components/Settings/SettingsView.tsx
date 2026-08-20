@@ -4,6 +4,7 @@ import { useAuthStore } from '../../state/authStore'
 import { useUiStore, type Theme } from '../../state/uiStore'
 import { useSyncEnabledStore } from '../../state/syncEnabledStore'
 import { useConnectivityStore } from '../../state/connectivityStore'
+import { useCardsStore } from '../../state/cardsStore'
 import { runSyncCycle } from '../../lib/syncEngine'
 import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useZoomFactor } from '../../hooks/useZoomFactor'
 
@@ -56,6 +57,39 @@ export function SettingsView(): JSX.Element {
       await runSyncCycle()
     } finally {
       setManualSyncing(false)
+    }
+  }
+
+  const loadCards = useCardsStore((s) => s.loadCards)
+  const [ankiBusy, setAnkiBusy] = useState<'export' | 'import' | null>(null)
+  const [ankiMessage, setAnkiMessage] = useState<string | null>(null)
+
+  async function handleAnkiExport(): Promise<void> {
+    setAnkiBusy('export')
+    setAnkiMessage(null)
+    try {
+      const result = await window.api.anki.exportAll()
+      if (!result.canceled) setAnkiMessage(`Exported ${result.count} card${result.count === 1 ? '' : 's'} to ${result.path}`)
+    } catch (err) {
+      setAnkiMessage(err instanceof Error ? `Export failed: ${err.message}` : 'Export failed')
+    } finally {
+      setAnkiBusy(null)
+    }
+  }
+
+  async function handleAnkiImport(): Promise<void> {
+    setAnkiBusy('import')
+    setAnkiMessage(null)
+    try {
+      const result = await window.api.anki.import()
+      if (!result.canceled) {
+        setAnkiMessage(`Imported ${result.imported} card${result.imported === 1 ? '' : 's'}`)
+        await loadCards()
+      }
+    } catch (err) {
+      setAnkiMessage(err instanceof Error ? `Import failed: ${err.message}` : 'Import failed')
+    } finally {
+      setAnkiBusy(null)
     }
   }
 
@@ -202,6 +236,24 @@ export function SettingsView(): JSX.Element {
             Reset
           </button>
         </div>
+      </section>
+
+      <section style={sectionStyle}>
+        <h2 style={sectionTitleStyle}>Anki</h2>
+        <p style={hintStyle}>
+          Export your whole library as a .apkg file Anki can import, or import notes from one. Basic and
+          cloze notes both round-trip; scheduling doesn't carry over either direction — imported cards
+          start fresh, same as any newly created card.
+        </p>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <button disabled={ankiBusy !== null} onClick={handleAnkiExport} style={primaryButtonStyle}>
+            {ankiBusy === 'export' ? 'Exporting…' : 'Export to Anki'}
+          </button>
+          <button disabled={ankiBusy !== null} onClick={handleAnkiImport} style={quietTextButtonStyle}>
+            {ankiBusy === 'import' ? 'Importing…' : 'Import from Anki'}
+          </button>
+        </div>
+        {ankiMessage && <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>{ankiMessage}</p>}
       </section>
 
       <section style={sectionStyle}>

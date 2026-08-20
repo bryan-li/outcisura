@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { dialog, ipcMain } from 'electron'
+import { readFileSync, writeFileSync } from 'fs'
 import { IpcChannels } from '../../shared/ipc'
 import type {
   AiJudgeFreeTextRequest,
@@ -32,7 +33,8 @@ import type { AiService } from '../aiService'
 import type { OcrService } from '../ocrService'
 import type { TranscriptionService } from '../transcriptionService'
 import type { Repository } from '../db/repository'
-import { readImageAsDataUrl, saveDataUrlImage } from '../imageStore'
+import { readImageAsDataUrl, saveDataUrlImage, saveImageBuffer } from '../imageStore'
+import { buildAnkiPackage, parseAnkiPackage } from '../anki'
 import { convertPptxToPdf } from '../pptxConverter'
 import { getApiKeyStatus, setApiKey, getOpenAiApiKeyStatus, setOpenAiApiKey } from '../settingsStore'
 
@@ -140,6 +142,40 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
 
   ipcMain.handle(IpcChannels.cardImagesAdd, (_event, cardId: string, imagePaths: string[]) => repo.addCardImages(cardId, imagePaths))
   ipcMain.handle(IpcChannels.cardImagesRemove, (_event, cardId: string, sourceId: string) => repo.removeCardImage(cardId, sourceId))
+
+  ipcMain.handle(IpcChannels.ankiExportAll, async () => {
+    const cards = repo.listCards()
+    if (cards.length === 0) return { canceled: true }
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Export to Anki',
+      defaultPath: 'outcisura-export.apkg',
+      filters: [{ name: 'Anki Package', extensions: ['apkg'] }]
+    })
+    if (canceled || !filePath) return { canceled: true }
+    const buffer = await buildAnkiPackage(cards, 'Outcisura Export')
+    writeFileSync(filePath, buffer)
+    return { canceled: false, path: filePath, count: cards.length }
+  })
+
+  ipcMain.handle(IpcChannels.ankiImport, async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: 'Import from Anki',
+      filters: [{ name: 'Anki Package', extensions: ['apkg'] }],
+      properties: ['openFile']
+    })
+    if (canceled || filePaths.length === 0) return { canceled: true, imported: 0 }
+    const notes = await parseAnkiPackage(readFileSync(filePaths[0]))
+    let imported = 0
+    for (const note of notes) {
+      const card = repo.createCard({ front: note.front, back: note.back, cardType: note.cardType, sources: [] })
+      if (note.images.length > 0) {
+        const imagePaths = note.images.map((img) => saveImageBuffer(img.data, img.filename))
+        repo.addCardImages(card.id, imagePaths)
+      }
+      imported++
+    }
+    return { canceled: false, imported }
+  })
 
   ipcMain.handle(IpcChannels.syncGetPendingOps, () => repo.getPendingSyncOps())
   ipcMain.handle(IpcChannels.syncRemoveOps, (_event, ids: number[]) => repo.removeSyncOps(ids))

@@ -25,6 +25,15 @@ export function saveDataUrlImage(dataUrl: string): string {
   return filePath
 }
 
+/** Persists raw image bytes (e.g. media extracted from an imported .apkg) to disk, keeping the
+ *  original file's extension, and returns the absolute file path. */
+export function saveImageBuffer(data: Buffer, originalFilename: string): string {
+  const ext = extname(originalFilename).slice(1) || 'png'
+  const filePath = join(getImagesDir(), `${randomUUID()}.${ext}`)
+  writeFileSync(filePath, data)
+  return filePath
+}
+
 /** Reads back a file saved by saveDataUrlImage as a `data:` URL, for display in the renderer. */
 export function readImageAsDataUrl(filePath: string): string {
   const ext = extname(filePath).slice(1).toLowerCase()

@@ -70,6 +70,10 @@ const api: FlashcardApi = {
     add: (cardId, imagePaths) => ipcRenderer.invoke(IpcChannels.cardImagesAdd, cardId, imagePaths),
     remove: (cardId, sourceId) => ipcRenderer.invoke(IpcChannels.cardImagesRemove, cardId, sourceId)
   },
+  anki: {
+    exportAll: () => ipcRenderer.invoke(IpcChannels.ankiExportAll),
+    import: () => ipcRenderer.invoke(IpcChannels.ankiImport)
+  },
   sync: {
     getPendingOps: () => ipcRenderer.invoke(IpcChannels.syncGetPendingOps),
     removeOps: (ids) => ipcRenderer.invoke(IpcChannels.syncRemoveOps, ids),

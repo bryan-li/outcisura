@@ -5,6 +5,8 @@ import type {
   AiRegenerateResult,
   AiSharePrepRequest,
   AiSharePrepResult,
+  AnkiExportResult,
+  AnkiImportResult,
   ApiKeyStatus,
   CardRecord,
   CardReorderItem,
@@ -86,6 +88,8 @@ export const IpcChannels = {
   tagsSetCardTags: 'tags:setCardTags',
   cardImagesAdd: 'cardImages:add',
   cardImagesRemove: 'cardImages:remove',
+  ankiExportAll: 'anki:exportAll',
+  ankiImport: 'anki:import',
   syncGetPendingOps: 'sync:getPendingOps',
   syncRemoveOps: 'sync:removeOps',
   syncGetMeta: 'sync:getMeta',
@@ -231,6 +235,13 @@ export interface FlashcardApi {
   cardImages: {
     add(cardId: string, imagePaths: string[]): Promise<CardRecord>
     remove(cardId: string, sourceId: string): Promise<CardRecord>
+  }
+  /** Anki `.apkg` export/import — both show their own native save/open dialog in the main process
+   *  (see registerIpc.ts), so the renderer only learns the outcome once the user picks a file (or
+   *  cancels). See main/anki.ts for the legacy-schema format this targets. */
+  anki: {
+    exportAll(): Promise<AnkiExportResult>
+    import(): Promise<AnkiImportResult>
   }
   /** The local-first bidirectional sync engine's primitives (see renderer/src/lib/syncEngine.ts) —
    *  read/drain the local operation log and apply pulled remote rows, without moving the actual

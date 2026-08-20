@@ -372,6 +372,21 @@ export interface NewCardInput {
   revealImageOnFlip?: boolean
 }
 
+/** Result of an "Export to Anki" run — the save dialog was shown in the main process (it owns
+ *  `dialog`), so the renderer only learns the outcome after the fact. `canceled` covers both the
+ *  user dismissing the save dialog and there being no cards to export. */
+export interface AnkiExportResult {
+  canceled: boolean
+  path?: string
+  count?: number
+}
+
+/** Result of an "Import from Anki" run — same shape/reasoning as AnkiExportResult. */
+export interface AnkiImportResult {
+  canceled: boolean
+  imported: number
+}
+
 /** Carries the card's own content rather than just its id — main no longer looks the card up
  *  itself (see aiService.ts), since cards live in Supabase now while this IPC call stays local
  *  (bring-your-own-key, nothing here needs to move). The caller (cardsStore) already has the
