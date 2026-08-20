@@ -19,6 +19,7 @@ import { FoldersGrid } from './components/CardBrowser/FoldersGrid'
 import { LibraryGrid } from './components/Library/LibraryGrid'
 import { CombineBasketBar } from './components/CardEditor/CombineBasketBar'
 import { ZoomControl } from './components/ZoomControl'
+import { PomodoroTimer } from './components/PomodoroTimer'
 import { SearchPalette } from './components/Search/SearchPalette'
 import { ReviewSession } from './components/Review/ReviewSession'
 import { ReviewDashboard } from './components/Review/ReviewDashboard'
@@ -142,6 +143,7 @@ function AppShell(): JSX.Element {
 
       {combineMode && <CombineBasketBar />}
       <ZoomControl />
+      <PomodoroTimer />
       <SearchPalette />
       <HostPrepToast />
     </div>
