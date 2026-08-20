@@ -1,14 +1,24 @@
 import { create } from 'zustand'
-import type { DocumentRecord, ElementRecord, PageRecord } from '../../../shared/types'
+import type { DocumentFolderRecord, DocumentFolderReorderItem, DocumentFolderUpdatePatch, DocumentRecord, ElementRecord, PageRecord } from '../../../shared/types'
 
 interface DocumentsState {
   documents: DocumentRecord[]
+  documentFolders: DocumentFolderRecord[]
   pagesByDocument: Record<string, PageRecord[]>
   elementsByPage: Record<string, ElementRecord[]>
   activeDocumentId: string | null
   activePageIndex: number
 
   loadDocuments: () => Promise<void>
+  loadDocumentFolders: () => Promise<void>
+  createDocumentFolder: (name: string, parentId?: string | null) => Promise<DocumentFolderRecord>
+  updateDocumentFolder: (id: string, patch: DocumentFolderUpdatePatch) => Promise<void>
+  reorderDocumentFolders: (items: DocumentFolderReorderItem[]) => Promise<void>
+  deleteDocumentFolder: (id: string) => Promise<void>
+  /** Assigns (or clears, via null) which folder a document belongs to — same "direct IPC, no sync
+   *  engine involved" shape as every other document mutation here, since documents (and their
+   *  folders) never sync. */
+  moveDocumentToFolder: (documentId: string, folderId: string | null) => Promise<void>
   openDocument: (documentId: string) => Promise<void>
   deleteDocument: (documentId: string) => Promise<void>
   /** Also persists the new position (fire-and-forget) so reopening this document later resumes
@@ -28,6 +38,7 @@ interface DocumentsState {
 
 export const useDocumentsStore = create<DocumentsState>((set, get) => ({
   documents: [],
+  documentFolders: [],
   pagesByDocument: {},
   elementsByPage: {},
   activeDocumentId: null,
@@ -36,6 +47,47 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
   loadDocuments: async () => {
     const documents = await window.api.documents.list()
     set({ documents })
+  },
+
+  loadDocumentFolders: async () => {
+    const documentFolders = await window.api.documentFolders.list()
+    set({ documentFolders })
+  },
+
+  createDocumentFolder: async (name, parentId = null) => {
+    const folder = await window.api.documentFolders.create(name, parentId)
+    set((state) => ({ documentFolders: [...state.documentFolders, folder] }))
+    return folder
+  },
+
+  updateDocumentFolder: async (id, patch) => {
+    const updated = await window.api.documentFolders.update(id, patch)
+    set((state) => ({ documentFolders: state.documentFolders.map((f) => (f.id === id ? updated : f)) }))
+  },
+
+  // Applied optimistically so the tree doesn't visually snap back while the write completes —
+  // same reasoning as foldersStore's reorderFolders.
+  reorderDocumentFolders: async (items) => {
+    const byId = new Map(items.map((i) => [i.id, i]))
+    set((state) => ({
+      documentFolders: state.documentFolders.map((f) => {
+        const next = byId.get(f.id)
+        return next ? { ...f, parentId: next.parentId, sortOrder: next.sortOrder } : f
+      })
+    }))
+    await window.api.documentFolders.reorder(items)
+  },
+
+  deleteDocumentFolder: async (id) => {
+    await window.api.documentFolders.delete(id)
+    // Deleting a folder cascades to its whole subfolder subtree in the DB (and unfiles its
+    // documents) — reload both rather than trying to replicate that cascade client-side.
+    await Promise.all([get().loadDocumentFolders(), get().loadDocuments()])
+  },
+
+  moveDocumentToFolder: async (documentId, folderId) => {
+    set((state) => ({ documents: state.documents.map((d) => (d.id === documentId ? { ...d, folderId } : d)) }))
+    await window.api.documents.updateFolder(documentId, folderId)
   },
 
   openDocument: async (documentId) => {

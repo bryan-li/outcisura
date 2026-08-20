@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from 'react'
-import type { CardRecord, DocumentRecord, FolderRecord } from '../../../../shared/types'
+import type { CardRecord, DocumentFolderRecord, DocumentRecord, FolderRecord } from '../../../../shared/types'
 import { useDocumentsStore } from '../../state/documentsStore'
 import { useCardsStore } from '../../state/cardsStore'
 import { useFoldersStore } from '../../state/foldersStore'
@@ -10,6 +10,8 @@ import { parsePptx } from '../../parsers/pptxParser'
 import { parseVideoFile } from '../../parsers/videoParser'
 import { formatDuration } from '../../utils/formatDuration'
 import { computeMove, getChildren, type DropPosition } from '../../utils/folderTree'
+
+const DOCUMENT_DRAG_MIME = 'application/x-document-id'
 import { bySortOrder, computeCardReorder } from '../../utils/cardOrder'
 import { dueCards } from '../../utils/srsQueue'
 import { CARD_DRAG_MIME, readCardDragIds, writeCardDragIds } from '../CardBrowser/CardItem'
@@ -34,10 +36,16 @@ export function Sidebar(): JSX.Element {
   const openSearch = useUiStore((s) => s.openSearch)
 
   const documents = useDocumentsStore((s) => s.documents)
+  const documentFolders = useDocumentsStore((s) => s.documentFolders)
   const activeDocumentId = useDocumentsStore((s) => s.activeDocumentId)
   const loadDocuments = useDocumentsStore((s) => s.loadDocuments)
   const openDocument = useDocumentsStore((s) => s.openDocument)
   const deleteDocument = useDocumentsStore((s) => s.deleteDocument)
+  const createDocumentFolder = useDocumentsStore((s) => s.createDocumentFolder)
+  const updateDocumentFolder = useDocumentsStore((s) => s.updateDocumentFolder)
+  const reorderDocumentFolders = useDocumentsStore((s) => s.reorderDocumentFolders)
+  const deleteDocumentFolder = useDocumentsStore((s) => s.deleteDocumentFolder)
+  const moveDocumentToFolder = useDocumentsStore((s) => s.moveDocumentToFolder)
   const loadCards = useCardsStore((s) => s.loadCards)
   const updateCard = useCardsStore((s) => s.updateCard)
 
@@ -65,7 +73,10 @@ export function Sidebar(): JSX.Element {
   const [importError, setImportError] = useState<string | null>(null)
   const [creatingUnder, setCreatingUnder] = useState<string | null | undefined>(undefined)
   const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [creatingDocFolderUnder, setCreatingDocFolderUnder] = useState<string | null | undefined>(undefined)
+  const [renamingDocFolderId, setRenamingDocFolderId] = useState<string | null>(null)
   const [rootDropActive, setRootDropActive] = useState(false)
+  const [libraryRootDropActive, setLibraryRootDropActive] = useState(false)
   const [libraryCollapsed, setLibraryCollapsed] = useState(false)
   const [foldersCollapsed, setFoldersCollapsed] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
@@ -150,6 +161,31 @@ export function Sidebar(): JSX.Element {
     for (const id of cardIds) updateCard(id, { folderId })
   }
 
+  async function handleDeleteDocumentFolder(folder: DocumentFolderRecord): Promise<void> {
+    if (
+      !window.confirm(
+        `Delete "${folder.name}" (and any subfolders)? Documents inside aren't deleted — they'll go back to being unfiled.`
+      )
+    ) {
+      return
+    }
+    await deleteDocumentFolder(folder.id)
+  }
+
+  async function handleCreateDocumentFolder(name: string, parentId: string | null): Promise<void> {
+    await createDocumentFolder(name, parentId)
+    setCreatingDocFolderUnder(undefined)
+  }
+
+  function handleDocumentFolderDrop(draggedId: string, targetId: string | null, position: DropPosition): void {
+    const updates = computeMove(documentFolders, draggedId, targetId, position)
+    if (updates) reorderDocumentFolders(updates)
+  }
+
+  function handleDocumentDrop(documentId: string, folderId: string | null): void {
+    void moveDocumentToFolder(documentId, folderId)
+  }
+
   if (collapsed) {
     return (
       <aside style={collapsedSidebarStyle}>
@@ -224,40 +260,113 @@ export function Sidebar(): JSX.Element {
           onToggle={() => setLibraryCollapsed((v) => !v)}
           onOpen={() => setView({ type: 'library-index' })}
           action={
-            <label style={{ cursor: 'pointer', display: 'inline-flex' }}>
-              <input
-                type="file"
-                accept=".pdf,.pptx,.mp4"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) void handleFileChosen(file)
-                  e.target.value = ''
-                }}
-              />
-              <span title="Import PDF/PPTX" style={smallIconButton}>
-                {importing ? '…' : '＋'}
-              </span>
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <button onClick={() => setCreatingDocFolderUnder(null)} title="New folder" style={smallIconButton}>
+                📁＋
+              </button>
+              <label style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                <input
+                  type="file"
+                  accept=".pdf,.pptx,.mp4"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) void handleFileChosen(file)
+                    e.target.value = ''
+                  }}
+                />
+                <span title="Import PDF/PPTX/MP4" style={smallIconButton}>
+                  {importing ? '…' : '＋'}
+                </span>
+              </label>
+            </div>
           }
         />
         {importProgress && <ImportProgressBar progress={importProgress} />}
         {importError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-xs)', padding: '0 var(--space-2)' }}>{importError}</p>}
         {!libraryCollapsed && (
-          <div style={{ display: 'flex', flexDirection: 'column', animation: 'expand-collapse 120ms ease' }}>
-            {documents.map((doc) => (
-              <DocumentRow
-                key={doc.id}
-                doc={doc}
-                active={view.type === 'library' && activeDocumentId === doc.id}
-                onOpen={async () => {
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              animation: 'expand-collapse 120ms ease',
+              borderRadius: 'var(--radius-md)',
+              outline: libraryRootDropActive ? '2px dashed var(--accent)' : 'none',
+              outlineOffset: -2,
+              minHeight: 8
+            }}
+            onDragOver={(e) => {
+              if (!e.dataTransfer.types.includes(DOCUMENT_DRAG_MIME)) return
+              e.preventDefault()
+              setLibraryRootDropActive(true)
+            }}
+            onDragLeave={() => setLibraryRootDropActive(false)}
+            onDrop={(e) => {
+              const draggedId = e.dataTransfer.getData(DOCUMENT_DRAG_MIME)
+              setLibraryRootDropActive(false)
+              if (!draggedId) return
+              e.preventDefault()
+              handleDocumentDrop(draggedId, null)
+            }}
+          >
+            {getChildren(documentFolders, null).map((folder) => (
+              <DocumentFolderNode
+                key={folder.id}
+                folder={folder}
+                depth={0}
+                documentFolders={documentFolders}
+                documents={documents}
+                view={view}
+                activeDocumentId={activeDocumentId}
+                renamingId={renamingDocFolderId}
+                creatingUnder={creatingDocFolderUnder}
+                setView={setView}
+                onOpenDocument={async (doc) => {
                   setView({ type: 'library' })
                   await openDocument(doc.id)
                 }}
-                onDelete={() => handleDeleteDocument(doc)}
+                onDeleteDocument={handleDeleteDocument}
+                onToggleCollapse={() => updateDocumentFolder(folder.id, { collapsed: !folder.collapsed })}
+                onStartRename={() => setRenamingDocFolderId(folder.id)}
+                onFinishRename={async (name) => {
+                  if (name.trim()) await updateDocumentFolder(folder.id, { name: name.trim() })
+                  setRenamingDocFolderId(null)
+                }}
+                onCancelRename={() => setRenamingDocFolderId(null)}
+                onStartCreateChild={() => setCreatingDocFolderUnder(folder.id)}
+                onCreate={handleCreateDocumentFolder}
+                onCancelCreate={() => setCreatingDocFolderUnder(undefined)}
+                onDelete={() => handleDeleteDocumentFolder(folder)}
+                onDrop={handleDocumentFolderDrop}
+                onDropDocument={handleDocumentDrop}
               />
             ))}
-            {documents.length === 0 && <EmptySidebarHint text="Import a PDF or PPTX to get started." />}
+            {creatingDocFolderUnder === null && (
+              <InlineTextInput
+                depth={0}
+                placeholder="Folder name"
+                onSubmit={(name) => handleCreateDocumentFolder(name, null)}
+                onCancel={() => setCreatingDocFolderUnder(undefined)}
+              />
+            )}
+            {documents
+              .filter((d) => d.folderId === null)
+              .map((doc) => (
+                <DocumentRow
+                  key={doc.id}
+                  doc={doc}
+                  active={view.type === 'library' && activeDocumentId === doc.id}
+                  draggable
+                  onOpen={async () => {
+                    setView({ type: 'library' })
+                    await openDocument(doc.id)
+                  }}
+                  onDelete={() => handleDeleteDocument(doc)}
+                />
+              ))}
+            {documents.length === 0 && documentFolders.length === 0 && creatingDocFolderUnder === undefined && (
+              <EmptySidebarHint text="Import a PDF, PPTX, or MP4 to get started." />
+            )}
           </div>
         )}
       </div>
@@ -469,21 +578,32 @@ function DocumentRow({
   doc,
   active,
   onOpen,
-  onDelete
+  onDelete,
+  depth = 0,
+  draggable = false
 }: {
   doc: DocumentRecord
   active: boolean
   onOpen: () => void
   onDelete: () => void
+  depth?: number
+  /** Only root-level and in-folder document rows are drag sources — DocumentFolderNode passes
+   *  this; other callers (e.g. LibraryGrid, if ever reused there) default to non-draggable. */
+  draggable?: boolean
 }): JSX.Element {
   return (
     <div
       className="doc-row"
+      draggable={draggable}
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DOCUMENT_DRAG_MIME, doc.id)
+        e.dataTransfer.effectAllowed = 'move'
+      }}
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: 4,
-        paddingLeft: 6,
+        paddingLeft: depth * 14 + 6,
         paddingRight: 6,
         borderRadius: 'var(--radius-sm)',
         background: active ? 'var(--bg-active)' : 'transparent',
@@ -880,6 +1000,175 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
               siblingIds={ownCardIds}
               onFileInto={(ids) => props.onDropCard(ids, folder.id)}
               onClick={() => props.focusCard(card.id, folder.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface DocumentFolderNodeProps {
+  folder: DocumentFolderRecord
+  depth: number
+  documentFolders: DocumentFolderRecord[]
+  documents: DocumentRecord[]
+  view: MainView
+  activeDocumentId: string | null
+  renamingId: string | null
+  creatingUnder: string | null | undefined
+  setView: (view: MainView) => void
+  onOpenDocument: (doc: DocumentRecord) => void
+  onDeleteDocument: (doc: DocumentRecord) => void
+  onToggleCollapse: () => void
+  onStartRename: () => void
+  onFinishRename: (name: string) => void
+  onCancelRename: () => void
+  onStartCreateChild: () => void
+  onCreate: (name: string, parentId: string | null) => void
+  onCancelCreate: () => void
+  onDelete: () => void
+  onDrop: (draggedId: string, targetId: string, position: DropPosition) => void
+  onDropDocument: (documentId: string, folderId: string) => void
+}
+
+/** Library's folder tree, mirroring FolderNode above almost exactly — same nesting/drag-drop
+ *  shape, just over document_folders/documents instead of folders/cards. Kept as a separate
+ *  component rather than generalizing FolderNode itself: the two leaf types (CardLeaf vs
+ *  DocumentRow) and their per-item actions (focusCard vs open/delete a document) differ enough
+ *  that a shared component would need as many branches as it saves lines. */
+function DocumentFolderNode(props: DocumentFolderNodeProps): JSX.Element {
+  const { folder, depth, documentFolders, documents, view, activeDocumentId, renamingId, creatingUnder } = props
+  const [dropIndicator, setDropIndicator] = useState<DropPosition | null>(null)
+  const [documentDropActive, setDocumentDropActive] = useState(false)
+  const [bodyDropActive, setBodyDropActive] = useState(false)
+  const children = getChildren(documentFolders, folder.id)
+  const ownDocuments = documents.filter((d) => d.folderId === folder.id)
+  const hasContent = children.length > 0 || ownDocuments.length > 0
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>): void {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.dataTransfer.types.includes(DOCUMENT_DRAG_MIME)) {
+      setDocumentDropActive(true)
+      return
+    }
+    const rect = e.currentTarget.getBoundingClientRect()
+    const relY = (e.clientY - rect.top) / rect.height
+    setDropIndicator(relY < 0.25 ? 'before' : relY > 0.75 ? 'after' : 'inside')
+  }
+
+  function clearDropState(): void {
+    setDropIndicator(null)
+    setDocumentDropActive(false)
+  }
+
+  function handleDrop(e: DragEvent<HTMLDivElement>): void {
+    e.preventDefault()
+    e.stopPropagation()
+    const documentId = e.dataTransfer.getData(DOCUMENT_DRAG_MIME)
+    if (documentId) {
+      props.onDropDocument(documentId, folder.id)
+      clearDropState()
+      return
+    }
+    const draggedId = e.dataTransfer.getData('text/plain')
+    if (draggedId && dropIndicator) props.onDrop(draggedId, folder.id, dropIndicator)
+    clearDropState()
+  }
+
+  return (
+    <div>
+      {renamingId === folder.id ? (
+        <InlineTextInput depth={depth} initialValue={folder.name} onSubmit={props.onFinishRename} onCancel={props.onCancelRename} />
+      ) : (
+        <div
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData('text/plain', folder.id)
+            e.dataTransfer.effectAllowed = 'move'
+          }}
+          onDragOver={handleDragOver}
+          onDragLeave={clearDropState}
+          onDrop={handleDrop}
+          className="folder-row"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            paddingLeft: depth * 14 + 6,
+            paddingRight: 6,
+            borderRadius: 'var(--radius-sm)',
+            background: documentDropActive || dropIndicator === 'inside' ? 'var(--accent-soft)' : 'transparent',
+            borderTop: dropIndicator === 'before' ? '2px solid var(--accent)' : '2px solid transparent',
+            borderBottom: dropIndicator === 'after' ? '2px solid var(--accent)' : '2px solid transparent',
+            transition: 'background-color var(--transition-fast)'
+          }}
+          onMouseEnter={(e) => {
+            if (!dropIndicator && !documentDropActive) e.currentTarget.style.background = 'var(--bg-hover)'
+          }}
+          onMouseLeave={(e) => {
+            if (!dropIndicator && !documentDropActive) e.currentTarget.style.background = 'transparent'
+          }}
+        >
+          <button onClick={props.onToggleCollapse} style={{ ...caretButtonStyle, visibility: hasContent ? 'visible' : 'hidden' }}>
+            {folder.collapsed ? '▶' : '▼'}
+          </button>
+          <button onClick={props.onToggleCollapse} style={navFolderTitleStyle}>
+            📁 {folder.name} <span style={{ color: 'var(--fg-faint)' }}>({ownDocuments.length})</span>
+          </button>
+          <button onClick={props.onStartCreateChild} title="New subfolder" style={smallIconButton}>
+            ＋
+          </button>
+          <button onClick={props.onStartRename} title="Rename" style={smallIconButton}>
+            ✏️
+          </button>
+          <button onClick={props.onDelete} title="Delete folder" style={smallIconButton}>
+            🗑
+          </button>
+        </div>
+      )}
+
+      {!folder.collapsed && (
+        <div
+          onDragOver={(e) => {
+            if (!e.dataTransfer.types.includes(DOCUMENT_DRAG_MIME)) return
+            e.preventDefault()
+            setBodyDropActive(true)
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setBodyDropActive(false)
+          }}
+          onDrop={(e) => {
+            const documentId = e.dataTransfer.getData(DOCUMENT_DRAG_MIME)
+            if (!documentId) return
+            e.preventDefault()
+            e.stopPropagation()
+            props.onDropDocument(documentId, folder.id)
+            setBodyDropActive(false)
+          }}
+          style={{
+            animation: 'expand-collapse 120ms ease',
+            borderRadius: 'var(--radius-sm)',
+            background: bodyDropActive ? 'var(--accent-soft)' : 'transparent',
+            transition: 'background-color var(--transition-fast)'
+          }}
+        >
+          {children.map((child) => (
+            <DocumentFolderNode key={child.id} {...props} folder={child} depth={depth + 1} />
+          ))}
+          {creatingUnder === folder.id && (
+            <InlineTextInput depth={depth + 1} placeholder="Subfolder name" onSubmit={(name) => props.onCreate(name, folder.id)} onCancel={props.onCancelCreate} />
+          )}
+          {ownDocuments.map((doc) => (
+            <DocumentRow
+              key={doc.id}
+              doc={doc}
+              depth={depth + 1}
+              draggable
+              active={view.type === 'library' && activeDocumentId === doc.id}
+              onOpen={() => props.onOpenDocument(doc)}
+              onDelete={() => props.onDeleteDocument(doc)}
             />
           ))}
         </div>

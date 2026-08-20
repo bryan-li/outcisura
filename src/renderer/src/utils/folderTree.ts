@@ -1,14 +1,27 @@
-import type { FolderRecord, FolderReorderItem } from '../../../shared/types'
-
 export type DropPosition = 'before' | 'inside' | 'after'
 
-export function getChildren(folders: FolderRecord[], parentId: string | null): FolderRecord[] {
+/** Minimal shape every function here actually needs — genericized (originally typed directly to
+ *  FolderRecord/FolderReorderItem) once document_folders needed the exact same tree/drag-drop math
+ *  over a same-shaped but separate, never-synced table. Any record with these three fields works. */
+interface TreeNode {
+  id: string
+  parentId: string | null
+  sortOrder: number
+}
+
+interface ReorderItem {
+  id: string
+  parentId: string | null
+  sortOrder: number
+}
+
+export function getChildren<T extends TreeNode>(folders: T[], parentId: string | null): T[] {
   return folders.filter((f) => f.parentId === parentId).sort((a, b) => a.sortOrder - b.sortOrder)
 }
 
 /** A folder's chain of ancestors, nearest first, not including the folder itself — the empty
  *  array for a root-level folder. Symmetric with getDescendantIds below. */
-export function getAncestorIds(folders: FolderRecord[], folderId: string): string[] {
+export function getAncestorIds<T extends TreeNode>(folders: T[], folderId: string): string[] {
   const byId = new Map(folders.map((f) => [f.id, f]))
   const result: string[] = []
   let current = byId.get(folderId)
@@ -19,7 +32,7 @@ export function getAncestorIds(folders: FolderRecord[], folderId: string): strin
   return result
 }
 
-export function getDescendantIds(folders: FolderRecord[], rootId: string): Set<string> {
+export function getDescendantIds<T extends TreeNode>(folders: T[], rootId: string): Set<string> {
   const result = new Set<string>()
   const stack = [rootId]
   while (stack.length > 0) {
@@ -35,12 +48,12 @@ export function getDescendantIds(folders: FolderRecord[], rootId: string): Set<s
 }
 
 /** Pure position math for a drag-drop move — resolved into a flat batch of {id, parentId, sortOrder}. */
-export function computeMove(
-  folders: FolderRecord[],
+export function computeMove<T extends TreeNode>(
+  folders: T[],
   draggedId: string,
   targetId: string | null,
   position: DropPosition
-): FolderReorderItem[] | null {
+): ReorderItem[] | null {
   const dragged = folders.find((f) => f.id === draggedId)
   if (!dragged || draggedId === targetId) return null
 
@@ -54,7 +67,7 @@ export function computeMove(
   if (newParentId !== null && forbidden.has(newParentId)) return null // would nest a folder inside itself
 
   const oldParentId = dragged.parentId
-  let newSiblings = getChildren(folders, newParentId).filter((f) => f.id !== draggedId)
+  let newSiblings: T[] = getChildren(folders, newParentId).filter((f) => f.id !== draggedId)
 
   if (targetId === null || position === 'inside') {
     newSiblings = [...newSiblings, dragged]
@@ -64,7 +77,7 @@ export function computeMove(
     newSiblings = [...newSiblings.slice(0, insertAt), dragged, ...newSiblings.slice(insertAt)]
   }
 
-  const updates: FolderReorderItem[] = newSiblings.map((f, i) => ({ id: f.id, parentId: newParentId, sortOrder: i }))
+  const updates: ReorderItem[] = newSiblings.map((f, i) => ({ id: f.id, parentId: newParentId, sortOrder: i }))
 
   if (oldParentId !== newParentId) {
     const oldSiblings = getChildren(folders, oldParentId).filter((f) => f.id !== draggedId)

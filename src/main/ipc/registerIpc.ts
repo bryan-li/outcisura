@@ -8,6 +8,8 @@ import type {
   CardRecord,
   CardReorderItem,
   CreateVideoFramePageInput,
+  DocumentFolderReorderItem,
+  DocumentFolderUpdatePatch,
   DocumentPositionPatch,
   FolderRecord,
   FolderReorderItem,
@@ -53,6 +55,23 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
   ipcMain.handle(IpcChannels.documentsSaveImage, (_event, dataUrl: string) => saveDataUrlImage(dataUrl))
   ipcMain.handle(IpcChannels.documentsUpdatePosition, (_event, id: string, patch: DocumentPositionPatch) => {
     repo.updateDocumentPosition(id, patch)
+  })
+  ipcMain.handle(IpcChannels.documentsUpdateFolder, (_event, id: string, folderId: string | null) => {
+    repo.updateDocumentFolderAssignment(id, folderId)
+  })
+
+  ipcMain.handle(IpcChannels.documentFoldersCreate, (_event, name: string, parentId?: string | null) =>
+    repo.createDocumentFolder(name, parentId ?? null)
+  )
+  ipcMain.handle(IpcChannels.documentFoldersList, () => repo.listDocumentFolders())
+  ipcMain.handle(IpcChannels.documentFoldersUpdate, (_event, id: string, patch: DocumentFolderUpdatePatch) =>
+    repo.updateDocumentFolder(id, patch)
+  )
+  ipcMain.handle(IpcChannels.documentFoldersReorder, (_event, items: DocumentFolderReorderItem[]) => {
+    repo.reorderDocumentFolders(items)
+  })
+  ipcMain.handle(IpcChannels.documentFoldersDelete, (_event, id: string) => {
+    repo.deleteDocumentFolder(id)
   })
 
   ipcMain.handle(IpcChannels.cardsCreate, (_event, input: NewCardInput) => repo.createCard(input))

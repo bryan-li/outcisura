@@ -10,6 +10,9 @@ import type {
   CardReorderItem,
   CardUpdatePatch,
   CreateVideoFramePageInput,
+  DocumentFolderRecord,
+  DocumentFolderReorderItem,
+  DocumentFolderUpdatePatch,
   DocumentPositionPatch,
   DocumentRecord,
   ElementRecord,
@@ -47,6 +50,12 @@ export const IpcChannels = {
   documentsDelete: 'documents:delete',
   documentsSaveImage: 'documents:saveImage',
   documentsUpdatePosition: 'documents:updatePosition',
+  documentsUpdateFolder: 'documents:updateFolder',
+  documentFoldersCreate: 'documentFolders:create',
+  documentFoldersList: 'documentFolders:list',
+  documentFoldersUpdate: 'documentFolders:update',
+  documentFoldersReorder: 'documentFolders:reorder',
+  documentFoldersDelete: 'documentFolders:delete',
   cardsCreate: 'cards:create',
   cardsList: 'cards:list',
   cardsUpdate: 'cards:update',
@@ -120,6 +129,17 @@ export interface FlashcardApi {
     /** Persists where the user left off, so reopening the document resumes there. Fire-and-forget
      *  from the caller's side — see documentsStore for when this actually gets called. */
     updatePosition(id: string, patch: DocumentPositionPatch): Promise<void>
+    /** Assigns (or clears, via null) which document_folders row a document belongs to. */
+    updateFolder(id: string, folderId: string | null): Promise<void>
+  }
+  documentFolders: {
+    create(name: string, parentId?: string | null): Promise<DocumentFolderRecord>
+    list(): Promise<DocumentFolderRecord[]>
+    update(id: string, patch: DocumentFolderUpdatePatch): Promise<DocumentFolderRecord>
+    /** Persists a batch of {id, parentId, sortOrder} moves computed client-side after a drag-drop. */
+    reorder(items: DocumentFolderReorderItem[]): Promise<void>
+    /** Deletes the folder and its subfolders; documents inside are not deleted, they fall back to unfiled. */
+    delete(id: string): Promise<void>
   }
   cards: {
     create(input: NewCardInput): Promise<CardRecord>

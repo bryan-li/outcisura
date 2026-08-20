@@ -15,7 +15,15 @@ const api: FlashcardApi = {
     convertPptxToPdf: (pptxBytes) => ipcRenderer.invoke(IpcChannels.documentsConvertPptxToPdf, pptxBytes),
     delete: (id) => ipcRenderer.invoke(IpcChannels.documentsDelete, id),
     saveImage: (dataUrl) => ipcRenderer.invoke(IpcChannels.documentsSaveImage, dataUrl),
-    updatePosition: (id, patch) => ipcRenderer.invoke(IpcChannels.documentsUpdatePosition, id, patch)
+    updatePosition: (id, patch) => ipcRenderer.invoke(IpcChannels.documentsUpdatePosition, id, patch),
+    updateFolder: (id, folderId) => ipcRenderer.invoke(IpcChannels.documentsUpdateFolder, id, folderId)
+  },
+  documentFolders: {
+    create: (name, parentId) => ipcRenderer.invoke(IpcChannels.documentFoldersCreate, name, parentId),
+    list: () => ipcRenderer.invoke(IpcChannels.documentFoldersList),
+    update: (id, patch) => ipcRenderer.invoke(IpcChannels.documentFoldersUpdate, id, patch),
+    reorder: (items) => ipcRenderer.invoke(IpcChannels.documentFoldersReorder, items),
+    delete: (id) => ipcRenderer.invoke(IpcChannels.documentFoldersDelete, id)
   },
   cards: {
     create: (input) => ipcRenderer.invoke(IpcChannels.cardsCreate, input),

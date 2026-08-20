@@ -45,11 +45,35 @@ export interface DocumentRecord {
   lastPageIndex: number | null
   /** Video only — the playback position (seconds) to resume from, or null to start at 0. */
   lastPlaybackSeconds: number | null
+  /** User-assigned folder in the Library sidebar, or null for unfiled (shown at the tree root).
+   *  See DocumentFolderRecord — a separate, never-synced table, not the cards/folders one. */
+  folderId: string | null
 }
 
 export interface DocumentPositionPatch {
   lastPageIndex?: number
   lastPlaybackSeconds?: number
+}
+
+/** Folders for imported documents (Library sidebar) — same shape as FolderRecord (cards' own
+ *  folders), but a deliberately separate, local-only table: documents never sync to Supabase, so
+ *  neither do their folders. See schema.ts's document_folders migration for the full reasoning. */
+export interface DocumentFolderRecord {
+  id: string
+  name: string
+  createdAt: string
+  parentId: string | null
+  sortOrder: number
+  collapsed: boolean
+}
+
+export type DocumentFolderUpdatePatch = Partial<Pick<DocumentFolderRecord, 'name' | 'parentId' | 'sortOrder' | 'collapsed'>>
+
+/** One document folder's new position, as computed client-side after a drag-drop move. */
+export interface DocumentFolderReorderItem {
+  id: string
+  parentId: string | null
+  sortOrder: number
 }
 
 export interface PageRecord {

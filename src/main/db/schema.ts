@@ -392,6 +392,28 @@ const MIGRATIONS: string[] = [
   UPDATE card_sources
   SET source_timestamp_seconds = (SELECT timestamp_seconds FROM pages WHERE pages.id = card_sources.page_id)
   WHERE page_id IS NOT NULL;
+  `,
+  `
+  -- Folders for imported documents (Library sidebar), mirroring the folders table cards already
+  -- have (same shape: nesting via parent_id, manual sort_order, persisted collapsed state) — but a
+  -- deliberately SEPARATE table, not a document_id column added onto the existing folders table.
+  -- folders syncs to Supabase (cards need it to); documents never do and never will (see the
+  -- Phase 0 scope revision documented in supabase/migrations/0001_init.sql's own header). Reusing
+  -- one synced table for both would mean a document folder syncs to another device while the
+  -- documents inside it don't — an empty "ghost" folder there with no way to know it's supposed to
+  -- hold local files that device doesn't have. A same-shaped but separate, never-synced table keeps
+  -- documents and their folders on the same side of the local/cloud boundary.
+  CREATE TABLE document_folders (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    parent_id TEXT REFERENCES document_folders(id) ON DELETE CASCADE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    collapsed INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX idx_document_folders_parent ON document_folders(parent_id);
+
+  ALTER TABLE documents ADD COLUMN folder_id TEXT REFERENCES document_folders(id) ON DELETE SET NULL;
   `
 ]
 

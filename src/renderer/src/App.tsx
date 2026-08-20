@@ -67,6 +67,7 @@ function AppShell(): JSX.Element {
   const documents = useDocumentsStore((s) => s.documents)
   const activeDocumentId = useDocumentsStore((s) => s.activeDocumentId)
   const loadDocuments = useDocumentsStore((s) => s.loadDocuments)
+  const loadDocumentFolders = useDocumentsStore((s) => s.loadDocumentFolders)
   const loadCards = useCardsStore((s) => s.loadCards)
   const loadFolders = useFoldersStore((s) => s.loadFolders)
   const loadReviewLog = useReviewLogStore((s) => s.loadReviewLog)
@@ -75,10 +76,11 @@ function AppShell(): JSX.Element {
 
   useEffect(() => {
     loadDocuments()
+    loadDocumentFolders()
     loadCards()
     loadFolders()
     loadReviewLog()
-  }, [loadDocuments, loadCards, loadFolders, loadReviewLog])
+  }, [loadDocuments, loadDocumentFolders, loadCards, loadFolders, loadReviewLog])
 
   // Local SQLite is always the primary read/write path (loaded above regardless), so this only
   // controls whether the background engine also keeps Supabase in sync — see syncEngine.ts and

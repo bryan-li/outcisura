@@ -12,6 +12,9 @@ import type {
   DocumentRecord,
   ElementKind,
   ElementRecord,
+  DocumentFolderRecord,
+  DocumentFolderReorderItem,
+  DocumentFolderUpdatePatch,
   FolderRecord,
   FolderReorderItem,
   FolderUpdatePatch,
@@ -95,7 +98,8 @@ export class Repository {
       sourceVideoPath: null,
       durationSeconds: null,
       lastPageIndex: null,
-      lastPlaybackSeconds: null
+      lastPlaybackSeconds: null,
+      folderId: null
     }
   }
 
@@ -120,7 +124,8 @@ export class Repository {
       sourceVideoPath,
       durationSeconds: input.durationSeconds,
       lastPageIndex: null,
-      lastPlaybackSeconds: null
+      lastPlaybackSeconds: null,
+      folderId: null
     }
   }
 
@@ -162,7 +167,7 @@ export class Repository {
   listDocuments(): DocumentRecord[] {
     const rows = this.db
       .prepare(
-        `SELECT id, filename, type, imported_at, page_count, source_video_path, duration_seconds, last_page_index, last_playback_seconds FROM documents ORDER BY imported_at DESC`
+        `SELECT id, filename, type, imported_at, page_count, source_video_path, duration_seconds, last_page_index, last_playback_seconds, folder_id FROM documents ORDER BY imported_at DESC`
       )
       .all() as {
       id: string
@@ -174,6 +179,7 @@ export class Repository {
       duration_seconds: number | null
       last_page_index: number | null
       last_playback_seconds: number | null
+      folder_id: string | null
     }[]
     return rows.map((r) => ({
       id: r.id,
@@ -184,8 +190,64 @@ export class Repository {
       sourceVideoPath: r.source_video_path,
       durationSeconds: r.duration_seconds,
       lastPageIndex: r.last_page_index,
-      lastPlaybackSeconds: r.last_playback_seconds
+      lastPlaybackSeconds: r.last_playback_seconds,
+      folderId: r.folder_id
     }))
+  }
+
+  /** Assigns (or clears, via null) which document_folders row a document belongs to — a narrow
+   *  single-purpose patch, same shape as updateDocumentPosition, rather than a general updateDocument
+   *  covering fields nothing else needs to change together. */
+  updateDocumentFolderAssignment(documentId: string, folderId: string | null): void {
+    this.db.prepare(`UPDATE documents SET folder_id = ? WHERE id = ?`).run(folderId, documentId)
+  }
+
+  createDocumentFolder(name: string, parentId: string | null = null): DocumentFolderRecord {
+    const id = randomUUID()
+    const createdAt = new Date().toISOString()
+    const siblingCount = (
+      this.db.prepare(`SELECT COUNT(*) as c FROM document_folders WHERE parent_id IS ?`).get(parentId) as { c: number }
+    ).c
+    this.db
+      .prepare(`INSERT INTO document_folders (id, name, created_at, parent_id, sort_order, collapsed) VALUES (?, ?, ?, ?, ?, 0)`)
+      .run(id, name, createdAt, parentId, siblingCount)
+    return { id, name, createdAt, parentId, sortOrder: siblingCount, collapsed: false }
+  }
+
+  listDocumentFolders(): DocumentFolderRecord[] {
+    const rows = this.db.prepare(`SELECT * FROM document_folders ORDER BY parent_id, sort_order ASC`).all() as DocumentFolderRow[]
+    return rows.map(hydrateDocumentFolder)
+  }
+
+  updateDocumentFolder(id: string, patch: DocumentFolderUpdatePatch): DocumentFolderRecord {
+    const existing = this.db.prepare(`SELECT * FROM document_folders WHERE id = ?`).get(id) as DocumentFolderRow | undefined
+    if (!existing) throw new Error(`Document folder ${id} not found`)
+    const name = patch.name ?? existing.name
+    const parentId = 'parentId' in patch ? (patch.parentId ?? null) : existing.parent_id
+    const sortOrder = patch.sortOrder ?? existing.sort_order
+    const collapsed = patch.collapsed ?? !!existing.collapsed
+    this.db
+      .prepare(`UPDATE document_folders SET name = ?, parent_id = ?, sort_order = ?, collapsed = ? WHERE id = ?`)
+      .run(name, parentId, sortOrder, collapsed ? 1 : 0, id)
+    return hydrateDocumentFolder(this.db.prepare(`SELECT * FROM document_folders WHERE id = ?`).get(id) as DocumentFolderRow)
+  }
+
+  /** Applies a batch of drag-drop position updates in one transaction — same "cosmetic, per-device,
+   *  not synced" reasoning as reorderFolders, doubly true here since document_folders never syncs
+   *  at all. */
+  reorderDocumentFolders(items: DocumentFolderReorderItem[]): void {
+    const stmt = this.db.prepare(`UPDATE document_folders SET parent_id = ?, sort_order = ? WHERE id = ?`)
+    const run = this.db.transaction((rows: DocumentFolderReorderItem[]) => {
+      for (const row of rows) stmt.run(row.parentId, row.sortOrder, row.id)
+    })
+    run(items)
+  }
+
+  /** Subfolders cascade-delete (FK ON DELETE CASCADE); documents inside fall back to unfiled via
+   *  documents.folder_id's own ON DELETE SET NULL — same pattern deleteFolder already established
+   *  for cards. */
+  deleteDocumentFolder(id: string): void {
+    this.db.prepare(`DELETE FROM document_folders WHERE id = ?`).run(id)
   }
 
   /** Only ever called with the one field that applies to this document's type (page index for
@@ -1388,6 +1450,26 @@ function hydrateFolder(row: FolderRow): FolderRecord {
     collapsed: !!row.collapsed,
     originBackend: row.origin_backend,
     originId: row.origin_id
+  }
+}
+
+interface DocumentFolderRow {
+  id: string
+  name: string
+  created_at: string
+  parent_id: string | null
+  sort_order: number
+  collapsed: number
+}
+
+function hydrateDocumentFolder(row: DocumentFolderRow): DocumentFolderRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    createdAt: row.created_at,
+    parentId: row.parent_id,
+    sortOrder: row.sort_order,
+    collapsed: !!row.collapsed
   }
 }
 
