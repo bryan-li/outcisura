@@ -60,6 +60,12 @@ const api: FlashcardApi = {
     log: (input) => ipcRenderer.invoke(IpcChannels.reviewSessionsLog, input),
     list: () => ipcRenderer.invoke(IpcChannels.reviewSessionsList)
   },
+  tags: {
+    create: (name) => ipcRenderer.invoke(IpcChannels.tagsCreate, name),
+    list: () => ipcRenderer.invoke(IpcChannels.tagsList),
+    delete: (id) => ipcRenderer.invoke(IpcChannels.tagsDelete, id),
+    setCardTags: (cardId, tagIds) => ipcRenderer.invoke(IpcChannels.tagsSetCardTags, cardId, tagIds)
+  },
   sync: {
     getPendingOps: () => ipcRenderer.invoke(IpcChannels.syncGetPendingOps),
     removeOps: (ids) => ipcRenderer.invoke(IpcChannels.syncRemoveOps, ids),

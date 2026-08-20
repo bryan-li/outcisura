@@ -296,6 +296,17 @@ export interface CardRecord {
   revealImageOnFlip: boolean
   originBackend: OriginBackend
   originId: string | null
+  /** Free-form labels, independent of folder membership — see TagRecord. Local-only (not synced),
+   *  same as the tags themselves. */
+  tagIds: string[]
+}
+
+/** A free-form label a card can carry, independent of folder membership — see schema.ts's tags
+ *  migration for why this is local-only rather than synced. */
+export interface TagRecord {
+  id: string
+  name: string
+  createdAt: string
 }
 
 export type CardUpdatePatch = Partial<

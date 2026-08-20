@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEven
 import type { CardRecord } from '../../../../shared/types'
 import { useCardsStore } from '../../state/cardsStore'
 import { useReviewLogStore } from '../../state/reviewLogStore'
+import { useTagsStore } from '../../state/tagsStore'
 import { useUiStore } from '../../state/uiStore'
 import { backTextToLines, blockTextToCard, cardToBlockText } from '../../utils/blockCard'
 import { computeCardReorder } from '../../utils/cardOrder'
@@ -364,6 +365,7 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
                   {reviewCount > 0 ? `Reviewed ${reviewCount} time${reviewCount === 1 ? '' : 's'}` : 'Not reviewed yet'}
                 </p>
               )}
+              {expanded && <TagRow cardId={card.id} tagIds={card.tagIds} />}
             </div>
           )}
         </div>
@@ -398,6 +400,95 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
             </button>
           ))}
         </div>
+      )}
+    </div>
+  )
+}
+
+function TagRow({ cardId, tagIds }: { cardId: string; tagIds: string[] }): JSX.Element {
+  const allTags = useTagsStore((s) => s.tags)
+  const createTag = useTagsStore((s) => s.createTag)
+  const setCardTags = useCardsStore((s) => s.setCardTags)
+
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const cardTags = tagIds.map((id) => allTags.find((t) => t.id === id)).filter((t): t is NonNullable<typeof t> => !!t)
+  const suggestions =
+    draft.trim().length > 0
+      ? allTags.filter((t) => !tagIds.includes(t.id) && t.name.toLowerCase().includes(draft.trim().toLowerCase())).slice(0, 6)
+      : []
+
+  function removeTag(tagId: string): void {
+    void setCardTags(cardId, tagIds.filter((id) => id !== tagId))
+  }
+
+  async function addTag(name: string): Promise<void> {
+    const trimmed = name.trim()
+    if (!trimmed) {
+      setAdding(false)
+      setDraft('')
+      return
+    }
+    const tag = await createTag(trimmed)
+    if (!tagIds.includes(tag.id)) void setCardTags(cardId, [...tagIds, tag.id])
+    setDraft('')
+    setAdding(false)
+  }
+
+  return (
+    <div onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()} style={tagRowStyle}>
+      {cardTags.map((tag) => (
+        <span key={tag.id} style={tagChipStyle}>
+          {tag.name}
+          <button onClick={() => removeTag(tag.id)} title={`Remove tag "${tag.name}"`} style={tagChipRemoveStyle}>
+            ×
+          </button>
+        </span>
+      ))}
+      {adding ? (
+        <span style={{ position: 'relative' }}>
+          <input
+            ref={inputRef}
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => addTag(draft)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void addTag(draft)
+              } else if (e.key === 'Escape') {
+                setAdding(false)
+                setDraft('')
+              }
+            }}
+            placeholder="Tag name…"
+            style={tagInputStyle}
+          />
+          {suggestions.length > 0 && (
+            <div style={tagSuggestionsStyle}>
+              {suggestions.map((s) => (
+                <button
+                  key={s.id}
+                  // Fires before the input's onBlur commits the typed draft as a new tag.
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    void addTag(s.name)
+                  }}
+                  style={tagSuggestionItemStyle}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </span>
+      ) : (
+        <button onClick={() => setAdding(true)} style={tagAddButtonStyle}>
+          + tag
+        </button>
       )}
     </div>
   )
@@ -530,5 +621,83 @@ const sourceMenuItemStyle: CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   cursor: 'pointer',
   fontSize: 'var(--font-sm)',
+  color: 'inherit'
+}
+
+const tagRowStyle: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 4,
+  marginTop: 6
+}
+
+const tagChipStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 3,
+  padding: '1px 4px 1px 8px',
+  borderRadius: 999,
+  fontSize: 'var(--font-xs)',
+  color: 'var(--accent)',
+  background: 'var(--accent-soft)',
+  whiteSpace: 'nowrap'
+}
+
+const tagChipRemoveStyle: CSSProperties = {
+  border: 'none',
+  background: 'none',
+  cursor: 'pointer',
+  color: 'inherit',
+  fontSize: 12,
+  lineHeight: 1,
+  padding: '0 3px',
+  opacity: 0.7
+}
+
+const tagAddButtonStyle: CSSProperties = {
+  border: '1px dashed var(--border)',
+  background: 'none',
+  cursor: 'pointer',
+  color: 'var(--fg-faint)',
+  fontSize: 'var(--font-xs)',
+  padding: '1px 7px',
+  borderRadius: 999
+}
+
+const tagInputStyle: CSSProperties = {
+  border: '1px solid var(--accent)',
+  borderRadius: 999,
+  padding: '1px 8px',
+  fontSize: 'var(--font-xs)',
+  background: 'var(--bg)',
+  color: 'inherit',
+  width: 100
+}
+
+const tagSuggestionsStyle: CSSProperties = {
+  position: 'absolute',
+  top: '100%',
+  left: 0,
+  marginTop: 2,
+  background: 'var(--modal-bg)',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius-sm)',
+  padding: 2,
+  display: 'flex',
+  flexDirection: 'column',
+  minWidth: 120,
+  zIndex: 20,
+  boxShadow: '0 4px 16px #00000030'
+}
+
+const tagSuggestionItemStyle: CSSProperties = {
+  border: 'none',
+  background: 'none',
+  textAlign: 'left',
+  padding: '3px 6px',
+  borderRadius: 'var(--radius-sm)',
+  cursor: 'pointer',
+  fontSize: 'var(--font-xs)',
   color: 'inherit'
 }

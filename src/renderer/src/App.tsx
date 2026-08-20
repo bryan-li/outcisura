@@ -4,6 +4,7 @@ import { useDocumentsStore } from './state/documentsStore'
 import { useCardsStore } from './state/cardsStore'
 import { useFoldersStore } from './state/foldersStore'
 import { useReviewLogStore } from './state/reviewLogStore'
+import { useTagsStore } from './state/tagsStore'
 import { useUiStore } from './state/uiStore'
 import { useSyncEnabledStore } from './state/syncEnabledStore'
 import { useConnectivityStore } from './state/connectivityStore'
@@ -71,6 +72,7 @@ function AppShell(): JSX.Element {
   const loadCards = useCardsStore((s) => s.loadCards)
   const loadFolders = useFoldersStore((s) => s.loadFolders)
   const loadReviewLog = useReviewLogStore((s) => s.loadReviewLog)
+  const loadTags = useTagsStore((s) => s.loadTags)
   const syncEnabled = useSyncEnabledStore((s) => s.enabled)
   const lastSyncedAt = useConnectivityStore((s) => s.lastSyncedAt)
 
@@ -80,7 +82,8 @@ function AppShell(): JSX.Element {
     loadCards()
     loadFolders()
     loadReviewLog()
-  }, [loadDocuments, loadDocumentFolders, loadCards, loadFolders, loadReviewLog])
+    loadTags()
+  }, [loadDocuments, loadDocumentFolders, loadCards, loadFolders, loadReviewLog, loadTags])
 
   // Local SQLite is always the primary read/write path (loaded above regardless), so this only
   // controls whether the background engine also keeps Supabase in sync — see syncEngine.ts and

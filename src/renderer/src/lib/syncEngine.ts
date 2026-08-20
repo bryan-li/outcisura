@@ -119,7 +119,11 @@ function hydrateCardRow(row: RemoteCardRow): CardRecord {
     sources,
     revealImageOnFlip: row.reveal_image_on_flip,
     originBackend: row.origin_backend,
-    originId: row.origin_id
+    originId: row.origin_id,
+    // Tags are local-only (never synced — see schema.ts's tags migration) and applyRemoteCardUpsert
+    // never touches card_tags, so this placeholder is only here to satisfy CardRecord's shape; a
+    // pulled card's real local tags (if any) are untouched regardless of this value.
+    tagIds: []
   }
 }
 

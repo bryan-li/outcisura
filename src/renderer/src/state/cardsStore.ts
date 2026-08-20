@@ -33,6 +33,8 @@ interface CardsState {
   restoreCardSrs: (id: string, srs: SrsSnapshot) => Promise<void>
   deleteCard: (id: string) => Promise<void>
   regenerate: (cardId: string, instruction?: string) => Promise<void>
+  /** Local-only, like tags themselves — no triggerSync. Replaces the card's full tag set. */
+  setCardTags: (cardId: string, tagIds: string[]) => Promise<void>
 }
 
 export const useCardsStore = create<CardsState>((set, get) => {
@@ -157,6 +159,11 @@ export const useCardsStore = create<CardsState>((set, get) => {
       await localCardsApi.delete(id)
       persist(get().cards.filter((c) => c.id !== id))
       triggerSync()
+    },
+
+    setCardTags: async (cardId, tagIds) => {
+      await window.api.tags.setCardTags(cardId, tagIds)
+      persist(get().cards.map((c) => (c.id === cardId ? { ...c, tagIds } : c)))
     },
 
     regenerate: async (cardId, instruction) => {

@@ -133,6 +133,11 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
   ipcMain.handle(IpcChannels.reviewSessionsLog, (_event, input: NewReviewSessionInput) => repo.logReviewSession(input))
   ipcMain.handle(IpcChannels.reviewSessionsList, () => repo.listReviewSessions())
 
+  ipcMain.handle(IpcChannels.tagsCreate, (_event, name: string) => repo.createTag(name))
+  ipcMain.handle(IpcChannels.tagsList, () => repo.listTags())
+  ipcMain.handle(IpcChannels.tagsDelete, (_event, id: string) => repo.deleteTag(id))
+  ipcMain.handle(IpcChannels.tagsSetCardTags, (_event, cardId: string, tagIds: string[]) => repo.setCardTags(cardId, tagIds))
+
   ipcMain.handle(IpcChannels.syncGetPendingOps, () => repo.getPendingSyncOps())
   ipcMain.handle(IpcChannels.syncRemoveOps, (_event, ids: number[]) => repo.removeSyncOps(ids))
   ipcMain.handle(IpcChannels.syncGetMeta, (_event, key: string) => repo.getSyncMeta(key))

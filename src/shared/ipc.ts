@@ -33,6 +33,7 @@ import type {
   SaveTranscriptSegmentInput,
   SrsSnapshot,
   SyncOp,
+  TagRecord,
   TranscribeAudioInput,
   TranscriptCoverageInput,
   TranscriptCoverageResult,
@@ -79,6 +80,10 @@ export const IpcChannels = {
   reviewLogList: 'reviewLog:list',
   reviewSessionsLog: 'reviewSessions:log',
   reviewSessionsList: 'reviewSessions:list',
+  tagsCreate: 'tags:create',
+  tagsList: 'tags:list',
+  tagsDelete: 'tags:delete',
+  tagsSetCardTags: 'tags:setCardTags',
   syncGetPendingOps: 'sync:getPendingOps',
   syncRemoveOps: 'sync:removeOps',
   syncGetMeta: 'sync:getMeta',
@@ -208,6 +213,15 @@ export interface FlashcardApi {
     /** Records one completed review session (start to finish) for the "avg session length" stat. */
     log(input: NewReviewSessionInput): Promise<ReviewSessionRecord>
     list(): Promise<ReviewSessionRecord[]>
+  }
+  tags: {
+    /** Case-insensitive find-or-create — reuses an existing tag if the name (any casing) matches. */
+    create(name: string): Promise<TagRecord>
+    list(): Promise<TagRecord[]>
+    /** Cascades: every card carrying this tag just loses it. */
+    delete(id: string): Promise<void>
+    /** Replaces a card's full tag set in one call. */
+    setCardTags(cardId: string, tagIds: string[]): Promise<void>
   }
   /** The local-first bidirectional sync engine's primitives (see renderer/src/lib/syncEngine.ts) —
    *  read/drain the local operation log and apply pulled remote rows, without moving the actual

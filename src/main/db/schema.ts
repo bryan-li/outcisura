@@ -429,6 +429,31 @@ const MIGRATIONS: string[] = [
     cards_reviewed INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX idx_review_sessions_started ON review_sessions(started_at);
+  `,
+  `
+  -- Tags: free-form labels on cards, independent of folder membership (a card can be tagged
+  -- "exam-1" and "weak-topic" without needing a folder for each). A real junction table, not a
+  -- comma-separated column on cards, so "every card tagged X" stays a cheap indexed lookup instead
+  -- of a text scan. Local-only for now, deliberately — cards/folders sync because touching the
+  -- sync engine (push/pull, RLS) is real, sensitive work with a documented history of a hard-to-
+  -- diagnose bug (see 0011_live_sessions_select_fix.sql's own header for that saga elsewhere in
+  -- this project). Tags don't strictly need cross-device sync to satisfy what was actually asked
+  -- for, so this ships local-only now rather than taking on that risk for a nice-to-have; flagged
+  -- as a real, named scope cut, not a silent omission — revisit if cross-device tags turn out to
+  -- matter in practice.
+  CREATE TABLE tags (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX idx_tags_name_unique ON tags(name COLLATE NOCASE);
+
+  CREATE TABLE card_tags (
+    card_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (card_id, tag_id)
+  );
+  CREATE INDEX idx_card_tags_tag ON card_tags(tag_id);
   `
 ]
 

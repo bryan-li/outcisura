@@ -31,6 +31,7 @@ import type {
   SaveTranscriptSegmentInput,
   SrsSnapshot,
   SyncOp,
+  TagRecord,
   TimeRange,
   TranscriptCoverageResult,
   TranscriptionEngine,
@@ -444,7 +445,8 @@ export class Repository {
         sources: sourceRows,
         revealImageOnFlip: input.revealImageOnFlip ?? false,
         originBackend: null,
-        originId: null
+        originId: null,
+        tagIds: []
       }
       this.logSyncOp('cards', 'insert', cardId, cardRecord)
       if (sourceRows.length > 0) this.logSyncOp('card_sources', 'insert', cardId, sourceRows)
@@ -452,6 +454,40 @@ export class Repository {
     run()
 
     return this.getCard(cardId)!
+  }
+
+  /** Case-insensitive find-or-create — retyping an existing tag's name (in any casing) reuses it
+   *  instead of creating a near-duplicate ("Exam-1" vs "exam-1"). */
+  createTag(name: string): TagRecord {
+    const trimmed = name.trim()
+    const existing = this.db.prepare(`SELECT * FROM tags WHERE name = ? COLLATE NOCASE`).get(trimmed) as TagRow | undefined
+    if (existing) return { id: existing.id, name: existing.name, createdAt: existing.created_at }
+    const id = randomUUID()
+    const createdAt = new Date().toISOString()
+    this.db.prepare(`INSERT INTO tags (id, name, created_at) VALUES (?, ?, ?)`).run(id, trimmed, createdAt)
+    return { id, name: trimmed, createdAt }
+  }
+
+  listTags(): TagRecord[] {
+    const rows = this.db.prepare(`SELECT * FROM tags ORDER BY name COLLATE NOCASE ASC`).all() as TagRow[]
+    return rows.map((r) => ({ id: r.id, name: r.name, createdAt: r.created_at }))
+  }
+
+  /** Cascades to card_tags via FK — every card that had this tag just loses it, nothing else changes. */
+  deleteTag(id: string): void {
+    this.db.prepare(`DELETE FROM tags WHERE id = ?`).run(id)
+  }
+
+  /** Replaces a card's full tag set in one go (delete-then-insert) rather than separate add/remove
+   *  calls — the UI always has the complete desired set on hand (a chip list), so this is simpler
+   *  than diffing client-side first. */
+  setCardTags(cardId: string, tagIds: string[]): void {
+    const run = this.db.transaction(() => {
+      this.db.prepare(`DELETE FROM card_tags WHERE card_id = ?`).run(cardId)
+      const insert = this.db.prepare(`INSERT INTO card_tags (card_id, tag_id) VALUES (?, ?)`)
+      for (const tagId of tagIds) insert.run(cardId, tagId)
+    })
+    run()
   }
 
   getCard(cardId: string): CardRecord | null {
@@ -729,6 +765,9 @@ export class Repository {
     const sourceRows = this.db
       .prepare(`SELECT * FROM card_sources WHERE card_id = ?`)
       .all(row.id) as CardSourceRow[]
+    const tagIds = (this.db.prepare(`SELECT tag_id FROM card_tags WHERE card_id = ?`).all(row.id) as { tag_id: string }[]).map(
+      (t) => t.tag_id
+    )
     const sources: CardSourceRecord[] = sourceRows.map((s) => ({
       id: s.id,
       cardId: s.card_id,
@@ -765,7 +804,8 @@ export class Repository {
       sources,
       revealImageOnFlip: !!row.reveal_image_on_flip,
       originBackend: row.origin_backend,
-      originId: row.origin_id
+      originId: row.origin_id,
+      tagIds
     }
   }
 
@@ -1480,6 +1520,12 @@ function hydrateFolder(row: FolderRow): FolderRecord {
     originBackend: row.origin_backend,
     originId: row.origin_id
   }
+}
+
+interface TagRow {
+  id: string
+  name: string
+  created_at: string
 }
 
 interface DocumentFolderRow {
