@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useHostSessionStore } from '../../state/hostSessionStore'
 import { useSessionChannel } from '../../lib/liveSession/realtime'
+import { LeaderboardList } from './LeaderboardList'
 
 interface HostControlViewProps {
   sessionId: string
@@ -18,6 +19,7 @@ export function HostControlView({ sessionId }: HostControlViewProps): JSX.Elemen
   const participants = useHostSessionStore((s) => s.participants)
   const answeredCount = useHostSessionStore((s) => s.answeredCount)
   const revealedAnswers = useHostSessionStore((s) => s.revealedAnswers)
+  const revealedAnswerText = useHostSessionStore((s) => s.revealedAnswerText)
   const leaderboard = useHostSessionStore((s) => s.leaderboard)
   const refreshAnsweredCount = useHostSessionStore((s) => s.refreshAnsweredCount)
   const revealResults = useHostSessionStore((s) => s.revealResults)
@@ -40,7 +42,8 @@ export function HostControlView({ sessionId }: HostControlViewProps): JSX.Elemen
     revealedForIndexRef.current = currentQuestionIndex
     try {
       await revealResults()
-      send({ type: 'results_revealed', questionIndex: currentQuestionIndex })
+      const { revealedAnswerText: answerText } = useHostSessionStore.getState()
+      send({ type: 'results_revealed', questionIndex: currentQuestionIndex, answerText: answerText ?? '' })
     } catch (err) {
       revealedForIndexRef.current = null
       setError(err instanceof Error ? err.message : 'Failed to reveal results')
@@ -118,6 +121,13 @@ export function HostControlView({ sessionId }: HostControlViewProps): JSX.Elemen
 
       {phase === 'revealed' && (
         <>
+          {revealedAnswerText && (
+            <p style={{ fontSize: 'var(--font-sm)', margin: 0 }}>
+              <span style={{ color: 'var(--fg-faint)' }}>Correct answer: </span>
+              <strong>{revealedAnswerText}</strong>
+            </p>
+          )}
+
           <div>
             <p style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--fg-faint)', textTransform: 'uppercase', margin: '0 0 6px' }}>
               This question
@@ -138,16 +148,7 @@ export function HostControlView({ sessionId }: HostControlViewProps): JSX.Elemen
             <p style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--fg-faint)', textTransform: 'uppercase', margin: '0 0 6px' }}>
               Leaderboard
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {leaderboard.map((entry, i) => (
-                <div key={entry.userId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-sm)' }}>
-                  <span>
-                    {i + 1}. {entry.displayName}
-                  </span>
-                  <span style={{ fontWeight: 600 }}>{entry.totalPoints}</span>
-                </div>
-              ))}
-            </div>
+            <LeaderboardList entries={leaderboard} />
           </div>
 
           {isLastQuestion ? (
@@ -162,7 +163,12 @@ export function HostControlView({ sessionId }: HostControlViewProps): JSX.Elemen
         </>
       )}
 
-      {phase === 'ended' && <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)' }}>Session ended.</p>}
+      {phase === 'ended' && (
+        <>
+          <p style={{ fontSize: 'var(--font-lg)', fontWeight: 600, margin: 0 }}>🏁 Session over</p>
+          <LeaderboardList entries={leaderboard} podium />
+        </>
+      )}
     </div>
   )
 }

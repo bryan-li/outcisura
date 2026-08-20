@@ -6,6 +6,7 @@ import { useSessionChannel } from '../../lib/liveSession/realtime'
 import { computeLeaderboard, type LeaderboardEntry } from '../../lib/liveSession/leaderboard'
 import type { ShareFormat } from '../../../../shared/types'
 import { JoinSessionForm } from './JoinSessionForm'
+import { LeaderboardList } from '../LiveSession/LeaderboardList'
 
 /** Rendered by App.tsx in place of the normal AppShell whenever the current Supabase session is
  *  anonymous (session.user.is_anonymous) — a guest never sees the flashcard library, review
@@ -85,6 +86,7 @@ function LiveGame({
   const [freeText, setFreeText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [ownResult, setOwnResult] = useState<{ isCorrect: boolean | null; pointsAwarded: number | null } | null>(null)
+  const [revealedAnswerText, setRevealedAnswerText] = useState<string | null>(null)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -105,11 +107,12 @@ function LiveGame({
     setSelectedIndex(null)
     setFreeText('')
     setOwnResult(null)
+    setRevealedAnswerText(null)
     setError(null)
     setPhase('answering')
   }
 
-  async function loadResults(questionId: string): Promise<void> {
+  async function loadResults(questionId: string, answerText: string): Promise<void> {
     const { data } = await supabase
       .from('live_session_answers')
       .select('is_correct, points_awarded')
@@ -118,13 +121,14 @@ function LiveGame({
       .maybeSingle()
     const row = data as OwnAnswerRow | null
     setOwnResult({ isCorrect: row?.is_correct ?? null, pointsAwarded: row?.points_awarded ?? null })
+    setRevealedAnswerText(answerText || null)
     setLeaderboard(await computeLeaderboard(sessionId))
     setPhase('revealed')
   }
 
   const send = useSessionChannel(sessionId, (event) => {
     if (event.type === 'question_advanced') void loadQuestion(event.questionIndex, event.deadline)
-    else if (event.type === 'results_revealed' && question) void loadResults(question.id)
+    else if (event.type === 'results_revealed' && question) void loadResults(question.id, event.answerText)
     else if (event.type === 'session_ended') void computeLeaderboard(sessionId).then((board) => { setLeaderboard(board); setPhase('ended') })
   })
 
@@ -230,20 +234,17 @@ function LiveGame({
             <p style={{ fontSize: 'var(--font-xl)', margin: 0 }}>
               {ownResult?.isCorrect ? '✅ Correct!' : '❌ Not quite'} {ownResult?.pointsAwarded ? `+${ownResult.pointsAwarded}` : ''}
             </p>
+            {revealedAnswerText && (
+              <p style={{ fontSize: 'var(--font-sm)', margin: 0 }}>
+                <span style={{ color: 'var(--fg-faint)' }}>Correct answer: </span>
+                <strong>{revealedAnswerText}</strong>
+              </p>
+            )}
             <div>
               <p style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--fg-faint)', textTransform: 'uppercase', margin: '0 0 6px' }}>
                 Leaderboard
               </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {leaderboard.map((entry, i) => (
-                  <div key={entry.userId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-sm)' }}>
-                    <span>
-                      {i + 1}. {entry.displayName}
-                    </span>
-                    <span style={{ fontWeight: 600 }}>{entry.totalPoints}</span>
-                  </div>
-                ))}
-              </div>
+              <LeaderboardList entries={leaderboard} />
             </div>
             <p style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)', margin: 0 }}>Waiting for the next question…</p>
           </>
@@ -252,16 +253,7 @@ function LiveGame({
         {phase === 'ended' && (
           <>
             <h1 style={{ fontSize: 'var(--font-xl)', margin: 0 }}>🏁 Session over</h1>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {leaderboard.map((entry, i) => (
-                <div key={entry.userId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-sm)' }}>
-                  <span>
-                    {i + 1}. {entry.displayName}
-                  </span>
-                  <span style={{ fontWeight: 600 }}>{entry.totalPoints}</span>
-                </div>
-              ))}
-            </div>
+            <LeaderboardList entries={leaderboard} podium />
           </>
         )}
 

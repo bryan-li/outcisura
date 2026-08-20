@@ -9,7 +9,11 @@ import { supabase } from '../supabase'
  *  Postgres read/write, never from the broadcast itself. */
 export type SessionEvent =
   | { type: 'question_advanced'; questionIndex: number; deadline: string }
-  | { type: 'results_revealed'; questionIndex: number }
+  /** answerText is informational only, not security-sensitive by this point (grading already
+   *  happened, host-only live_session_answer_keys is never exposed to guests via RLS) — carried
+   *  directly in the broadcast rather than requiring a second RLS-gated read, since a guest has no
+   *  other way to see it (they never get read access to the answer key table itself). */
+  | { type: 'results_revealed'; questionIndex: number; answerText: string }
   | { type: 'session_ended' }
   | { type: 'participant_joined' }
   | { type: 'answer_submitted' }

@@ -47,6 +47,7 @@ interface AnswerRow {
 interface AnswerKeyRow {
   correct_mcq_index: number | null
   free_text_rubric: string | null
+  back_snapshot: string
 }
 
 interface ParticipantRow {
@@ -65,6 +66,10 @@ interface HostSessionState {
   participants: HostParticipant[]
   answeredCount: number
   revealedAnswers: AnswerBreakdownRow[]
+  /** The reference answer text for the just-revealed question — null before a reveal has happened
+   *  for the current question. Read by HostControlView to show alongside the breakdown and
+   *  broadcast to guests, who have no other way to see it (live_session_answer_keys is host-only). */
+  revealedAnswerText: string | null
   leaderboard: LeaderboardEntry[]
 
   createAndHost: (folderId: string, folderName: string) => Promise<void>
@@ -92,6 +97,7 @@ export const useHostSessionStore = create<HostSessionState>((set, get) => ({
   participants: [],
   answeredCount: 0,
   revealedAnswers: [],
+  revealedAnswerText: null,
   leaderboard: [],
 
   createAndHost: async (folderId, folderName) => {
@@ -118,7 +124,7 @@ export const useHostSessionStore = create<HostSessionState>((set, get) => ({
     const deadline = computeDeadline()
     const { error } = await supabase.from('live_sessions').update({ status: 'active', current_question_index: 0, started_at: new Date().toISOString() }).eq('id', sessionId)
     if (error) throw error
-    set({ currentQuestionIndex: 0, phase: 'question', deadline, answeredCount: 0, revealedAnswers: [] })
+    set({ currentQuestionIndex: 0, phase: 'question', deadline, answeredCount: 0, revealedAnswers: [], revealedAnswerText: null })
   },
 
   refreshParticipants: async () => {
@@ -151,7 +157,7 @@ export const useHostSessionStore = create<HostSessionState>((set, get) => ({
         .from('live_session_answers')
         .select('id, user_id, selected_mcq_index, free_text_answer, answered_at')
         .eq('question_id', question.id),
-      supabase.from('live_session_answer_keys').select('correct_mcq_index, free_text_rubric').eq('question_id', question.id).single()
+      supabase.from('live_session_answer_keys').select('correct_mcq_index, free_text_rubric, back_snapshot').eq('question_id', question.id).single()
     ])
     if (answersError) throw answersError
     if (keyError) throw keyError
@@ -196,7 +202,7 @@ export const useHostSessionStore = create<HostSessionState>((set, get) => ({
     }))
 
     const leaderboard = await computeLeaderboard(sessionId)
-    set({ phase: 'revealed', revealedAnswers, leaderboard })
+    set({ phase: 'revealed', revealedAnswers, revealedAnswerText: key.back_snapshot, leaderboard })
   },
 
   nextQuestion: async () => {
@@ -206,7 +212,7 @@ export const useHostSessionStore = create<HostSessionState>((set, get) => ({
     const deadline = computeDeadline()
     const { error } = await supabase.from('live_sessions').update({ current_question_index: nextIndex }).eq('id', sessionId)
     if (error) throw error
-    set({ currentQuestionIndex: nextIndex, phase: 'question', deadline, answeredCount: 0, revealedAnswers: [] })
+    set({ currentQuestionIndex: nextIndex, phase: 'question', deadline, answeredCount: 0, revealedAnswers: [], revealedAnswerText: null })
   },
 
   endSession: async () => {
@@ -230,6 +236,7 @@ export const useHostSessionStore = create<HostSessionState>((set, get) => ({
       participants: [],
       answeredCount: 0,
       revealedAnswers: [],
+      revealedAnswerText: null,
       leaderboard: []
     })
 }))

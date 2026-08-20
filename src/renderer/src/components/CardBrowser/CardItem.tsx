@@ -269,7 +269,13 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
               style={editTextareaStyle}
             />
           ) : (
-            <div onClick={startEditing} style={{ cursor: 'text' }}>
+            // Click flips (same as the ▶/▼ arrow button — toggling here too just gives a bigger,
+            // more obvious hit target); double-click edits, matching the fast "click to edit"
+            // precedent the textarea itself sets on blur. The single-click handler still fires
+            // during a double-click (browsers dispatch click, click, then dblclick), so the card
+            // flips and un-flips before landing in edit mode — a minor, harmless flicker, not
+            // worth a click-timer to avoid.
+            <div onClick={() => setExpanded((v) => !v)} onDoubleClick={startEditing} style={{ cursor: 'pointer' }}>
               {isCloze ? (
                 <span style={{ fontSize: 'var(--font-md)', lineHeight: `${CARD_LINE_HEIGHT}px` }}>
                   {card.front.trim() ? (

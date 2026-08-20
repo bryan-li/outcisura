@@ -209,6 +209,25 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
     if (recaptureTarget) setFreeSelectTarget('recapture')
   }, [recaptureTarget, document.id])
 
+  // Left/right arrow keys step through slides, same as the prev/next toolbar buttons — suppressed
+  // while typing anywhere (same guard as useDeleteSelectedCardsShortcut) or while an editor/modal
+  // that might have its own use for arrow keys is open, so this never hijacks unrelated input.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent): void {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      const target = e.target as HTMLElement | null
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return
+      if (createModalOpen || freeSelectTarget !== null || occlusionSource !== null || pictureCardSource !== null) return
+      const nextIndex = e.key === 'ArrowLeft' ? activePageIndex - 1 : activePageIndex + 1
+      if (nextIndex < 0 || nextIndex >= pages.length) return
+      e.preventDefault()
+      setSelectedElementIds(new Set())
+      setActivePageIndex(nextIndex)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activePageIndex, pages.length, createModalOpen, freeSelectTarget, occlusionSource, pictureCardSource, setActivePageIndex])
+
   const selectedElements = useMemo(
     () => elements.filter((e) => selectedElementIds.has(e.id)),
     [elements, selectedElementIds]
