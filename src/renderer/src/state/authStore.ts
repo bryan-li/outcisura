@@ -16,7 +16,28 @@ interface AuthState {
   init: () => void
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, username: string) => Promise<void>
+  /** Hands off to the system browser for Google's consent screen (Electron can't complete OAuth
+   *  inside an embedded webview — Google blocks it) — see main/index.ts's outcisura:// protocol
+   *  handler for how the redirect back into the app completes the flow via onDeepLink below. */
+  signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
+}
+
+/** Registered once from init() below — the deep link carries the OAuth `code` query param that
+ *  completes signInWithGoogle's flow. Not wired up if Google sign-in was never started, but
+ *  listening unconditionally is simpler than tracking whether one is in flight, and a stray
+ *  outcisura:// link with no `code` is just a silent no-op. */
+function handleAuthDeepLink(url: string, set: (partial: Partial<AuthState>) => void): void {
+  let code: string | null
+  try {
+    code = new URL(url).searchParams.get('code')
+  } catch {
+    return
+  }
+  if (!code) return
+  supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+    if (error) set({ error: error.message })
+  })
 }
 
 /** This project's Supabase Auth config requires email confirmation, so signUp() never has a live
@@ -62,6 +83,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ session })
       if (session) void ensureProfile(session, set)
     })
+    window.api.auth.onDeepLink((url) => handleAuthDeepLink(url, set))
   },
 
   signIn: async (email, password) => {
@@ -85,6 +107,22 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ error: error.message })
       throw error
     }
+  },
+
+  signInWithGoogle: async () => {
+    set({ error: null })
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: 'outcisura://auth-callback', skipBrowserRedirect: true }
+    })
+    if (error) {
+      set({ error: error.message })
+      throw error
+    }
+    // skipBrowserRedirect means Supabase hands back the consent URL instead of navigating there
+    // itself — this IS the renderer's own window, and an embedded webview can't complete Google's
+    // OAuth flow anyway (Google blocks it), so the system browser opens it instead.
+    window.api.auth.openOAuthUrl(data.url)
   },
 
   signOut: async () => {

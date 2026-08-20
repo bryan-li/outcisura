@@ -7,6 +7,7 @@ type Mode = 'signIn' | 'signUp' | 'join'
 export function LoginView(): JSX.Element {
   const signIn = useAuthStore((s) => s.signIn)
   const signUp = useAuthStore((s) => s.signUp)
+  const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle)
   const error = useAuthStore((s) => s.error)
 
   const [mode, setMode] = useState<Mode>('signIn')
@@ -14,6 +15,7 @@ export function LoginView(): JSX.Element {
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [googleSubmitting, setGoogleSubmitting] = useState(false)
   // Separate from the store's own `error` — this catches a signUp's "check your email to confirm"
   // case, which isn't a failure and shouldn't render like one.
   const [notice, setNotice] = useState<string | null>(null)
@@ -35,6 +37,18 @@ export function LoginView(): JSX.Element {
       // here, just stop showing the submitting state.
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleGoogleSignIn(): Promise<void> {
+    setGoogleSubmitting(true)
+    try {
+      await signInWithGoogle()
+      // Deliberately left spinning — the app stays on this screen until the system browser
+      // redirect completes and the outcisura:// deep link lands (see authStore's onDeepLink),
+      // which then flips `session` and unmounts this view entirely.
+    } catch {
+      setGoogleSubmitting(false)
     }
   }
 
@@ -98,6 +112,16 @@ export function LoginView(): JSX.Element {
           {mode === 'signIn' ? 'Sign in' : 'Sign up'}
         </button>
 
+        <div style={dividerRowStyle}>
+          <span style={dividerLineStyle} />
+          <span style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>or</span>
+          <span style={dividerLineStyle} />
+        </div>
+
+        <button type="button" disabled={googleSubmitting} onClick={handleGoogleSignIn} style={googleButtonStyle}>
+          {googleSubmitting ? 'Opening browser…' : 'Continue with Google'}
+        </button>
+
         <button
           type="button"
           onClick={() => {
@@ -155,6 +179,28 @@ const primaryButtonStyle: CSSProperties = {
   border: '1px solid var(--accent)',
   background: 'var(--accent-soft)',
   color: 'var(--accent)',
+  fontWeight: 600,
+  borderRadius: 'var(--radius-sm)',
+  padding: '8px 14px',
+  cursor: 'pointer'
+}
+
+const dividerRowStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 'var(--space-2)'
+}
+
+const dividerLineStyle: CSSProperties = {
+  flex: 1,
+  height: 1,
+  background: 'var(--border)'
+}
+
+const googleButtonStyle: CSSProperties = {
+  border: '1px solid var(--border)',
+  background: 'var(--bg)',
+  color: 'inherit',
   fontWeight: 600,
   borderRadius: 'var(--radius-sm)',
   padding: '8px 14px',

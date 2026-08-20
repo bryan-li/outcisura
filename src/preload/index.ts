@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
+import { contextBridge, ipcRenderer, shell, webFrame, webUtils } from 'electron'
 import { IpcChannels } from '../shared/ipc'
 import type { FlashcardApi } from '../shared/ipc'
 
@@ -73,6 +73,16 @@ const api: FlashcardApi = {
   anki: {
     exportAll: () => ipcRenderer.invoke(IpcChannels.ankiExportAll),
     import: () => ipcRenderer.invoke(IpcChannels.ankiImport)
+  },
+  auth: {
+    openOAuthUrl: (url) => {
+      shell.openExternal(url)
+    },
+    onDeepLink: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, url: string): void => callback(url)
+      ipcRenderer.on(IpcChannels.authDeepLink, listener)
+      return () => ipcRenderer.removeListener(IpcChannels.authDeepLink, listener)
+    }
   },
   sync: {
     getPendingOps: () => ipcRenderer.invoke(IpcChannels.syncGetPendingOps),

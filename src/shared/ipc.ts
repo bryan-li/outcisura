@@ -90,6 +90,7 @@ export const IpcChannels = {
   cardImagesRemove: 'cardImages:remove',
   ankiExportAll: 'anki:exportAll',
   ankiImport: 'anki:import',
+  authDeepLink: 'auth:deep-link',
   syncGetPendingOps: 'sync:getPendingOps',
   syncRemoveOps: 'sync:removeOps',
   syncGetMeta: 'sync:getMeta',
@@ -242,6 +243,17 @@ export interface FlashcardApi {
   anki: {
     exportAll(): Promise<AnkiExportResult>
     import(): Promise<AnkiImportResult>
+  }
+  /** Bridges the outcisura:// custom-protocol handler (see main/index.ts) into the renderer —
+   *  currently only used for the Google OAuth redirect (Electron can't complete Google's OAuth
+   *  consent inside an embedded webview, so the flow hands off to the system browser and comes
+   *  back via this deep link), but the protocol handler itself is launch-generic. */
+  auth: {
+    /** Opens a URL in the system's default browser (via Electron's `shell.openExternal`). */
+    openOAuthUrl(url: string): void
+    /** Fires with the full `outcisura://...` URL whenever the OS hands one to this app. Returns
+     *  an unsubscribe function. */
+    onDeepLink(callback: (url: string) => void): () => void
   }
   /** The local-first bidirectional sync engine's primitives (see renderer/src/lib/syncEngine.ts) —
    *  read/drain the local operation log and apply pulled remote rows, without moving the actual
