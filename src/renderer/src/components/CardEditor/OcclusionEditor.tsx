@@ -55,6 +55,10 @@ export function OcclusionEditor({
   const [masks, setMasks] = useState<MaskInfo[]>([])
   const [groupOf, setGroupOf] = useState<Record<number, number>>({})
   const [checkedMaskIds, setCheckedMaskIds] = useState<Set<number>>(new Set())
+  /** Which mask the pointer (on canvas) or a list-panel row (via its own hover) currently targets
+   *  — one shared piece of state, so hovering either surface highlights both. See maskAt below for
+   *  why this needs its own hit-test instead of per-Rect Konva event handlers. */
+  const [hoveredMaskId, setHoveredMaskId] = useState<number | null>(null)
   const nextMaskIdRef = useRef(0)
   const nextGroupIdRef = useRef(0)
   const drawing = useRef<Mask | null>(null)
@@ -89,12 +93,35 @@ export function OcclusionEditor({
   }
 
   function handleMouseMove(e: Konva.KonvaEventObject<MouseEvent>): void {
-    if (!drawing.current) return
     const pos = relativePointer(e.target.getLayer())
-    if (!pos) return
-    const start = drawing.current
-    const rect = { x: Math.min(start.x, pos.x), y: Math.min(start.y, pos.y), w: Math.abs(pos.x - start.x), h: Math.abs(pos.y - start.y) }
-    setLiveRect(rect)
+    if (drawing.current) {
+      if (!pos) return
+      const start = drawing.current
+      const rect = { x: Math.min(start.x, pos.x), y: Math.min(start.y, pos.y), w: Math.abs(pos.x - start.x), h: Math.abs(pos.y - start.y) }
+      setLiveRect(rect)
+      return
+    }
+    setHoveredMaskId(pos ? (maskAt(pos)?.id ?? null) : null)
+  }
+
+  /** Smallest-area mask whose rect contains the point, not "whichever Konva Rect happens to be
+   *  topmost" — when a larger mask fully wraps a smaller one, raw paint/hit order would always
+   *  favor whichever was drawn later (Konva hit-tests in the same order it paints), leaving the
+   *  other permanently unreachable depending on draw order. Checking every mask and picking the
+   *  smallest match makes the more specific (nested) box reachable regardless of draw order. */
+  function maskAt(pos: { x: number; y: number }): MaskInfo | null {
+    let best: MaskInfo | null = null
+    let bestArea = Infinity
+    for (const m of masks) {
+      const { x, y, w, h } = m.rect
+      if (pos.x < x || pos.x > x + w || pos.y < y || pos.y > y + h) continue
+      const area = w * h
+      if (area < bestArea) {
+        bestArea = area
+        best = m
+      }
+    }
+    return best
   }
 
   function handleMouseUp(): void {
@@ -121,6 +148,7 @@ export function OcclusionEditor({
       next.delete(id)
       return next
     })
+    setHoveredMaskId((prev) => (prev === id ? null : prev))
   }
 
   function toggleChecked(id: number): void {
@@ -172,6 +200,11 @@ export function OcclusionEditor({
       h: mask.h / img!.naturalHeight
     }
   }
+
+  // Largest-first paint order, so a smaller nested mask's highlighted stroke renders on top of
+  // its enclosing one instead of underneath it — matches maskAt's own smallest-area-wins priority,
+  // just for visual stacking instead of hit-testing.
+  const masksByPaintOrder = [...masks].sort((a, b) => b.rect.w * b.rect.h - a.rect.w * a.rect.h)
 
   // Masks sharing a group id become one card with multiple sources, all hidden together.
   const groups = new Map<number, MaskInfo[]>()
@@ -229,22 +262,33 @@ export function OcclusionEditor({
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', cursor: 'crosshair' }}
+          onMouseLeave={() => setHoveredMaskId(null)}
+          style={{
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            cursor: drawing.current ? 'crosshair' : hoveredMaskId !== null ? 'pointer' : 'crosshair'
+          }}
         >
           <Layer scaleX={scale} scaleY={scale}>
             <KonvaImage image={img} width={img.naturalWidth} height={img.naturalHeight} />
-            {masks.map((m) => (
-              <Rect
-                key={m.id}
-                x={m.rect.x}
-                y={m.rect.y}
-                width={m.rect.w}
-                height={m.rect.h}
-                fill={`${groupColor(groupOf[m.id])}99`}
-                stroke={groupColor(groupOf[m.id])}
-                strokeWidth={2}
-              />
-            ))}
+            {masksByPaintOrder.map((m) => {
+              const isHovered = hoveredMaskId === m.id
+              return (
+                <Rect
+                  key={m.id}
+                  x={m.rect.x}
+                  y={m.rect.y}
+                  width={m.rect.w}
+                  height={m.rect.h}
+                  fill={`${groupColor(groupOf[m.id])}${isHovered ? 'cc' : '99'}`}
+                  stroke={groupColor(groupOf[m.id])}
+                  strokeWidth={isHovered ? 4 : 2}
+                  shadowColor={isHovered ? groupColor(groupOf[m.id]) : undefined}
+                  shadowBlur={isHovered ? 12 : 0}
+                  shadowOpacity={isHovered ? 0.9 : 0}
+                />
+              )
+            })}
             {liveRect && <Rect x={liveRect.x} y={liveRect.y} width={liveRect.w} height={liveRect.h} fill="#e86b0f55" stroke="#e86b0f" />}
           </Layer>
         </Stage>
@@ -275,7 +319,20 @@ export function OcclusionEditor({
               <span style={{ width: 10, height: 10, borderRadius: '50%', background: groupColor(groupId), flexShrink: 0 }} />
               {groupMasks.length > 1 && <span style={{ fontSize: 12, opacity: 0.7 }}>Group ({groupMasks.length}):</span>}
               {groupMasks.map((m, i) => (
-                <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13 }}>
+                <label
+                  key={m.id}
+                  onMouseEnter={() => setHoveredMaskId(m.id)}
+                  onMouseLeave={() => setHoveredMaskId((prev) => (prev === m.id ? null : prev))}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    fontSize: 13,
+                    padding: '2px 4px',
+                    borderRadius: 4,
+                    background: hoveredMaskId === m.id ? `${groupColor(groupId)}33` : 'transparent'
+                  }}
+                >
                   <input type="checkbox" checked={checkedMaskIds.has(m.id)} onChange={() => toggleChecked(m.id)} />
                   Mask {i + 1}
                   <button onClick={() => removeMask(m.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'inherit' }}>
