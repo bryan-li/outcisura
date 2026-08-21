@@ -51,7 +51,8 @@ const api: FlashcardApi = {
   ai: {
     regenerate: (req) => ipcRenderer.invoke(IpcChannels.aiRegenerate, req),
     prepareForSharing: (req) => ipcRenderer.invoke(IpcChannels.aiPrepareForSharing, req),
-    judgeFreeTextAnswers: (req) => ipcRenderer.invoke(IpcChannels.aiJudgeFreeTextAnswers, req)
+    judgeFreeTextAnswers: (req) => ipcRenderer.invoke(IpcChannels.aiJudgeFreeTextAnswers, req),
+    summarizeDocument: (documentId) => ipcRenderer.invoke(IpcChannels.aiSummarizeDocument, documentId)
   },
   reviewLog: {
     list: () => ipcRenderer.invoke(IpcChannels.reviewLogList)

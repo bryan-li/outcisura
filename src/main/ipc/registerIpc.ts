@@ -131,6 +131,14 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
     return ai.judgeFreeTextAnswers(req)
   })
 
+  // Unlike the other ai.* handlers above, this one persists on the main-process side itself —
+  // see AiService.summarizeDocument's own doc comment on why.
+  ipcMain.handle(IpcChannels.aiSummarizeDocument, async (_event, documentId: string) => {
+    const result = await ai.summarizeDocument(documentId)
+    repo.updateDocumentSummary(documentId, result.summary)
+    return result
+  })
+
   ipcMain.handle(IpcChannels.reviewLogList, () => repo.listReviewLog())
   ipcMain.handle(IpcChannels.reviewSessionsLog, (_event, input: NewReviewSessionInput) => repo.logReviewSession(input))
   ipcMain.handle(IpcChannels.reviewSessionsList, () => repo.listReviewSessions())

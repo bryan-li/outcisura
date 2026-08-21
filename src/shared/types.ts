@@ -48,6 +48,9 @@ export interface DocumentRecord {
   /** User-assigned folder in the Library sidebar, or null for unfiled (shown at the tree root).
    *  See DocumentFolderRecord — a separate, never-synced table, not the cards/folders one. */
   folderId: string | null
+  /** AI-generated summary of the whole document's content, or null if never generated. See
+   *  AiSummarizeRequest/Result — a separate call from per-card regeneration. */
+  summary: string | null
 }
 
 export interface DocumentPositionPatch {
@@ -370,6 +373,12 @@ export interface NewCardInput {
   sources: NewCardSourceInput[]
   /** See CardRecord.revealImageOnFlip. Defaults to false when omitted. */
   revealImageOnFlip?: boolean
+}
+
+/** Result of summarizing a whole document's content (see aiService.summarizeDocument) — a
+ *  separate call from per-card regeneration, over every parsed text element on every page. */
+export interface AiSummarizeResult {
+  summary: string
 }
 
 /** Result of an "Export to Anki" run — the save dialog was shown in the main process (it owns

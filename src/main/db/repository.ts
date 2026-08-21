@@ -102,7 +102,8 @@ export class Repository {
       durationSeconds: null,
       lastPageIndex: null,
       lastPlaybackSeconds: null,
-      folderId: null
+      folderId: null,
+      summary: null
     }
   }
 
@@ -128,7 +129,8 @@ export class Repository {
       durationSeconds: input.durationSeconds,
       lastPageIndex: null,
       lastPlaybackSeconds: null,
-      folderId: null
+      folderId: null,
+      summary: null
     }
   }
 
@@ -170,7 +172,7 @@ export class Repository {
   listDocuments(): DocumentRecord[] {
     const rows = this.db
       .prepare(
-        `SELECT id, filename, type, imported_at, page_count, source_video_path, duration_seconds, last_page_index, last_playback_seconds, folder_id FROM documents ORDER BY imported_at DESC`
+        `SELECT id, filename, type, imported_at, page_count, source_video_path, duration_seconds, last_page_index, last_playback_seconds, folder_id, summary FROM documents ORDER BY imported_at DESC`
       )
       .all() as {
       id: string
@@ -183,6 +185,7 @@ export class Repository {
       last_page_index: number | null
       last_playback_seconds: number | null
       folder_id: string | null
+      summary: string | null
     }[]
     return rows.map((r) => ({
       id: r.id,
@@ -194,8 +197,16 @@ export class Repository {
       durationSeconds: r.duration_seconds,
       lastPageIndex: r.last_page_index,
       lastPlaybackSeconds: r.last_playback_seconds,
-      folderId: r.folder_id
+      folderId: r.folder_id,
+      summary: r.summary
     }))
+  }
+
+  /** Persists an AI-generated whole-document summary (see aiService.summarizeDocument) — the
+   *  service itself is "pure compute, caller persists", same shape as aiRegenerate, so this is
+   *  called from registerIpc.ts after the AI call resolves, not from within AiService. */
+  updateDocumentSummary(documentId: string, summary: string): void {
+    this.db.prepare(`UPDATE documents SET summary = ? WHERE id = ?`).run(summary, documentId)
   }
 
   /** Assigns (or clears, via null) which document_folders row a document belongs to — a narrow

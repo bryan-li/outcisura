@@ -7,6 +7,7 @@ import type {
   AiRegenerateResult,
   AiSharePrepRequest,
   AiSharePrepResult,
+  AiSummarizeResult,
   GenerationComplexity,
   ShareFormat
 } from '../shared/types'
@@ -203,6 +204,61 @@ export class AiService {
       throw new Error(`AI judging response is missing judgments for: ${missing.join(', ')}. Raw: ${text}`)
     }
     return { judgments: expectedAnswerIds.map((answerId) => ({ answerId, isCorrect: byId.get(answerId)! })) }
+  }
+
+  /** Whole-document summary — a separate call from regenerate() (one card's front/back), over
+   *  every parsed text element on every page, in reading order. "Pure compute, caller persists"
+   *  like every other AI call here: registerIpc.ts saves the result via repo.updateDocumentSummary
+   *  after this resolves, not this method itself. Text-only (unlike regenerate/OCR, which attach
+   *  images) — a whole deck's worth of slide images would be an expensive, mostly-redundant
+   *  attachment when the parsed text already carries the content; image-only slides (a photo with
+   *  no OCR'd text) just contribute nothing to the summary, same as they'd contribute nothing to a
+   *  human skimming the deck's outline. */
+  async summarizeDocument(documentId: string): Promise<AiSummarizeResult> {
+    if (!this.client) throw new Error('AI service unavailable: set an API key in Settings')
+
+    const pages = this.repo.getPages(documentId)
+    const text = pages
+      .map((page) => {
+        const elementText = this.repo
+          .getElements(page.id)
+          .map((el) => el.text)
+          .filter((t): t is string => !!t && t.trim().length > 0)
+          .join('\n')
+        return elementText ? `--- Page ${page.pageIndex + 1} ---\n${elementText}` : null
+      })
+      .filter((t): t is string => !!t)
+      .join('\n\n')
+
+    if (!text.trim()) throw new Error('This document has no extracted text to summarize (image-only slides aren\'t OCR\'d here).')
+
+    const message = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: this.buildSummarizePrompt(text) }]
+    })
+
+    const summary = message.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map((block) => block.text)
+      .join('')
+      .trim()
+
+    if (!summary) throw new Error('AI returned an empty summary')
+    return { summary }
+  }
+
+  private buildSummarizePrompt(text: string): string {
+    return [
+      'You are summarizing an entire imported study document (a slide deck or PDF) for a student.',
+      'Write a concise summary of the whole document\'s content — the main topics covered and how',
+      'they relate, not a page-by-page recap. Aim for 3-6 short paragraphs or a tight bulleted',
+      'outline, whichever fits the material better. No preamble like "This document covers..." —',
+      'start directly with the content.',
+      '',
+      'Document content (page markers included for your own orientation, don\'t reproduce them):',
+      text
+    ].join('\n')
   }
 
   private buildPrompt(req: AiRegenerateRequest): string {

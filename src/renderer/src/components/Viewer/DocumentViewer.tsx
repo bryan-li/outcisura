@@ -102,6 +102,12 @@ const pictureMenuHintStyle: CSSProperties = {
   fontWeight: 400
 }
 
+const summaryPanelStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 'var(--space-2)'
+}
+
 const recaptureBannerStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -489,6 +495,8 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
         </h1>
       </header>
 
+      <DocumentSummaryPanel document={document} />
+
       {recaptureTarget && (
         <div style={recaptureBannerStyle}>
           <span>
@@ -743,6 +751,50 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
           onSave={() => saveCreateModal(false)}
           onGenerateWithAi={() => saveCreateModal(true)}
         />
+      )}
+    </div>
+  )
+}
+
+/** AI summary of the whole document (see aiService.summarizeDocument) — distinct from per-card
+ *  generation, which works on one highlighted selection at a time. Collapsed by default once a
+ *  summary exists, so it doesn't push the actual page content down every time the document opens. */
+function DocumentSummaryPanel({ document }: { document: DocumentRecord }): JSX.Element {
+  const summarizeDocument = useDocumentsStore((s) => s.summarizeDocument)
+  const [expanded, setExpanded] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleGenerate(): Promise<void> {
+    setGenerating(true)
+    setError(null)
+    try {
+      await summarizeDocument(document.id)
+      setExpanded(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate summary')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  return (
+    <div style={summaryPanelStyle}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        {document.summary && (
+          <button onClick={() => setExpanded((v) => !v)} style={quietButtonStyle} title={expanded ? 'Collapse summary' : 'Expand summary'}>
+            {expanded ? '▼' : '▶'} Summary
+          </button>
+        )}
+        <button disabled={generating} onClick={handleGenerate} style={document.summary ? quietButtonStyle : primaryButtonStyle}>
+          {generating ? 'Summarizing…' : document.summary ? '🔄 Regenerate summary' : '✨ Summarize document'}
+        </button>
+      </div>
+      {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
+      {document.summary && expanded && (
+        <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', whiteSpace: 'pre-wrap', margin: 0, maxWidth: 720 }}>
+          {document.summary}
+        </p>
       )}
     </div>
   )

@@ -5,6 +5,7 @@ import type {
   AiRegenerateResult,
   AiSharePrepRequest,
   AiSharePrepResult,
+  AiSummarizeResult,
   AnkiExportResult,
   AnkiImportResult,
   ApiKeyStatus,
@@ -106,6 +107,7 @@ export const IpcChannels = {
   aiGenerateFromSources: 'ai:generateFromSources',
   aiPrepareForSharing: 'ai:prepareForSharing',
   aiJudgeFreeTextAnswers: 'ai:judgeFreeTextAnswers',
+  aiSummarizeDocument: 'ai:summarizeDocument',
   ocrRecognizePage: 'ocr:recognizePage',
   transcriptionTranscribe: 'transcription:transcribe',
   transcriptionGetCoverage: 'transcription:getCoverage',
@@ -210,6 +212,10 @@ export interface FlashcardApi {
      *  the host's own machine (hostSessionStore's revealResults), which persists the results
      *  itself via Supabase. */
     judgeFreeTextAnswers(req: AiJudgeFreeTextRequest): Promise<AiJudgeFreeTextResult>
+    /** Whole-document summary (see aiService.summarizeDocument) — unlike the other ai.* calls
+     *  above, main persists this one itself (documents.summary) once it resolves, since the
+     *  renderer has no other reason to see the raw text this was generated from. */
+    summarizeDocument(documentId: string): Promise<AiSummarizeResult>
   }
   reviewLog: {
     /** Every review grade ever logged — small enough for a personal deck to fetch whole and

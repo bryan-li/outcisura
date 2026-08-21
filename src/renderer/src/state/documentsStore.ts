@@ -34,6 +34,9 @@ interface DocumentsState {
    *  to the rest of the app (card backlinks via goToSource, the video timeline's marker list)
    *  without needing a full re-fetch. */
   registerPage: (documentId: string, page: PageRecord) => void
+  /** AI-generated whole-document summary — main persists it (documents.summary) itself once the
+   *  call resolves, so this just refreshes the one document's record with the result. */
+  summarizeDocument: (documentId: string) => Promise<void>
 }
 
 export const useDocumentsStore = create<DocumentsState>((set, get) => ({
@@ -153,5 +156,10 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
         ...state.pagesByDocument,
         [documentId]: [...(state.pagesByDocument[documentId] ?? []), page]
       }
-    }))
+    })),
+
+  summarizeDocument: async (documentId) => {
+    const { summary } = await window.api.ai.summarizeDocument(documentId)
+    set((state) => ({ documents: state.documents.map((d) => (d.id === documentId ? { ...d, summary } : d)) }))
+  }
 }))

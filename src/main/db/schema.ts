@@ -454,6 +454,13 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (card_id, tag_id)
   );
   CREATE INDEX idx_card_tags_tag ON card_tags(tag_id);
+  `,
+  `
+  -- AI-generated whole-document summary (distinct from a single card's front/back) — persisted so
+  -- it doesn't need regenerating every time the document reopens. Documents are local-only and
+  -- never sync, so this rides along with everything else on that table without any sync-engine
+  -- involvement.
+  ALTER TABLE documents ADD COLUMN summary TEXT;
   `
 ]
 
