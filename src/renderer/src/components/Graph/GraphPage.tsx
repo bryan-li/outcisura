@@ -10,8 +10,8 @@ export function GraphPage(): JSX.Element {
   const documents = useDocumentsStore((s) => s.documents)
 
   return (
-    <div style={pageStyle}>
-      <PageHeader title="Graph" subtitle="How your cards, folders, and source documents connect." />
+    <div style={{ ...pageStyle, gap: 'var(--space-4)' }}>
+      <PageHeader title="Graph" subtitle="How your cards, folders and sources connect — hover to draw nodes in, click to jump." />
       <CardGraph cards={cards} folders={folders} documents={documents} />
     </div>
   )

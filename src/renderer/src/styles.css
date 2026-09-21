@@ -504,3 +504,27 @@ aside svg {
 @media (prefers-reduced-motion: reduce) {
   .slim-range::-webkit-slider-thumb { transition: none; }
 }
+
+/* Graph: nodes pop in one after another (delay set inline), edges fade up behind them, the
+   tuning panel grows out of its button, the hover tooltip fades in. */
+@keyframes graph-node-in {
+  from { opacity: 0; transform: scale(0.2); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes graph-fade-in { from { opacity: 0; } }
+@keyframes graph-panel-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+.graph-node {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: graph-node-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.graph-edges { animation: graph-fade-in 700ms ease 150ms both; }
+.graph-tuning-panel { transform-origin: top right; animation: graph-panel-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.graph-tooltip { animation: graph-fade-in 120ms ease; }
+.graph-tuning-button:active { transform: scale(0.92); }
+@media (prefers-reduced-motion: reduce) {
+  .graph-node, .graph-edges, .graph-tuning-panel, .graph-tooltip { animation: none; }
+}

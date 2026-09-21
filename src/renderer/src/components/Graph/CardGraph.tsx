@@ -5,7 +5,7 @@ import { initializeNodes, tick, totalKineticEnergy, type GraphEdge, type GraphNo
 import { Icon } from '../Icon'
 
 const WIDTH = 900
-const HEIGHT = 560
+const HEIGHT = 440
 const MAX_TICKS = 350
 const SETTLE_THRESHOLD = 0.02
 const DOCUMENT_NODE_PREFIX = 'doc:'
@@ -430,10 +430,6 @@ export function CardGraph({
 
   return (
     <div>
-      <p style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-sm)', margin: '0 0 var(--space-3)' }}>
-        Cards connect to their folder and to each source document; folders connect to their own parent folder. Move
-        your cursor over the web to draw nearby nodes toward it. Click a card to jump to it, or a folder to open it.
-      </p>
       <div ref={containerRef} style={{ position: 'relative' }}>
         <div style={tuningWrapStyle}>
           <button
@@ -441,12 +437,15 @@ export function CardGraph({
             aria-expanded={tuningOpen}
             aria-controls="graph-tuning"
             title="Graph tuning"
+            className="graph-tuning-button"
             style={{ ...tuningButtonStyle, ...(tuningOpen ? { color: 'var(--accent)', borderColor: 'var(--accent)' } : null) }}
           >
-            <Icon name="sliders" bare size={15} />
+            <span style={{ display: 'inline-flex', transition: 'transform 260ms cubic-bezier(.2,.8,.2,1)', transform: tuningOpen ? 'rotate(90deg)' : 'none' }}>
+              <Icon name="sliders" bare size={15} />
+            </span>
           </button>
       {tuningOpen && (
-          <div id="graph-tuning" style={tuningPanelStyle}>
+          <div id="graph-tuning" className="graph-tuning-panel" style={tuningPanelStyle}>
             <GraphSlider
               id="graph-follow-rate"
               label="Pull strength"
@@ -479,7 +478,7 @@ export function CardGraph({
           onMouseLeave={handleSvgMouseLeave}
           style={{ width: '100%', height: 'auto', display: 'block', border: '1px solid var(--border)', borderRadius: 18, background: 'var(--bg)' }}
         >
-          <g opacity={0.35}>
+          <g opacity={0.35} className="graph-edges">
             {edges.map((edge, i) => {
               const a = liveNodes.get(edge.source)
               const b = liveNodes.get(edge.target)
@@ -488,7 +487,7 @@ export function CardGraph({
             })}
           </g>
           <g>
-            {[...liveNodes.values()].map((node) => {
+            {[...liveNodes.values()].map((node, index) => {
               const info = meta.get(node.id)
               if (!info) return null
               const radius = radiusFor(node.id)
@@ -514,7 +513,8 @@ export function CardGraph({
                       fillOpacity={0.85}
                       stroke={isHovered ? 'var(--fg)' : 'var(--bg)'}
                       strokeWidth={isHovered ? 2 : 1.5}
-                      style={{ transition: 'width 100ms ease, height 100ms ease' }}
+                      className="graph-node"
+                      style={{ transition: 'width 100ms ease, height 100ms ease', animationDelay: `${Math.min(index * 9, 500)}ms` }}
                     />
                   )}
                   {info.kind === 'folder' && (
@@ -527,7 +527,8 @@ export function CardGraph({
                       fill={colorFor(info)}
                       stroke={isHovered ? 'var(--fg)' : 'var(--bg)'}
                       strokeWidth={isHovered ? 2 : 1.5}
-                      style={{ transition: 'width 100ms ease, height 100ms ease' }}
+                      className="graph-node"
+                      style={{ transition: 'width 100ms ease, height 100ms ease', animationDelay: `${Math.min(index * 9, 500)}ms` }}
                     />
                   )}
                   {info.kind === 'card' && (
@@ -536,7 +537,8 @@ export function CardGraph({
                       fill={colorFor(info)}
                       stroke={isHovered ? 'var(--fg)' : 'var(--bg)'}
                       strokeWidth={isHovered ? 2 : 1.5}
-                      style={{ transition: 'r 100ms ease' }}
+                      className="graph-node"
+                      style={{ transition: 'r 100ms ease', animationDelay: `${Math.min(index * 9, 500)}ms` }}
                     />
                   )}
                 </g>
@@ -550,7 +552,7 @@ export function CardGraph({
             if (!info) return null
             const icon = info.kind === 'document' ? <Icon name="file" /> : info.kind === 'folder' ? <Icon name="folder" /> : null
             return (
-              <div style={{ ...tooltipStyle, left: hovered.x + 12, top: hovered.y + 12 }}>
+              <div className="graph-tooltip" style={{ ...tooltipStyle, left: hovered.x + 12, top: hovered.y + 12 }}>
                 {icon}
                 {labelFor(hovered.id, info)}
               </div>
