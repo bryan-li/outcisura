@@ -18,6 +18,16 @@ function formatSyncedAt(iso: string): string {
   return `${hours} hour${hours === 1 ? '' : 's'} ago`
 }
 
+type SettingsTab = 'account' | 'data' | 'general'
+
+/** Settings used to be one long column of unrelated sections. Grouped by what you'd be doing when
+ *  you open it: sort out your account and AI access, deal with your data, or tweak how the app looks. */
+const TABS: { id: SettingsTab; label: string }[] = [
+  { id: 'account', label: 'Account & AI' },
+  { id: 'data', label: 'Data' },
+  { id: 'general', label: 'Appearance' }
+]
+
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: 'system', label: 'System' },
   { value: 'light', label: 'Light' },
@@ -30,6 +40,7 @@ export function SettingsView(): JSX.Element {
   const theme = useUiStore((s) => s.theme)
   const setTheme = useUiStore((s) => s.setTheme)
   const [zoom, setZoom] = useZoomFactor()
+  const [tab, setTab] = useState<SettingsTab>('account')
 
   const [keyStatus, setKeyStatus] = useState<ApiKeyStatus | null>(null)
   const [keyInput, setKeyInput] = useState('')
@@ -165,96 +176,28 @@ export function SettingsView(): JSX.Element {
 
       <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0 }}>Settings</h1>
 
+      <div role="tablist" style={tabListStyle}>
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            style={tab === t.id ? tabActiveStyle : tabStyle}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'account' && (
+        <>
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Account</h2>
         <p style={hintStyle}>Signed in as {session?.user.email}</p>
         <button onClick={() => signOut()} style={quietTextButtonStyle}>
           Sign out
         </button>
-      </section>
-
-      <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>Cloud sync</h2>
-        <p style={hintStyle}>
-          Cards, folders, and review history always live on this device — instant, no network wait.
-          When on, changes also sync to your account in the background, and anything from other
-          devices signed into the same account gets pulled in too.
-        </p>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', fontSize: 'var(--font-sm)' }}>
-          <input type="checkbox" checked={syncEnabled} onChange={(e) => setSyncEnabled(e.target.checked)} />
-          Sync to cloud
-        </label>
-        {syncEnabled && (
-          <>
-            <p style={hintStyle}>
-              {syncStatus === 'syncing'
-                ? 'Syncing…'
-                : syncStatus === 'error'
-                  ? `Sync error: ${lastSyncError}`
-                  : lastSyncedAt
-                    ? `Synced ${formatSyncedAt(lastSyncedAt)}`
-                    : 'Not synced yet'}
-              {pendingCount > 0 ? ` — ${pendingCount} change${pendingCount === 1 ? '' : 's'} waiting to sync` : ''}
-            </p>
-            <button disabled={manualSyncing} onClick={handleManualSync} style={quietTextButtonStyle}>
-              {manualSyncing ? 'Syncing…' : 'Sync now'}
-            </button>
-          </>
-        )}
-      </section>
-
-      <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>Appearance</h2>
-        <div style={segmentedRowStyle}>
-          {THEME_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setTheme(opt.value)}
-              style={theme === opt.value ? segmentButtonActiveStyle : segmentButtonStyle}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>Interface scale</h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <input
-            type="range"
-            min={MIN_ZOOM}
-            max={MAX_ZOOM}
-            step={0.05}
-            value={zoom}
-            onChange={(e) => setZoom(Number(e.target.value))}
-            style={{ flex: 1 }}
-          />
-          <span style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', width: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-            {Math.round(zoom * 100)}%
-          </span>
-          <button onClick={() => setZoom(DEFAULT_ZOOM)} style={quietTextButtonStyle}>
-            Reset
-          </button>
-        </div>
-      </section>
-
-      <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>Anki</h2>
-        <p style={hintStyle}>
-          Export your whole library as a .apkg file Anki can import, or import notes from one. Basic and
-          cloze notes both round-trip; scheduling doesn't carry over either direction — imported cards
-          start fresh, same as any newly created card.
-        </p>
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <button disabled={ankiBusy !== null} onClick={handleAnkiExport} style={primaryButtonStyle}>
-            {ankiBusy === 'export' ? 'Exporting…' : 'Export to Anki'}
-          </button>
-          <button disabled={ankiBusy !== null} onClick={handleAnkiImport} style={quietTextButtonStyle}>
-            {ankiBusy === 'import' ? 'Importing…' : 'Import from Anki'}
-          </button>
-        </div>
-        {ankiMessage && <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>{ankiMessage}</p>}
       </section>
 
       <AiAccessSection />
@@ -314,6 +257,100 @@ export function SettingsView(): JSX.Element {
         </div>
         {openaiKeyError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{openaiKeyError}</p>}
       </section>
+        </>
+      )}
+
+      {tab === 'data' && (
+        <>
+      <section style={sectionStyle}>
+        <h2 style={sectionTitleStyle}>Cloud sync</h2>
+        <p style={hintStyle}>
+          Cards, folders, and review history always live on this device — instant, no network wait.
+          When on, changes also sync to your account in the background, and anything from other
+          devices signed into the same account gets pulled in too.
+        </p>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', fontSize: 'var(--font-sm)' }}>
+          <input type="checkbox" checked={syncEnabled} onChange={(e) => setSyncEnabled(e.target.checked)} />
+          Sync to cloud
+        </label>
+        {syncEnabled && (
+          <>
+            <p style={hintStyle}>
+              {syncStatus === 'syncing'
+                ? 'Syncing…'
+                : syncStatus === 'error'
+                  ? `Sync error: ${lastSyncError}`
+                  : lastSyncedAt
+                    ? `Synced ${formatSyncedAt(lastSyncedAt)}`
+                    : 'Not synced yet'}
+              {pendingCount > 0 ? ` — ${pendingCount} change${pendingCount === 1 ? '' : 's'} waiting to sync` : ''}
+            </p>
+            <button disabled={manualSyncing} onClick={handleManualSync} style={quietTextButtonStyle}>
+              {manualSyncing ? 'Syncing…' : 'Sync now'}
+            </button>
+          </>
+        )}
+      </section>
+
+      <section style={sectionStyle}>
+        <h2 style={sectionTitleStyle}>Anki</h2>
+        <p style={hintStyle}>
+          Export your whole library as a .apkg file Anki can import, or import notes from one. Basic and
+          cloze notes both round-trip; scheduling doesn't carry over either direction — imported cards
+          start fresh, same as any newly created card.
+        </p>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <button disabled={ankiBusy !== null} onClick={handleAnkiExport} style={primaryButtonStyle}>
+            {ankiBusy === 'export' ? 'Exporting…' : 'Export to Anki'}
+          </button>
+          <button disabled={ankiBusy !== null} onClick={handleAnkiImport} style={quietTextButtonStyle}>
+            {ankiBusy === 'import' ? 'Importing…' : 'Import from Anki'}
+          </button>
+        </div>
+        {ankiMessage && <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>{ankiMessage}</p>}
+      </section>
+        </>
+      )}
+
+      {tab === 'general' && (
+        <>
+      <section style={sectionStyle}>
+        <h2 style={sectionTitleStyle}>Appearance</h2>
+        <div style={segmentedRowStyle}>
+          {THEME_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setTheme(opt.value)}
+              style={theme === opt.value ? segmentButtonActiveStyle : segmentButtonStyle}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section style={sectionStyle}>
+        <h2 style={sectionTitleStyle}>Interface scale</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <input
+            type="range"
+            min={MIN_ZOOM}
+            max={MAX_ZOOM}
+            step={0.05}
+            value={zoom}
+            onChange={(e) => setZoom(Number(e.target.value))}
+            style={{ flex: 1 }}
+          />
+          <span style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', width: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+            {Math.round(zoom * 100)}%
+          </span>
+          <button onClick={() => setZoom(DEFAULT_ZOOM)} style={quietTextButtonStyle}>
+            Reset
+          </button>
+        </div>
+      </section>
+        </>
+      )}
     </div>
   )
 }
@@ -397,4 +434,30 @@ const quietTextButtonStyle: CSSProperties = {
   color: 'var(--fg-muted)',
   cursor: 'pointer',
   fontSize: 'var(--font-sm)'
+}
+
+const tabListStyle: CSSProperties = {
+  display: 'flex',
+  gap: 'var(--space-1)',
+  borderBottom: '1px solid var(--border)',
+  marginBottom: 'calc(var(--space-2) * -1)'
+}
+
+const tabStyle: CSSProperties = {
+  border: 'none',
+  borderBottom: '2px solid transparent',
+  background: 'none',
+  color: 'var(--fg-muted)',
+  cursor: 'pointer',
+  fontSize: 'var(--font-sm)',
+  padding: '6px 12px',
+  marginBottom: -1,
+  borderRadius: 0
+}
+
+const tabActiveStyle: CSSProperties = {
+  ...tabStyle,
+  borderBottom: '2px solid var(--accent)',
+  color: 'var(--fg)',
+  fontWeight: 600
 }

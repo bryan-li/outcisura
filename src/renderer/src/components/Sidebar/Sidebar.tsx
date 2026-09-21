@@ -19,6 +19,7 @@ import { CARD_DRAG_MIME, readCardDragIds, writeCardDragIds } from '../CardBrowse
 import { MarqueeSelect } from '../Grid/MarqueeSelect'
 import type { ImportProgress } from '../../types/importProgress'
 import { ImportProgressBar } from './ImportProgressBar'
+import { RowMenu } from './RowMenu'
 
 function ext(file: File): string | undefined {
   return file.name.split('.').pop()?.toLowerCase()
@@ -227,16 +228,27 @@ export function Sidebar(): JSX.Element {
       <div style={sidebarScrollStyle}>
       <div style={{ padding: '0 var(--space-2)' }}>
         <NavItem label="🔍 Search" active={false} onClick={openSearch} title="Search cards and documents (⌘K)" />
+
+        <NavGroupLabel>Study</NavGroupLabel>
         <NavItem label="🏠 Home" active={isView(view, { type: 'home' })} onClick={() => setView({ type: 'home' })} />
-        <NavItem label="🗂 All Cards" active={isView(view, { type: 'cards' })} onClick={() => setView({ type: 'cards' })} />
         <NavItem
           label={`🔁 Review${dueCount > 0 ? ` (${dueCount})` : ''}`}
           active={view.type === 'review' || view.type === 'review-dashboard'}
           onClick={() => setView({ type: 'review-dashboard' })}
         />
+        <NavItem label="🗂 All Cards" active={isView(view, { type: 'cards' })} onClick={() => setView({ type: 'cards' })} />
         <NavItem label="🕸️ Graph" active={isView(view, { type: 'graph' })} onClick={() => setView({ type: 'graph' })} />
+        {orphanCount > 0 && (
+          <NavItem
+            label={`⚠️ Missing Sources (${orphanCount})`}
+            active={isView(view, { type: 'missing-sources' })}
+            onClick={() => setView({ type: 'missing-sources' })}
+          />
+        )}
+
+        <NavGroupLabel>Live sessions</NavGroupLabel>
         <NavItem
-          label="📡 Hostable Decks"
+          label="📡 Host a deck"
           active={isView(view, { type: 'hostable-decks' })}
           onClick={() => setView({ type: 'hostable-decks' })}
         />
@@ -245,14 +257,6 @@ export function Sidebar(): JSX.Element {
           active={view.type === 'live-session-join' || view.type === 'live-session-play'}
           onClick={() => setView({ type: 'live-session-join' })}
         />
-        {isAiAdmin && <NavItem label="🛠 AI Admin" active={isView(view, { type: 'admin' })} onClick={() => setView({ type: 'admin' })} />}
-        {orphanCount > 0 && (
-          <NavItem
-            label={`⚠️ Missing Sources (${orphanCount})`}
-            active={isView(view, { type: 'missing-sources' })}
-            onClick={() => setView({ type: 'missing-sources' })}
-          />
-        )}
       </div>
 
       <div style={sectionStyle}>
@@ -448,6 +452,15 @@ export function Sidebar(): JSX.Element {
       </div>
 
       <div style={sidebarFooterStyle}>
+        {isAiAdmin && (
+          <button
+            onClick={() => setView({ type: 'admin' })}
+            style={{ ...settingsButtonStyle, background: isView(view, { type: 'admin' }) ? 'var(--bg-active)' : 'none', fontWeight: isView(view, { type: 'admin' }) ? 600 : 400 }}
+            title="Manage AI budgets and accounts"
+          >
+            🛠 AI Admin
+          </button>
+        )}
         <button onClick={() => setView({ type: 'settings', returnTo: view })} style={settingsButtonStyle} title="Settings">
           ⚙️ Settings
         </button>
@@ -467,7 +480,9 @@ function NewlyCreatedSection(): JSX.Element | null {
   const view = useUiStore((s) => s.view)
   const setView = useUiStore((s) => s.setView)
   const focusCard = useUiStore((s) => s.focusCard)
-  const [collapsedDocs, setCollapsedDocs] = useState<Set<string>>(new Set())
+  // Groups start COLLAPSED: with dozens of unfiled cards, listing every one under the tree buried the
+  // folders below it. Track which the user has opened, rather than which they've closed.
+  const [expandedDocs, setExpandedDocs] = useState<Set<string>>(new Set())
   const [sectionCollapsed, setSectionCollapsed] = useState(false)
 
   const unfiled = cards.filter((c) => !c.folderId)
@@ -482,7 +497,7 @@ function NewlyCreatedSection(): JSX.Element | null {
   }
 
   function toggle(key: string): void {
-    setCollapsedDocs((prev) => {
+    setExpandedDocs((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -502,7 +517,7 @@ function NewlyCreatedSection(): JSX.Element | null {
       />
       {!sectionCollapsed &&
         [...byDocument.entries()].map(([key, docCards]) => {
-          const collapsed = collapsedDocs.has(key)
+          const collapsed = !expandedDocs.has(key)
           const name = key === '__none__' ? 'No source' : documents.find((d) => d.id === key)?.filename ?? 'Unknown document'
           const sorted = [...docCards].sort(bySortOrder)
           const ids = sorted.map((c) => c.id)
@@ -525,6 +540,12 @@ function NewlyCreatedSection(): JSX.Element | null {
         })}
     </div>
   )
+}
+
+/** Small uppercase label that groups the nav items under it — same look as the Library/Folders
+ *  section headers, minus the caret and click target (these groups don't collapse). */
+function NavGroupLabel({ children }: { children: string }): JSX.Element {
+  return <div style={navGroupLabelStyle}>{children}</div>
 }
 
 function NavItem({
@@ -990,15 +1011,13 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
           >
             🔁
           </button>
-          <button onClick={props.onStartCreateChild} title="New subfolder" style={smallIconButton}>
-            ＋
-          </button>
-          <button onClick={props.onStartRename} title="Rename" style={smallIconButton}>
-            ✏️
-          </button>
-          <button onClick={props.onDelete} title="Delete folder" style={smallIconButton}>
-            🗑
-          </button>
+          <RowMenu
+            items={[
+              { label: 'New subfolder', onSelect: props.onStartCreateChild },
+              { label: 'Rename', onSelect: props.onStartRename },
+              { label: 'Delete folder', onSelect: props.onDelete, danger: true }
+            ]}
+          />
         </div>
       )}
 
@@ -1199,15 +1218,13 @@ function DocumentFolderNode(props: DocumentFolderNodeProps): JSX.Element {
           <button onClick={props.onToggleCollapse} style={navFolderTitleStyle}>
             📁 {folder.name} <span style={{ color: 'var(--fg-faint)' }}>({ownDocuments.length})</span>
           </button>
-          <button onClick={props.onStartCreateChild} title="New subfolder" style={smallIconButton}>
-            ＋
-          </button>
-          <button onClick={props.onStartRename} title="Rename" style={smallIconButton}>
-            ✏️
-          </button>
-          <button onClick={props.onDelete} title="Delete folder" style={smallIconButton}>
-            🗑
-          </button>
+          <RowMenu
+            items={[
+              { label: 'New subfolder', onSelect: props.onStartCreateChild },
+              { label: 'Rename', onSelect: props.onStartRename },
+              { label: 'Delete folder', onSelect: props.onDelete, danger: true }
+            ]}
+          />
         </div>
       )}
 
@@ -1385,6 +1402,15 @@ const settingsButtonStyle: CSSProperties = {
   fontSize: 'var(--font-sm)',
   padding: '6px 8px',
   borderRadius: 'var(--radius-sm)'
+}
+
+const navGroupLabelStyle: CSSProperties = {
+  fontSize: 'var(--font-xs)',
+  fontWeight: 700,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
+  color: 'var(--fg-faint)',
+  padding: '10px 10px 3px'
 }
 
 const sectionStyle: CSSProperties = {
