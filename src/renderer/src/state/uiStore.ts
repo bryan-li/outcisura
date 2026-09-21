@@ -36,6 +36,7 @@ export type MainView =
   /** Decks ready to host (your own prepped folders + public premade decks). Always shown in the
    *  sidebar, unlike missing-sources' count-gated visibility — see HostableDecksView.tsx. */
   | { type: 'hostable-decks' }
+  | { type: 'admin' }
   /** The host's lobby for a just-created live session — join code + live participant list, before
    *  starting. See HostLobbyView.tsx/hostSessionStore.ts. */
   | { type: 'host-lobby'; sessionId: string }

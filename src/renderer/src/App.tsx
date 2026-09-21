@@ -5,6 +5,8 @@ import { useCardsStore } from './state/cardsStore'
 import { useFoldersStore } from './state/foldersStore'
 import { useReviewLogStore } from './state/reviewLogStore'
 import { useTagsStore } from './state/tagsStore'
+import { useAiAdminStore } from './state/aiAdminStore'
+import { AdminDashboard } from './components/Admin/AdminDashboard'
 import { useUiStore } from './state/uiStore'
 import { useSyncEnabledStore } from './state/syncEnabledStore'
 import { useConnectivityStore } from './state/connectivityStore'
@@ -73,6 +75,7 @@ function AppShell(): JSX.Element {
   const loadFolders = useFoldersStore((s) => s.loadFolders)
   const loadReviewLog = useReviewLogStore((s) => s.loadReviewLog)
   const loadTags = useTagsStore((s) => s.loadTags)
+  const loadAiAdmin = useAiAdminStore((s) => s.load)
   const syncEnabled = useSyncEnabledStore((s) => s.enabled)
   const lastSyncedAt = useConnectivityStore((s) => s.lastSyncedAt)
 
@@ -83,7 +86,8 @@ function AppShell(): JSX.Element {
     loadFolders()
     loadReviewLog()
     loadTags()
-  }, [loadDocuments, loadDocumentFolders, loadCards, loadFolders, loadReviewLog, loadTags])
+    void loadAiAdmin()
+  }, [loadDocuments, loadDocumentFolders, loadCards, loadFolders, loadReviewLog, loadTags, loadAiAdmin])
 
   // Local SQLite is always the primary read/write path (loaded above regardless), so this only
   // controls whether the background engine also keeps Supabase in sync — see syncEngine.ts and
@@ -138,6 +142,7 @@ function AppShell(): JSX.Element {
           {view.type === 'graph' && <GraphPage />}
           {view.type === 'missing-sources' && <MissingSourcesView />}
           {view.type === 'hostable-decks' && <HostableDecksView />}
+          {view.type === 'admin' && <AdminDashboard />}
           {view.type === 'host-lobby' && <HostLobbyView sessionId={view.sessionId} />}
           {view.type === 'host-control' && <HostControlView sessionId={view.sessionId} />}
           {view.type === 'live-session-join' && <JoinLiveSessionView />}

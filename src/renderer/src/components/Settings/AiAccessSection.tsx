@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useUiStore } from '../../state/uiStore'
 
 interface MyStatus {
   monthly_budget_usd: number
@@ -7,18 +8,6 @@ interface MyStatus {
   requests_per_minute: number
   disabled: boolean
   is_admin: boolean
-}
-
-interface AdminRow {
-  user_id: string
-  email: string | null
-  username: string | null
-  monthly_budget_usd: number
-  requests_per_minute: number
-  disabled: boolean
-  note: string | null
-  spent_month_usd: number
-  last_used_at: string | null
 }
 
 const usd = (n: number): string => `$${Number(n).toFixed(2)}`
@@ -30,6 +19,7 @@ const usd = (n: number): string => `$${Number(n).toFixed(2)}`
 export function AiAccessSection(): JSX.Element {
   const [status, setStatus] = useState<MyStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const setView = useUiStore((s) => s.setView)
 
   const loadStatus = useCallback(async () => {
     const { data, error: err } = await supabase.rpc('ai_my_status')
@@ -71,99 +61,14 @@ export function AiAccessSection(): JSX.Element {
               </div>
             </>
           )}
-          {status.is_admin && <AdminTable onChanged={loadStatus} />}
+          {status.is_admin && (
+            <button onClick={() => setView({ type: 'admin' })} style={linkButtonStyle}>
+              Open the AI admin dashboard →
+            </button>
+          )}
         </>
       )}
     </section>
-  )
-}
-
-function AdminTable({ onChanged }: { onChanged: () => void }): JSX.Element {
-  const [rows, setRows] = useState<AdminRow[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const load = useCallback(async () => {
-    const { data, error: err } = await supabase.rpc('ai_admin_overview')
-    if (err) setError(err.message)
-    else setRows(data as AdminRow[])
-  }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <h3 style={{ fontSize: 'var(--font-sm)', margin: 0, fontWeight: 600 }}>Accounts (admin)</h3>
-        <button onClick={() => void load()} style={quietButtonStyle}>
-          Refresh
-        </button>
-      </div>
-      <p style={hintStyle}>
-        Budgets are in USD per calendar month (UTC). Accounts start at $0 until you grant one. Only you can see this table.
-      </p>
-      {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
-      {rows?.map((row) => <AdminRowEditor key={row.user_id} row={row} onSaved={() => { void load(); onChanged() }} />)}
-    </div>
-  )
-}
-
-function AdminRowEditor({ row, onSaved }: { row: AdminRow; onSaved: () => void }): JSX.Element {
-  const [budget, setBudget] = useState(String(row.monthly_budget_usd))
-  const [rpm, setRpm] = useState(String(row.requests_per_minute))
-  const [disabled, setDisabled] = useState(row.disabled)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const budgetNum = Number(budget)
-  const rpmNum = Number(rpm)
-  const valid = Number.isFinite(budgetNum) && budgetNum >= 0 && Number.isInteger(rpmNum) && rpmNum > 0
-  const dirty = budgetNum !== Number(row.monthly_budget_usd) || rpmNum !== row.requests_per_minute || disabled !== row.disabled
-
-  async function save(): Promise<void> {
-    setSaving(true)
-    setError(null)
-    const { error: err } = await supabase.rpc('ai_admin_set_quota', {
-      target: row.user_id,
-      budget: budgetNum,
-      rpm: rpmNum,
-      is_disabled: disabled,
-      quota_note: row.note
-    })
-    setSaving(false)
-    if (err) setError(err.message)
-    else onSaved()
-  }
-
-  return (
-    <div style={rowStyle}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {row.username ?? row.email ?? row.user_id}
-        </div>
-        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-muted)' }}>
-          {row.username && row.email ? `${row.email} · ` : ''}
-          {usd(row.spent_month_usd)} spent
-        </div>
-        {error && <div style={{ fontSize: 'var(--font-xs)', color: 'var(--danger)' }}>{error}</div>}
-      </div>
-      <label style={fieldStyle} title="Monthly budget (USD)">
-        $
-        <input value={budget} onChange={(e) => setBudget(e.target.value)} inputMode="decimal" style={{ ...numberInputStyle, width: 60 }} />
-      </label>
-      <label style={fieldStyle} title="Max requests per minute">
-        <input value={rpm} onChange={(e) => setRpm(e.target.value)} inputMode="numeric" style={{ ...numberInputStyle, width: 40 }} />
-        /min
-      </label>
-      <label style={fieldStyle} title="Block this account from AI entirely">
-        <input type="checkbox" checked={disabled} onChange={(e) => setDisabled(e.target.checked)} />
-        off
-      </label>
-      <button disabled={!dirty || !valid || saving} onClick={() => void save()} style={saveButtonStyle}>
-        {saving ? '…' : 'Save'}
-      </button>
-    </div>
   )
 }
 
@@ -178,46 +83,18 @@ const sectionStyle: CSSProperties = {
 const sectionTitleStyle: CSSProperties = { fontSize: 'var(--font-md)', fontWeight: 600, margin: 0 }
 const hintStyle: CSSProperties = { fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }
 
-const rowStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 'var(--space-2)',
-  padding: '6px 0',
-  borderTop: '1px solid var(--border)'
-}
 
-const fieldStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 3,
-  fontSize: 'var(--font-xs)',
-  color: 'var(--fg-muted)'
-}
 
-const numberInputStyle: CSSProperties = {
-  fontSize: 'var(--font-sm)',
-  padding: '3px 5px',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg)',
-  color: 'inherit'
-}
 
-const saveButtonStyle: CSSProperties = {
-  border: '1px solid var(--accent)',
-  background: 'var(--accent-soft)',
-  color: 'var(--accent)',
-  fontWeight: 600,
-  borderRadius: 'var(--radius-sm)',
-  padding: '3px 10px',
-  cursor: 'pointer',
-  fontSize: 'var(--font-xs)'
-}
 
-const quietButtonStyle: CSSProperties = {
+
+const linkButtonStyle: CSSProperties = {
+  alignSelf: 'flex-start',
   border: 'none',
   background: 'none',
-  color: 'var(--fg-muted)',
+  color: 'var(--accent)',
   cursor: 'pointer',
-  fontSize: 'var(--font-xs)'
+  fontSize: 'var(--font-sm)',
+  fontWeight: 600,
+  padding: 0
 }

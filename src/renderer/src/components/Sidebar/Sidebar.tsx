@@ -5,6 +5,7 @@ import { useCardsStore } from '../../state/cardsStore'
 import { useFoldersStore } from '../../state/foldersStore'
 import { useUiStore, type MainView } from '../../state/uiStore'
 import { useConnectivityStore } from '../../state/connectivityStore'
+import { useAiAdminStore } from '../../state/aiAdminStore'
 import { parsePdf } from '../../parsers/pdfParser'
 import { parsePptx } from '../../parsers/pptxParser'
 import { parseVideoFile } from '../../parsers/videoParser'
@@ -34,6 +35,7 @@ export function Sidebar(): JSX.Element {
   const setView = useUiStore((s) => s.setView)
   const focusCard = useUiStore((s) => s.focusCard)
   const openSearch = useUiStore((s) => s.openSearch)
+  const isAiAdmin = useAiAdminStore((s) => s.isAdmin)
 
   const documents = useDocumentsStore((s) => s.documents)
   const documentFolders = useDocumentsStore((s) => s.documentFolders)
@@ -243,6 +245,7 @@ export function Sidebar(): JSX.Element {
           active={view.type === 'live-session-join' || view.type === 'live-session-play'}
           onClick={() => setView({ type: 'live-session-join' })}
         />
+        {isAiAdmin && <NavItem label="🛠 AI Admin" active={isView(view, { type: 'admin' })} onClick={() => setView({ type: 'admin' })} />}
         {orphanCount > 0 && (
           <NavItem
             label={`⚠️ Missing Sources (${orphanCount})`}
