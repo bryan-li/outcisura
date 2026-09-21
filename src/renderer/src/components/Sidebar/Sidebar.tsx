@@ -1225,6 +1225,7 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
             items={[
               { label: 'New subfolder', onSelect: props.onStartCreateChild },
               { label: 'Rename', onSelect: props.onStartRename },
+              { label: 'Export to Anki…', onSelect: () => void exportFolderToAnki(folder.id) },
               { label: 'Delete folder', onSelect: props.onDelete, danger: true }
             ]}
           />
@@ -1558,6 +1559,18 @@ const wordmarkStyle: CSSProperties = {
 /** The panel's glass finish: a thin gradient border that catches light at opposite corners (the
  *  "rim"), a faint sheen over the top, and the body gradient — all layered as backgrounds so the rim
  *  follows the rounded corners. Colours come from --glass-* tokens, tuned separately per theme. */
+/** Saves one folder (and its subfolders) as an Anki .apkg; the main process shows the save dialog. */
+async function exportFolderToAnki(folderId: string): Promise<void> {
+  try {
+    const result = await window.api.anki.exportAll(folderId)
+    // Dialog dismissed, or nothing to export — both a quiet no-op.
+    if (result.canceled) return
+    window.alert(`Exported ${result.count} card${result.count === 1 ? '' : 's'} to ${result.path}`)
+  } catch (err) {
+    window.alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
 const glassPanel: CSSProperties = {
   border: '1.5px solid transparent',
   background:

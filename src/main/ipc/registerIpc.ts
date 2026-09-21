@@ -35,6 +35,7 @@ import type { TranscriptionService } from '../transcriptionService'
 import type { Repository } from '../db/repository'
 import { readImageAsDataUrl, saveDataUrlImage, saveImageBuffer } from '../imageStore'
 import { buildAnkiPackage, parseAnkiPackage } from '../anki'
+import { importParsedNotes } from '../ankiImport'
 import { setProxySession } from '../anthropicClient'
 import { convertPptxToPdf } from '../pptxConverter'
 import { getApiKeyStatus, setApiKey, getOpenAiApiKeyStatus, setOpenAiApiKey } from '../settingsStore'
@@ -156,16 +157,34 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
     setProxySession(session)
   })
 
-  ipcMain.handle(IpcChannels.ankiExportAll, async () => {
-    const cards = repo.listCards()
+  ipcMain.handle(IpcChannels.ankiExportAll, async (_event, folderId?: string) => {
+    const folders = repo.listFolders()
+    let cards = repo.listCards()
+    let deckName = 'Outcisura'
+    if (folderId) {
+      // The folder plus every folder nested under it.
+      const inScope = new Set<string>([folderId])
+      let grew = true
+      while (grew) {
+        grew = false
+        for (const f of folders) {
+          if (f.parentId && inScope.has(f.parentId) && !inScope.has(f.id)) {
+            inScope.add(f.id)
+            grew = true
+          }
+        }
+      }
+      cards = cards.filter((c) => c.folderId && inScope.has(c.folderId))
+      deckName = folders.find((f) => f.id === folderId)?.name ?? deckName
+    }
     if (cards.length === 0) return { canceled: true }
     const { canceled, filePath } = await dialog.showSaveDialog({
       title: 'Export to Anki',
-      defaultPath: 'outcisura-export.apkg',
+      defaultPath: `${deckName.replace(/[\\/:*?"<>|]/g, '-')}.apkg`,
       filters: [{ name: 'Anki Package', extensions: ['apkg'] }]
     })
     if (canceled || !filePath) return { canceled: true }
-    const buffer = await buildAnkiPackage(cards, 'Outcisura Export')
+    const buffer = await buildAnkiPackage(cards, { folders, tags: repo.listTags(), defaultDeckName: 'Outcisura' })
     writeFileSync(filePath, buffer)
     return { canceled: false, path: filePath, count: cards.length }
   })
@@ -178,16 +197,9 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
     })
     if (canceled || filePaths.length === 0) return { canceled: true, imported: 0 }
     const notes = await parseAnkiPackage(readFileSync(filePaths[0]))
-    let imported = 0
-    for (const note of notes) {
-      const card = repo.createCard({ front: note.front, back: note.back, cardType: note.cardType, sources: [] })
-      if (note.images.length > 0) {
-        const imagePaths = note.images.map((img) => saveImageBuffer(img.data, img.filename))
-        repo.addCardImages(card.id, imagePaths)
-      }
-      imported++
-    }
-    return { canceled: false, imported }
+
+    const summary = importParsedNotes(repo, notes)
+    return { canceled: false, ...summary }
   })
 
   ipcMain.handle(IpcChannels.syncGetPendingOps, () => repo.getPendingSyncOps())

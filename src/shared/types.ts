@@ -394,6 +394,10 @@ export interface AnkiExportResult {
 export interface AnkiImportResult {
   canceled: boolean
   imported: number
+  /** Notes left out because an identical card (same front and back) already exists. */
+  skipped?: number
+  /** Folders created to mirror the package's decks. */
+  foldersCreated?: number
 }
 
 /** Carries the card's own content rather than just its id — main no longer looks the card up

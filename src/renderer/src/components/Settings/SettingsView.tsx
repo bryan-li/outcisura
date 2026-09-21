@@ -5,6 +5,8 @@ import { useUiStore, type Theme } from '../../state/uiStore'
 import { useSyncEnabledStore } from '../../state/syncEnabledStore'
 import { useConnectivityStore } from '../../state/connectivityStore'
 import { useCardsStore } from '../../state/cardsStore'
+import { useFoldersStore } from '../../state/foldersStore'
+import { useTagsStore } from '../../state/tagsStore'
 import { AiAccessSection } from './AiAccessSection'
 import { runSyncCycle } from '../../lib/syncEngine'
 import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useZoomFactor } from '../../hooks/useZoomFactor'
@@ -79,6 +81,8 @@ export function SettingsView(): JSX.Element {
   }
 
   const loadCards = useCardsStore((s) => s.loadCards)
+  const loadFolders = useFoldersStore((s) => s.loadFolders)
+  const loadTags = useTagsStore((s) => s.loadTags)
   const [ankiBusy, setAnkiBusy] = useState<'export' | 'import' | null>(null)
   const [ankiMessage, setAnkiMessage] = useState<string | null>(null)
 
@@ -101,8 +105,12 @@ export function SettingsView(): JSX.Element {
     try {
       const result = await window.api.anki.import()
       if (!result.canceled) {
-        setAnkiMessage(`Imported ${result.imported} card${result.imported === 1 ? '' : 's'}`)
-        await loadCards()
+        const extras = [
+          result.foldersCreated ? `${result.foldersCreated} folder${result.foldersCreated === 1 ? '' : 's'} created` : null,
+          result.skipped ? `${result.skipped} duplicate${result.skipped === 1 ? '' : 's'} skipped` : null
+        ].filter(Boolean)
+        setAnkiMessage(`Imported ${result.imported} card${result.imported === 1 ? '' : 's'}${extras.length ? ` (${extras.join(', ')})` : ''}`)
+        await Promise.all([loadCards(), loadFolders(), loadTags()])
       }
     } catch (err) {
       setAnkiMessage(err instanceof Error ? `Import failed: ${err.message}` : 'Import failed')
@@ -299,9 +307,10 @@ export function SettingsView(): JSX.Element {
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Anki</h2>
         <p style={hintStyle}>
-          Export your whole library as a .apkg file Anki can import, or import notes from one. Basic and
-          cloze notes both round-trip; scheduling doesn't carry over either direction — imported cards
-          start fresh, same as any newly created card.
+          Export your whole library as a .apkg file Anki can import, or import one. Basic and cloze cards,
+          folders (as decks), tags and review progress all carry over both ways, and images come along.
+          To export a single folder, use its ⋯ menu in the sidebar. Importing the same package twice skips
+          cards you already have.
         </p>
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
           <button disabled={ankiBusy !== null} onClick={handleAnkiExport} style={primaryButtonStyle}>

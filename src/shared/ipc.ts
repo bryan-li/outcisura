@@ -248,7 +248,8 @@ export interface FlashcardApi {
    *  (see registerIpc.ts), so the renderer only learns the outcome once the user picks a file (or
    *  cancels). See main/anki.ts for the legacy-schema format this targets. */
   anki: {
-    exportAll(): Promise<AnkiExportResult>
+    /** Exports every card, or just one folder (and its subfolders) when folderId is given. */
+    exportAll(folderId?: string): Promise<AnkiExportResult>
     import(): Promise<AnkiImportResult>
   }
   /** Bridges the outcisura:// custom-protocol handler (see main/index.ts) into the renderer —

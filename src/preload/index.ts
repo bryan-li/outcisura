@@ -72,7 +72,7 @@ const api: FlashcardApi = {
     remove: (cardId, sourceId) => ipcRenderer.invoke(IpcChannels.cardImagesRemove, cardId, sourceId)
   },
   anki: {
-    exportAll: () => ipcRenderer.invoke(IpcChannels.ankiExportAll),
+    exportAll: (folderId?: string) => ipcRenderer.invoke(IpcChannels.ankiExportAll, folderId),
     import: () => ipcRenderer.invoke(IpcChannels.ankiImport)
   },
   auth: {
