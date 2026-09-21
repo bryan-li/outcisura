@@ -162,6 +162,7 @@ export function CardGraph({
   const svgRef = useRef<SVGSVGElement>(null)
   const [hovered, setHovered] = useState<{ id: string; x: number; y: number } | null>(null)
   const [, forceRender] = useState(0)
+  const [tuningOpen, setTuningOpen] = useState(false)
 
   const nodesRef = useRef<Map<string, GraphNode>>(new Map())
   const rafRef = useRef<number | null>(null)
@@ -433,31 +434,44 @@ export function CardGraph({
         Cards connect to their folder and to each source document; folders connect to their own parent folder. Move
         your cursor over the web to draw nearby nodes toward it. Click a card to jump to it, or a folder to open it.
       </p>
-      <div style={controlsStyle}>
-        <GraphSlider
-          id="graph-follow-rate"
-          label="Pull strength"
-          title="How tightly a caught node tracks the cursor — lower is softer/laggier, higher is snappier"
-          min={MIN_FOLLOW_RATE}
-          max={MAX_FOLLOW_RATE}
-          step={0.01}
-          value={followRate}
-          display={`${Math.round(followRate * 100)}%`}
-          onChange={updateFollowRate}
-        />
-        <GraphSlider
-          id="graph-detach-distance"
-          label="Detach distance"
-          title="How far a caught node can be dragged from home before it lets go"
-          min={MIN_DETACH_DISTANCE}
-          max={MAX_DETACH_DISTANCE}
-          step={5}
-          value={detachDistance}
-          display={`${detachDistance}`}
-          onChange={updateDetachDistance}
-        />
-      </div>
       <div ref={containerRef} style={{ position: 'relative' }}>
+        <div style={tuningWrapStyle}>
+          <button
+            onClick={() => setTuningOpen((o) => !o)}
+            aria-expanded={tuningOpen}
+            aria-controls="graph-tuning"
+            title="Graph tuning"
+            style={{ ...tuningButtonStyle, ...(tuningOpen ? { color: 'var(--accent)', borderColor: 'var(--accent)' } : null) }}
+          >
+            <Icon name="sliders" bare size={15} />
+          </button>
+      {tuningOpen && (
+          <div id="graph-tuning" style={tuningPanelStyle}>
+            <GraphSlider
+              id="graph-follow-rate"
+              label="Pull strength"
+              title="How tightly a caught node tracks the cursor — lower is softer/laggier, higher is snappier"
+              min={MIN_FOLLOW_RATE}
+              max={MAX_FOLLOW_RATE}
+              step={0.01}
+              value={followRate}
+              display={`${Math.round(followRate * 100)}%`}
+              onChange={updateFollowRate}
+            />
+            <GraphSlider
+              id="graph-detach-distance"
+              label="Detach distance"
+              title="How far a caught node can be dragged from home before it lets go"
+              min={MIN_DETACH_DISTANCE}
+              max={MAX_DETACH_DISTANCE}
+              step={5}
+              value={detachDistance}
+              display={`${detachDistance}`}
+              onChange={updateDetachDistance}
+            />
+          </div>
+          )}
+        </div>
         <svg
           ref={svgRef}
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
@@ -600,15 +614,40 @@ function GraphSlider({
   )
 }
 
-const controlsStyle: CSSProperties = {
+const tuningWrapStyle: CSSProperties = {
+  position: 'absolute',
+  top: 12,
+  right: 12,
+  zIndex: 2,
   display: 'flex',
-  flexWrap: 'wrap',
-  gap: 'var(--space-5)',
+  flexDirection: 'column',
+  alignItems: 'flex-end',
+  gap: 8
+}
+
+const tuningButtonStyle: CSSProperties = {
+  width: 32,
+  height: 32,
+  padding: 0,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: '50%',
+  color: 'var(--fg-muted)',
+  background: 'var(--modal-bg)'
+}
+
+const tuningPanelStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 'var(--space-3)',
+  width: 260,
+  maxWidth: '100%',
   padding: 'var(--space-3) var(--space-4)',
-  margin: '0 0 var(--space-3)',
   border: '1px solid var(--border)',
   borderRadius: 18,
-  background: 'var(--bg)'
+  background: 'var(--modal-bg)',
+  boxShadow: '0 6px 24px #00000026'
 }
 
 const dividerStyle: CSSProperties = {
