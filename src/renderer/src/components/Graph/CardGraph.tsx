@@ -433,44 +433,29 @@ export function CardGraph({
         Cards connect to their folder and to each source document; folders connect to their own parent folder. Move
         your cursor over the web to draw nearby nodes toward it. Click a card to jump to it, or a folder to open it.
       </p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', margin: '0 0 var(--space-3)' }}>
-        <label htmlFor="graph-follow-rate" style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>
-          Pull strength
-        </label>
-        <input
+      <div style={controlsStyle}>
+        <GraphSlider
           id="graph-follow-rate"
-          type="range"
+          label="Pull strength"
+          title="How tightly a caught node tracks the cursor — lower is softer/laggier, higher is snappier"
           min={MIN_FOLLOW_RATE}
           max={MAX_FOLLOW_RATE}
           step={0.01}
           value={followRate}
-          onChange={(e) => updateFollowRate(Number(e.target.value))}
-          title="How tightly a caught node tracks the cursor — lower is softer/laggier, higher is snappier"
-          style={{ width: 140 }}
+          display={`${Math.round(followRate * 100)}%`}
+          onChange={updateFollowRate}
         />
-        <span style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)', width: 28, fontVariantNumeric: 'tabular-nums' }}>
-          {Math.round(followRate * 100)}%
-        </span>
-
-        <span style={dividerStyle} />
-
-        <label htmlFor="graph-detach-distance" style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>
-          Detach distance
-        </label>
-        <input
+        <GraphSlider
           id="graph-detach-distance"
-          type="range"
+          label="Detach distance"
+          title="How far a caught node can be dragged from home before it lets go"
           min={MIN_DETACH_DISTANCE}
           max={MAX_DETACH_DISTANCE}
           step={5}
           value={detachDistance}
-          onChange={(e) => updateDetachDistance(Number(e.target.value))}
-          title="How far a caught node can be dragged from home before it lets go"
-          style={{ width: 140 }}
+          display={`${detachDistance}`}
+          onChange={updateDetachDistance}
         />
-        <span style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)', width: 28, fontVariantNumeric: 'tabular-nums' }}>
-          {detachDistance}
-        </span>
       </div>
       <div ref={containerRef} style={{ position: 'relative' }}>
         <svg
@@ -478,7 +463,7 @@ export function CardGraph({
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           onMouseMove={handleSvgMouseMove}
           onMouseLeave={handleSvgMouseLeave}
-          style={{ width: '100%', height: 'auto', display: 'block', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', background: 'var(--bg)' }}
+          style={{ width: '100%', height: 'auto', display: 'block', border: '1px solid var(--border)', borderRadius: 18, background: 'var(--bg)' }}
         >
           <g opacity={0.35}>
             {edges.map((edge, i) => {
@@ -568,6 +553,62 @@ function folderHue(folderId: string): number {
   let hash = 0
   for (let i = 0; i < folderId.length; i++) hash = (hash * 31 + folderId.charCodeAt(i)) >>> 0
   return hash % 360
+}
+
+function GraphSlider({
+  id,
+  label,
+  title,
+  min,
+  max,
+  step,
+  value,
+  display,
+  onChange
+}: {
+  id: string
+  label: string
+  title: string
+  min: number
+  max: number
+  step: number
+  value: number
+  display: string
+  onChange: (value: number) => void
+}): JSX.Element {
+  const fill = ((value - min) / (max - min)) * 100
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 220px', minWidth: 0 }} title={title}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <label htmlFor={id} style={{ fontSize: 'var(--font-xs)', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-faint)' }}>
+          {label}
+        </label>
+        <span style={{ fontSize: 'var(--font-sm)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{display}</span>
+      </div>
+      <input
+        id={id}
+        className="slim-range"
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{ '--fill': `${fill}%` } as CSSProperties}
+      />
+    </div>
+  )
+}
+
+const controlsStyle: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 'var(--space-5)',
+  padding: 'var(--space-3) var(--space-4)',
+  margin: '0 0 var(--space-3)',
+  border: '1px solid var(--border)',
+  borderRadius: 18,
+  background: 'var(--bg)'
 }
 
 const dividerStyle: CSSProperties = {
