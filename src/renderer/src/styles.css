@@ -533,8 +533,23 @@ aside svg {
 @keyframes tour-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes tour-dialog-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
 @keyframes tour-pop-in { 0% { opacity: 0; transform: scale(0.4); } 70% { transform: scale(1.08); } 100% { opacity: 1; transform: scale(1); } }
-@keyframes tour-ring-out { 0% { opacity: 0.5; transform: scale(0.3); } 100% { opacity: 0; transform: scale(2.4); } }
-@keyframes tour-drop-in { 0% { opacity: 0; transform: translateY(-30px); } 25% { opacity: 1; transform: translateY(0); } 70% { opacity: 1; transform: translateY(78px) scale(1); } 100% { opacity: 0; transform: translateY(96px) scale(0.5); } }
+@keyframes tour-bundle-loop {
+  0% { opacity: 0; transform: translate(var(--dx), -6px) rotate(0) scale(0.9); }
+  12% { opacity: 1; }
+  38%, 58% { opacity: 1; transform: translate(0, 22px) rotate(var(--rot)) scale(1); }
+  80% { opacity: 1; transform: translate(0, 116px) rotate(var(--rot)) scale(0.4); }
+  86%, 100% { opacity: 0; transform: translate(0, 124px) rotate(var(--rot)) scale(0.25); }
+}
+@keyframes tour-tray-pulse {
+  0%, 74% { transform: scale(1); box-shadow: none; }
+  84% { transform: scale(1.09); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent); }
+  96%, 100% { transform: scale(1); box-shadow: none; }
+}
+@keyframes tour-fan-loop {
+  0%, 12% { transform: translate(0, 0) rotate(0); }
+  40%, 70% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); }
+  100% { transform: translate(0, 0) rotate(0); }
+}
 @keyframes tour-select-draw { 0%, 10% { transform: scale(0, 0.4); opacity: 0; } 40%, 85% { transform: scale(1); opacity: 1; } 100% { opacity: 0; } }
 @keyframes tour-card-appear { 0%, 42% { opacity: 0; transform: translateX(-24px) scale(0.85); } 58%, 90% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 @keyframes tour-flip-loop { 0%, 30% { transform: rotateY(0); } 45%, 80% { transform: rotateY(180deg); } 95%, 100% { transform: rotateY(360deg); } }
@@ -546,8 +561,9 @@ aside svg {
 .tour-art { animation: graph-fade-in 260ms ease; }
 .tour-text { animation: tour-fade-up 320ms cubic-bezier(0.2, 0.8, 0.2, 1) 60ms both; }
 .tour-pop { animation: tour-pop-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.tour-ring { position: absolute; left: 50%; top: 50%; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid var(--accent); animation: tour-ring-out 2.4s ease-out infinite; }
-.tour-drop { animation: tour-drop-in 2.4s ease-in-out infinite both; }
+.tour-bundle { animation: tour-bundle-loop 3.6s cubic-bezier(0.45, 0, 0.25, 1) infinite both; }
+.tour-tray { animation: tour-tray-pulse 3.6s ease-in-out infinite; }
+.tour-fan { animation: tour-fan-loop 3.6s cubic-bezier(0.45, 0, 0.25, 1) infinite both; }
 .tour-select { transform-origin: left top; animation: tour-select-draw 3.2s ease-in-out infinite both; }
 .tour-card-in { animation: tour-card-appear 3.2s ease-in-out infinite both; }
 .tour-flip { animation: tour-flip-loop 4s ease-in-out infinite; }
@@ -557,8 +573,7 @@ aside svg {
 .tour-avatar { animation: tour-pop-in 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .tour-confetti { position: absolute; top: 0; width: 8px; height: 12px; border-radius: 2px; animation: tour-confetti-fall 2s ease-in infinite both; }
 @media (prefers-reduced-motion: reduce) {
-  .tour-backdrop, .tour-dialog, .tour-art, .tour-text, .tour-pop, .tour-ring, .tour-drop, .tour-select, .tour-card-in,
+  .tour-backdrop, .tour-dialog, .tour-art, .tour-text, .tour-pop, .tour-bundle, .tour-tray, .tour-fan, .tour-select, .tour-card-in,
   .tour-flip, .tour-rate, .tour-edge, .tour-node, .tour-avatar, .tour-confetti { animation: none; }
   .tour-confetti { display: none; }
-  .tour-ring { opacity: 0.25; }
 }

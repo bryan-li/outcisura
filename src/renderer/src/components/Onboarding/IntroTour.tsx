@@ -167,33 +167,63 @@ function Frame({ children }: { children: ReactNode }): JSX.Element {
 }
 
 function WelcomeArt(): JSX.Element {
+  // A stack of flashcards that fans out and settles again — the app's whole idea in one loop.
+  const cards = [
+    { rot: -14, dx: -46, dy: 6, color: 'hsl(210 60% 60%)' },
+    { rot: 0, dx: 0, dy: -8, color: 'hsl(150 45% 50%)' },
+    { rot: 14, dx: 46, dy: 6, color: 'var(--accent)' }
+  ]
   return (
     <Frame>
-      {[0, 1, 2].map((i) => (
-        <span key={i} className="tour-ring" style={{ animationDelay: `${i * 0.8}s` }} />
-      ))}
-      <div className="tour-pop" style={{ ...centerStyle, color: 'var(--accent)' }}>
-        <Icon name="sparkles" bare size={56} />
+      <div style={{ ...centerStyle, top: '52%' }}>
+        {cards.map((c, i) => (
+          <div
+            key={i}
+            className="tour-fan"
+            style={
+              {
+                ...welcomeCardStyle,
+                '--rot': `${c.rot}deg`,
+                '--dx': `${c.dx}px`,
+                '--dy': `${c.dy}px`,
+                zIndex: i,
+                animationDelay: `${i * 0.08}s`
+              } as CSSProperties
+            }
+          >
+            <span style={{ ...lineStyle, width: '55%', height: 7, background: c.color }} />
+            <span style={{ ...lineStyle, width: '85%' }} />
+            <span style={{ ...lineStyle, width: '65%' }} />
+          </div>
+        ))}
       </div>
     </Frame>
   )
 }
 
 function ImportArt(): JSX.Element {
+  // Three files drift in from the sides, rotate into one tilted bundle in the centre, then the
+  // bundle drops into the Library button, which pulses as it lands.
   const files = [
-    { icon: 'presentation', left: '18%', delay: 0 },
-    { icon: 'file-text', left: '42%', delay: 0.35 },
-    { icon: 'video', left: '66%', delay: 0.7 }
+    { icon: 'presentation', dx: -96, rot: -12, delay: 0 },
+    { icon: 'file-text', dx: 0, rot: 3, delay: 0.06 },
+    { icon: 'video', dx: 96, rot: 14, delay: 0.12 }
   ] as const
   return (
     <Frame>
       {files.map((f) => (
-        <div key={f.icon} className="tour-drop" style={{ ...fileChipStyle, left: f.left, animationDelay: `${f.delay}s` }}>
+        <div
+          key={f.icon}
+          className="tour-bundle"
+          style={{ ...fileChipStyle, '--dx': `${f.dx}px`, '--rot': `${f.rot}deg`, animationDelay: `${f.delay}s` } as CSSProperties}
+        >
           <Icon name={f.icon} bare size={22} />
         </div>
       ))}
-      <div style={trayStyle}>
-        <Icon name="layers" bare size={16} /> Library
+      <div style={trayWrapStyle}>
+        <div className="tour-tray" style={trayStyle}>
+          <Icon name="layers" bare size={16} /> Library
+        </div>
       </div>
     </Frame>
   )
@@ -360,7 +390,9 @@ const centerStyle: CSSProperties = { position: 'absolute', left: 0, right: 0, to
 
 const fileChipStyle: CSSProperties = {
   position: 'absolute',
-  top: 18,
+  left: '50%',
+  top: 24,
+  marginLeft: -23,
   width: 46,
   height: 54,
   display: 'flex',
@@ -373,11 +405,9 @@ const fileChipStyle: CSSProperties = {
   boxShadow: '0 4px 12px #0000001a'
 }
 
+const trayWrapStyle: CSSProperties = { position: 'absolute', left: 0, right: 0, bottom: 18, display: 'flex', justifyContent: 'center' }
+
 const trayStyle: CSSProperties = {
-  position: 'absolute',
-  left: '50%',
-  bottom: 18,
-  transform: 'translateX(-50%)',
   display: 'flex',
   alignItems: 'center',
   gap: 6,
@@ -388,6 +418,22 @@ const trayStyle: CSSProperties = {
   color: 'var(--accent)',
   fontWeight: 600,
   fontSize: 'var(--font-sm)'
+}
+
+const welcomeCardStyle: CSSProperties = {
+  position: 'absolute',
+  left: -55,
+  top: -50,
+  width: 110,
+  height: 100,
+  padding: 14,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+  border: '1px solid var(--border)',
+  borderRadius: 14,
+  background: 'var(--bg)',
+  boxShadow: '0 6px 18px #0000001f'
 }
 
 const slideMockStyle: CSSProperties = {
