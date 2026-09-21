@@ -75,6 +75,18 @@ const api: FlashcardApi = {
     exportAll: (folderId?: string) => ipcRenderer.invoke(IpcChannels.ankiExportAll, folderId),
     import: () => ipcRenderer.invoke(IpcChannels.ankiImport)
   },
+  updates: {
+    getStatus: () => ipcRenderer.invoke(IpcChannels.updatesGetStatus),
+    check: () => ipcRenderer.invoke(IpcChannels.updatesCheck),
+    download: () => ipcRenderer.invoke(IpcChannels.updatesDownload),
+    install: () => ipcRenderer.invoke(IpcChannels.updatesInstall),
+    simulate: () => ipcRenderer.invoke(IpcChannels.updatesSimulate),
+    onStatus: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: Parameters<typeof callback>[0]): void => callback(status)
+      ipcRenderer.on(IpcChannels.updatesStatus, listener)
+      return () => ipcRenderer.removeListener(IpcChannels.updatesStatus, listener)
+    }
+  },
   auth: {
     openOAuthUrl: (url) => {
       shell.openExternal(url)

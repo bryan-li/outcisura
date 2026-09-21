@@ -36,6 +36,7 @@ import type { Repository } from '../db/repository'
 import { readImageAsDataUrl, saveDataUrlImage, saveImageBuffer } from '../imageStore'
 import { buildAnkiPackage, parseAnkiPackage } from '../anki'
 import { importParsedNotes } from '../ankiImport'
+import { checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate, simulateUpdate } from '../updater'
 import { setProxySession } from '../anthropicClient'
 import { convertPptxToPdf } from '../pptxConverter'
 import { getApiKeyStatus, setApiKey, getOpenAiApiKeyStatus, setOpenAiApiKey } from '../settingsStore'
@@ -156,6 +157,12 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
   ipcMain.handle(IpcChannels.authSetAiSession, (_event, session: { accessToken: string; supabaseUrl: string } | null) => {
     setProxySession(session)
   })
+
+  ipcMain.handle(IpcChannels.updatesGetStatus, () => getUpdateStatus())
+  ipcMain.handle(IpcChannels.updatesCheck, () => checkForUpdates())
+  ipcMain.handle(IpcChannels.updatesDownload, () => downloadUpdate())
+  ipcMain.handle(IpcChannels.updatesInstall, () => installUpdate())
+  ipcMain.handle(IpcChannels.updatesSimulate, () => simulateUpdate())
 
   ipcMain.handle(IpcChannels.ankiExportAll, async (_event, folderId?: string) => {
     const folders = repo.listFolders()

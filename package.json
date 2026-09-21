@@ -32,9 +32,22 @@
     "afterSign": "build/afterSign.cjs",
     "mac": {
       "category": "public.app-category.education",
+      "icon": "build/icon.icns",
       "target": [
-        "dmg"
-      ]
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "artifactName": "Outcisura-${version}-${arch}.${ext}"
     },
     "win": {
       "target": [
@@ -46,6 +59,29 @@
         "AppImage"
       ],
       "category": "Education"
+    },
+    "dmg": {
+      "title": "Install Outcisura",
+      "background": "build/dmg-background.tiff",
+      "icon": "build/icon.icns",
+      "iconSize": 104,
+      "window": {
+        "width": 660,
+        "height": 400
+      },
+      "contents": [
+        {
+          "x": 180,
+          "y": 200,
+          "type": "file"
+        },
+        {
+          "x": 480,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     }
   },
   "dependencies": {

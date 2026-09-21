@@ -8,6 +8,7 @@ import { useTagsStore } from './state/tagsStore'
 import { useAiAdminStore } from './state/aiAdminStore'
 import { AdminDashboard } from './components/Admin/AdminDashboard'
 import { useUiStore } from './state/uiStore'
+import { UpdateBanner } from './components/Updates/UpdateBanner'
 import { IntroTour } from './components/Onboarding/IntroTour'
 import { hasSeenIntro, isFreshAccount, useOnboardingStore } from './state/onboardingStore'
 import { useSyncEnabledStore } from './state/syncEnabledStore'
@@ -165,6 +166,7 @@ function AppShell(): JSX.Element {
       <PomodoroTimer />
       <SearchPalette />
       <HostPrepToast />
+      <UpdateBanner />
       <IntroTour />
     </div>
   )

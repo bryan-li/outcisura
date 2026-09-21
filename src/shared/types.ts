@@ -542,3 +542,19 @@ export interface SyncOp {
   payload: unknown
   createdAt: string
 }
+
+/** Where the app's self-updater is at — pushed to the renderer whenever it changes. */
+export interface UpdateStatus {
+  state: 'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'error'
+  currentVersion: string
+  /** The newer version, once one is found. */
+  version?: string
+  /** 0–1 while downloading. */
+  progress?: number
+  error?: string
+  /** False when the app can't replace itself here (unpackaged dev run, read-only or translocated
+   *  location, non-Mac); the UI then offers the download page instead. */
+  canAutoInstall: boolean
+  /** The release page, for the manual fallback. */
+  releaseUrl?: string
+}

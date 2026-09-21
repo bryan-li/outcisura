@@ -8,6 +8,7 @@ import type {
   AiSummarizeResult,
   AnkiExportResult,
   AnkiImportResult,
+  UpdateStatus,
   ApiKeyStatus,
   CardRecord,
   CardReorderItem,
@@ -91,6 +92,12 @@ export const IpcChannels = {
   cardImagesRemove: 'cardImages:remove',
   ankiExportAll: 'anki:exportAll',
   ankiImport: 'anki:import',
+  updatesGetStatus: 'updates:getStatus',
+  updatesCheck: 'updates:check',
+  updatesDownload: 'updates:download',
+  updatesInstall: 'updates:install',
+  updatesSimulate: 'updates:simulate',
+  updatesStatus: 'updates:status',
   authDeepLink: 'auth:deep-link',
   authSetAiSession: 'auth:setAiSession',
   syncGetPendingOps: 'sync:getPendingOps',
@@ -251,6 +258,18 @@ export interface FlashcardApi {
     /** Exports every card, or just one folder (and its subfolders) when folderId is given. */
     exportAll(folderId?: string): Promise<AnkiExportResult>
     import(): Promise<AnkiImportResult>
+  }
+  /** Self-updater (see main/updater.ts). Status changes are pushed to onStatus as they happen. */
+  updates: {
+    getStatus(): Promise<UpdateStatus>
+    check(): Promise<UpdateStatus>
+    /** Downloads the found update; resolves once it's ready to install (or failed). */
+    download(): Promise<UpdateStatus>
+    /** Swaps in the downloaded update and relaunches. */
+    install(): Promise<void>
+    /** Dev-only: pretend a newer version exists so the update UI can be seen. */
+    simulate(): Promise<UpdateStatus>
+    onStatus(callback: (status: UpdateStatus) => void): () => void
   }
   /** Bridges the outcisura:// custom-protocol handler (see main/index.ts) into the renderer —
    *  currently only used for the Google OAuth redirect (Electron can't complete Google's OAuth

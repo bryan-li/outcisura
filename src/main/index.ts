@@ -8,6 +8,7 @@ import { AiService } from './aiService'
 import { OcrService } from './ocrService'
 import { TranscriptionService } from './transcriptionService'
 import { registerIpc } from './ipc/registerIpc'
+import { startUpdater } from './updater'
 import { registerVideoProtocolPrivileges, registerVideoProtocolHandler } from './videoProtocol'
 import { getApiKey, getOpenAiApiKey } from './settingsStore'
 import { IpcChannels } from '../shared/ipc'
@@ -153,6 +154,7 @@ app.whenReady().then(() => {
   registerVideoProtocolHandler()
 
   createWindow()
+  startUpdater(() => mainWindow)
 
   // Windows/Linux cold start directly via a outcisura://... link (no other instance was running
   // to catch it via 'second-instance') — the link is just this fresh process's own argv.

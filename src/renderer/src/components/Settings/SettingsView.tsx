@@ -12,6 +12,7 @@ import { runSyncCycle } from '../../lib/syncEngine'
 import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useZoomFactor } from '../../hooks/useZoomFactor'
 import { Icon } from '../Icon'
 import { PageHeader, secondaryPillStyle } from '../dashboardKit'
+import { useUpdatesStore } from '../../state/updatesStore'
 import { useOnboardingStore } from '../../state/onboardingStore'
 import { importSampleDeck } from '../../lib/sampleDeck'
 
@@ -46,6 +47,10 @@ export function SettingsView(): JSX.Element {
   const theme = useUiStore((s) => s.theme)
   const setTheme = useUiStore((s) => s.setTheme)
   const [zoom, setZoom] = useZoomFactor()
+  const updateStatus = useUpdatesStore((s) => s.status)
+  const checkForUpdates = useUpdatesStore((s) => s.check)
+  const downloadUpdate = useUpdatesStore((s) => s.download)
+  const installUpdate = useUpdatesStore((s) => s.install)
   const [sampleBusy, setSampleBusy] = useState(false)
   const [sampleMessage, setSampleMessage] = useState<string | null>(null)
   const [tab, setTab] = useState<SettingsTab>('account')
@@ -364,6 +369,41 @@ export function SettingsView(): JSX.Element {
       </section>
 
       <section style={sectionStyle}>
+        <h2 style={sectionTitleStyle}>Updates</h2>
+        <p style={hintStyle}>
+          Outcisura {updateStatus?.currentVersion ?? ''} ·{' '}
+          {updateStatus?.state === 'checking'
+            ? 'Checking…'
+            : updateStatus?.state === 'up-to-date'
+              ? 'You’re on the latest version.'
+              : updateStatus?.state === 'available'
+                ? `Version ${updateStatus.version} is available.`
+                : updateStatus?.state === 'downloading'
+                  ? `Downloading ${updateStatus.version}… ${Math.round((updateStatus.progress ?? 0) * 100)}%`
+                  : updateStatus?.state === 'ready'
+                    ? `Version ${updateStatus.version} is ready to install.`
+                    : updateStatus?.state === 'error'
+                      ? `Couldn’t check: ${updateStatus.error}`
+                      : 'Updates are checked automatically every few hours.'}
+        </p>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+          <button disabled={updateStatus?.state === 'checking' || updateStatus?.state === 'downloading'} onClick={() => void checkForUpdates()} style={secondaryPillStyle}>
+            Check for updates
+          </button>
+          {updateStatus?.state === 'available' && updateStatus.canAutoInstall && (
+            <button onClick={() => void downloadUpdate()} style={secondaryPillStyle}>
+              Download {updateStatus.version}
+            </button>
+          )}
+          {updateStatus?.state === 'ready' && (
+            <button onClick={() => void installUpdate()} style={secondaryPillStyle}>
+              Restart to update
+            </button>
+          )}
+        </div>
+      </section>
+
+      <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Intro (debug)</h2>
         <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>
           New accounts see this walkthrough automatically. Replay it here, or add the sample deck to your Library.
@@ -383,6 +423,9 @@ export function SettingsView(): JSX.Element {
             style={secondaryPillStyle}
           >
             {sampleBusy ? 'Adding…' : 'Add sample deck'}
+          </button>
+          <button onClick={() => void window.api.updates.simulate()} style={secondaryPillStyle}>
+            Simulate update banner
           </button>
         </div>
         {sampleMessage && <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>{sampleMessage}</p>}
