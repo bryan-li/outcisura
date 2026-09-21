@@ -32,6 +32,28 @@ function isView(a: MainView, b: MainView): boolean {
   return true
 }
 
+/** Scrolls the main content pane back to the top. Switching to a different page snaps (the new page
+ *  should simply appear at its top); clicking the page you're already on glides, as a "back to top". */
+function scrollContentToTop(smooth: boolean): void {
+  const main = document.querySelector('main')
+  if (!main) return
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (smooth && !reduceMotion) main.scrollTo({ top: 0, behavior: 'smooth' })
+  else main.scrollTop = 0
+}
+
+/** The store's setView, plus resetting the content pane's scroll — otherwise a page you'd scrolled
+ *  down keeps its scroll offset when you navigate to another, and clicking the current page did nothing. */
+function useSidebarNavigate(): (target: MainView) => void {
+  const view = useUiStore((s) => s.view)
+  const setViewInStore = useUiStore((s) => s.setView)
+  return (target) => {
+    const samePage = isView(view, target)
+    setViewInStore(target)
+    scrollContentToTop(samePage)
+  }
+}
+
 const SIDEBAR_MIN = 188
 const SIDEBAR_MAX = 264
 const SIDEBAR_VW = 0.2
@@ -54,7 +76,7 @@ function useExpandedSidebarWidth(): number {
 
 export function Sidebar(): JSX.Element {
   const view = useUiStore((s) => s.view)
-  const setView = useUiStore((s) => s.setView)
+  const setView = useSidebarNavigate()
   const focusCard = useUiStore((s) => s.focusCard)
   const openSearch = useUiStore((s) => s.openSearch)
   const isAiAdmin = useAiAdminStore((s) => s.isAdmin)
@@ -540,7 +562,7 @@ function NewlyCreatedSection(): JSX.Element | null {
   const cards = useCardsStore((s) => s.cards)
   const documents = useDocumentsStore((s) => s.documents)
   const view = useUiStore((s) => s.view)
-  const setView = useUiStore((s) => s.setView)
+  const setView = useSidebarNavigate()
   const focusCard = useUiStore((s) => s.focusCard)
   // Groups start COLLAPSED: with dozens of unfiled cards, listing every one under the tree buried the
   // folders below it. Track which the user has opened, rather than which they've closed.

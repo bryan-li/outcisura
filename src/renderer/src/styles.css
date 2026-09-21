@@ -318,10 +318,11 @@ aside svg {
   opacity: 1;
 }
 
-/* Scrollbars: slim, rounded, and invisible until you hover the scrollable area, so a long page reads
-   as clean content rather than content plus a chrome strip. The thumb is drawn as a 4px pill inside
-   a 12px hit area (transparent border + padding-box clip), and takes its colour from --fg so it's
-   correct in both themes without extra tokens. Wheel/trackpad scrolling never needs it visible. */
+/* Scrollbars: slim, rounded, and invisible until they're needed — while you're scrolling (see
+   lib/scrollActivity.ts, which sets data-scrolling), or when you point at the thumb itself at the
+   edge. Revealing on hover of the whole scrollable area was far too eager, since the main panel is most
+   of the window. The thumb is a 4px pill inside a 12px hit area (transparent border + padding-box
+   clip) and takes its colour from --fg, so it's right in both themes without extra tokens. */
 ::-webkit-scrollbar {
   width: 12px;
   height: 12px;
@@ -339,11 +340,12 @@ aside svg {
   border-radius: 999px;
 }
 
-:hover::-webkit-scrollbar-thumb {
+[data-scrolling]::-webkit-scrollbar-thumb {
   background-color: color-mix(in srgb, var(--fg) 20%, transparent);
 }
 
-/* Grabbing the thumb: a touch darker and slightly wider (smaller border = wider pill). */
+/* Pointing at / grabbing the thumb: darker and slightly wider (smaller border = wider pill). A
+   transparent thumb still receives the pointer, so reaching for the edge reveals it. */
 ::-webkit-scrollbar-thumb:hover,
 ::-webkit-scrollbar-thumb:active {
   background-color: color-mix(in srgb, var(--fg) 38%, transparent);
