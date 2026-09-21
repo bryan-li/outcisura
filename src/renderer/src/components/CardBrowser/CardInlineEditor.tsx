@@ -99,9 +99,9 @@ export function CardInlineEditor({ front, back, isCloze, onCommit }: Props): JSX
 
   function handleBlur(): void {
     // Focus moving between this editor's own fields isn't leaving it.
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       if (rootRef.current && !rootRef.current.contains(document.activeElement)) commit(frontText, lines)
-    })
+    }, 0)
   }
 
   function updateLine(index: number, patch: Partial<BackLine>): void {
