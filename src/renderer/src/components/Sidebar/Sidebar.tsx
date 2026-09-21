@@ -20,7 +20,7 @@ import { MarqueeSelect } from '../Grid/MarqueeSelect'
 import type { ImportProgress } from '../../types/importProgress'
 import { ImportProgressBar } from './ImportProgressBar'
 import { RowMenu } from './RowMenu'
-import { DocTypeIcon, Icon } from '../Icon'
+import { DocTypeIcon, Icon, type IconName } from '../Icon'
 
 function ext(file: File): string | undefined {
   return file.name.split('.').pop()?.toLowerCase()
@@ -199,20 +199,44 @@ export function Sidebar(): JSX.Element {
         <button onClick={() => setCollapsed(false)} title="Expand sidebar" style={collapseToggleStyle}>
           <Icon name="chevrons-right" bare />
         </button>
-        <button
-          onClick={() => setView({ type: 'settings', returnTo: view })}
-          title="Settings"
-          style={{ ...collapsedMarkButtonStyle, marginTop: 'auto', fontSize: 'var(--font-md)' }}
-        >
-          <Icon name="sliders" bare size="1.2em" />
-        </button>
+        <div style={railDividerStyle} />
+        <RailButton icon="search" title="Search (⌘K)" active={false} onClick={openSearch} />
+        <RailButton icon="home" title="Home" active={isView(view, { type: 'home' })} onClick={() => setView({ type: 'home' })} />
+        <RailButton
+          icon="review"
+          title={dueCount > 0 ? `Review (${dueCount} due)` : 'Review'}
+          active={view.type === 'review' || view.type === 'review-dashboard'}
+          dot={dueCount > 0}
+          onClick={() => setView({ type: 'review-dashboard' })}
+        />
+        <RailButton icon="layers" title="All Cards" active={isView(view, { type: 'cards' })} onClick={() => setView({ type: 'cards' })} />
+        <RailButton icon="graph" title="Graph" active={isView(view, { type: 'graph' })} onClick={() => setView({ type: 'graph' })} />
+        {orphanCount > 0 && (
+          <RailButton
+            icon="warning"
+            title={`Missing Sources (${orphanCount})`}
+            active={isView(view, { type: 'missing-sources' })}
+            onClick={() => setView({ type: 'missing-sources' })}
+          />
+        )}
+        <div style={railDividerStyle} />
+        <RailButton icon="broadcast" title="Host a deck" active={isView(view, { type: 'hostable-decks' })} onClick={() => setView({ type: 'hostable-decks' })} />
+        <RailButton
+          icon="join"
+          title="Join a session"
+          active={view.type === 'live-session-join' || view.type === 'live-session-play'}
+          onClick={() => setView({ type: 'live-session-join' })}
+        />
+        <div style={{ flex: 1 }} />
+        {isAiAdmin && <RailButton icon="shield" title="AI Admin" active={isView(view, { type: 'admin' })} onClick={() => setView({ type: 'admin' })} />}
+        <RailButton icon="sliders" title="Settings" active={view.type === 'settings'} onClick={() => setView({ type: 'settings', returnTo: view })} />
       </aside>
     )
   }
 
   return (
     <aside style={sidebarStyle}>
-      <div style={{ display: 'flex', alignItems: 'center', padding: 'var(--space-3) 0 0' }}>
+      <div style={sidebarHeaderStyle}>
         <button
           onClick={() => setView({ type: 'home' })}
           title="Outcisura"
@@ -226,14 +250,15 @@ export function Sidebar(): JSX.Element {
         </button>
       </div>
 
-      <div style={sidebarScrollStyle}>
-      <div style={{ padding: '0 var(--space-2)' }}>
+      <div className="sidebar-scroll" style={sidebarScrollStyle}>
+      <div style={{ padding: '0 var(--space-3)' }}>
         <NavItem label={<><Icon name="search" />Search</>} active={false} onClick={openSearch} title="Search cards and documents (⌘K)" />
 
         <NavGroupLabel>Study</NavGroupLabel>
         <NavItem label={<><Icon name="home" />Home</>} active={isView(view, { type: 'home' })} onClick={() => setView({ type: 'home' })} />
         <NavItem
-          label={<><Icon name="review" />Review{dueCount > 0 ? ` (${dueCount})` : ''}</>}
+          label={<><Icon name="review" />Review</>}
+          badge={dueCount}
           active={view.type === 'review' || view.type === 'review-dashboard'}
           onClick={() => setView({ type: 'review-dashboard' })}
         />
@@ -241,7 +266,8 @@ export function Sidebar(): JSX.Element {
         <NavItem label={<><Icon name="graph" />Graph</>} active={isView(view, { type: 'graph' })} onClick={() => setView({ type: 'graph' })} />
         {orphanCount > 0 && (
           <NavItem
-            label={<><Icon name="warning" />Missing Sources ({orphanCount})</>}
+            label={<><Icon name="warning" />Missing Sources</>}
+            badge={orphanCount}
             active={isView(view, { type: 'missing-sources' })}
             onClick={() => setView({ type: 'missing-sources' })}
           />
@@ -456,13 +482,13 @@ export function Sidebar(): JSX.Element {
         {isAiAdmin && (
           <button
             onClick={() => setView({ type: 'admin' })}
-            style={{ ...settingsButtonStyle, background: isView(view, { type: 'admin' }) ? 'var(--bg-active)' : 'none', fontWeight: isView(view, { type: 'admin' }) ? 600 : 400 }}
+            style={footerButtonStyle(isView(view, { type: 'admin' }))}
             title="Manage AI budgets and accounts"
           >
             <Icon name="shield" />AI Admin
           </button>
         )}
-        <button onClick={() => setView({ type: 'settings', returnTo: view })} style={settingsButtonStyle} title="Settings">
+        <button onClick={() => setView({ type: 'settings', returnTo: view })} style={footerButtonStyle(view.type === 'settings')} title="Settings">
           <Icon name="sliders" />Settings
         </button>
       </div>
@@ -559,31 +585,35 @@ function NavItem({
   active,
   onClick,
   grow,
-  title
+  title,
+  badge
 }: {
   label: ReactNode
   active: boolean
   onClick: () => void
   grow?: boolean
   title?: string
+  /** A count shown as a circular badge on the right (e.g. cards due). Hidden at 0. */
+  badge?: number
 }): JSX.Element {
   return (
     <button
       onClick={onClick}
       title={title}
       style={{
-        display: 'block',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
         width: grow ? undefined : '100%',
         flex: grow ? 1 : undefined,
         minWidth: 0,
         textAlign: 'left',
-        overflow: 'hidden',
-        overflowWrap: 'anywhere',
-        padding: '6px 10px',
-        borderRadius: 'var(--radius-sm)',
+        padding: '8px 14px',
+        borderRadius: 'var(--radius-pill)',
         border: 'none',
-        background: active ? 'var(--bg-active)' : 'transparent',
-        color: 'inherit',
+        // The current page is a solid accent pill (text flips to --on-accent); hover is a soft wash.
+        background: active ? 'var(--accent)' : 'transparent',
+        color: active ? 'var(--on-accent)' : 'inherit',
         cursor: 'pointer',
         fontSize: 'var(--font-md)',
         fontWeight: active ? 600 : 400,
@@ -596,8 +626,98 @@ function NavItem({
         if (!active) e.currentTarget.style.background = 'transparent'
       }}
     >
-      {label}
+      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', overflowWrap: 'anywhere' }}>{label}</span>
+      {badge !== undefined && badge > 0 && <CountBadge count={badge} onAccent={active} />}
     </button>
+  )
+}
+
+/** One round icon button in the collapsed rail; the current page is a solid accent disc, like the
+ *  active pill in the expanded sidebar. `dot` flags something needing attention (cards due). */
+function RailButton({
+  icon,
+  title,
+  active,
+  dot,
+  onClick
+}: {
+  icon: IconName
+  title: string
+  active: boolean
+  dot?: boolean
+  onClick: () => void
+}): JSX.Element {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      style={{
+        position: 'relative',
+        width: 40,
+        height: 40,
+        padding: 0,
+        border: 'none',
+        borderRadius: '50%',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        cursor: 'pointer',
+        background: active ? 'var(--accent)' : 'transparent',
+        color: active ? 'var(--on-accent)' : 'var(--fg-muted)'
+      }}
+      onMouseEnter={(e) => {
+        if (!active) e.currentTarget.style.background = 'var(--bg-hover)'
+      }}
+      onMouseLeave={(e) => {
+        if (!active) e.currentTarget.style.background = 'transparent'
+      }}
+    >
+      <Icon name={icon} bare size={19} />
+      {dot && (
+        <span
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: active ? 'var(--on-accent)' : 'var(--accent)',
+            border: '1.5px solid var(--bg-sidebar)'
+          }}
+        />
+      )}
+    </button>
+  )
+}
+
+/** Small circular count (cards due, missing sources). Inverts on the active pill so it stays legible
+ *  against the solid accent. */
+function CountBadge({ count, onAccent }: { count: number; onAccent: boolean }): JSX.Element {
+  return (
+    <span
+      style={{
+        minWidth: 20,
+        height: 20,
+        // Negative margin so the badge doesn't make its row taller than rows without one.
+        margin: '-2px 0',
+        padding: '0 6px',
+        borderRadius: 'var(--radius-pill)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 11,
+        fontWeight: 700,
+        fontVariantNumeric: 'tabular-nums',
+        flexShrink: 0,
+        background: onAccent ? 'var(--on-accent)' : 'var(--fg)',
+        color: onAccent ? 'var(--accent)' : 'var(--bg)'
+      }}
+    >
+      {count > 99 ? '99+' : count}
+    </span>
   )
 }
 
@@ -635,7 +755,7 @@ function DocumentRow({
         gap: 4,
         paddingLeft: depth * 14 + 6,
         paddingRight: 6,
-        borderRadius: 'var(--radius-sm)',
+        borderRadius: 'var(--radius-row)',
         background: active ? 'var(--bg-active)' : 'transparent',
         transition: 'background-color var(--transition-fast)'
       }}
@@ -700,7 +820,7 @@ function SectionHeader({
           background: active ? 'var(--bg-active)' : 'transparent',
           cursor: 'pointer',
           padding: '2px 4px',
-          borderRadius: 'var(--radius-sm)',
+          borderRadius: 'var(--radius-row)',
           color: active ? 'var(--accent)' : 'var(--fg-faint)'
         }}
       >
@@ -808,7 +928,7 @@ function CardLeaf({
         boxShadow: selected ? 'inset 0 0 0 1px var(--accent)' : undefined,
         borderTop: dropPosition === 'before' ? '2px solid var(--accent)' : '2px solid transparent',
         borderBottom: dropPosition === 'after' ? '2px solid var(--accent)' : '2px solid transparent',
-        borderRadius: 'var(--radius-sm)',
+        borderRadius: 'var(--radius-row)',
         transition: 'background-color var(--transition-fast)'
       }}
       onMouseEnter={(e) => {
@@ -985,7 +1105,7 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
             gap: 4,
             paddingLeft: depth * 14 + 6,
             paddingRight: 6,
-            borderRadius: 'var(--radius-sm)',
+            borderRadius: 'var(--radius-row)',
             background:
               cardDropActive || dropIndicator === 'inside' ? 'var(--accent-soft)' : active ? 'var(--bg-active)' : 'transparent',
             borderTop: dropIndicator === 'before' ? '2px solid var(--accent)' : '2px solid transparent',
@@ -1052,7 +1172,7 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
           }}
           style={{
             animation: 'expand-collapse 120ms ease',
-            borderRadius: 'var(--radius-sm)',
+            borderRadius: 'var(--radius-row)',
             background: bodyDropActive ? 'var(--accent-soft)' : 'transparent',
             transition: 'background-color var(--transition-fast)'
           }}
@@ -1207,7 +1327,7 @@ function DocumentFolderNode(props: DocumentFolderNodeProps): JSX.Element {
             gap: 4,
             paddingLeft: depth * 14 + 6,
             paddingRight: 6,
-            borderRadius: 'var(--radius-sm)',
+            borderRadius: 'var(--radius-row)',
             background: documentDropActive || dropIndicator === 'inside' ? 'var(--accent-soft)' : 'transparent',
             borderTop: dropIndicator === 'before' ? '2px solid var(--accent)' : '2px solid transparent',
             borderBottom: dropIndicator === 'after' ? '2px solid var(--accent)' : '2px solid transparent',
@@ -1257,7 +1377,7 @@ function DocumentFolderNode(props: DocumentFolderNodeProps): JSX.Element {
           }}
           style={{
             animation: 'expand-collapse 120ms ease',
-            borderRadius: 'var(--radius-sm)',
+            borderRadius: 'var(--radius-row)',
             background: bodyDropActive ? 'var(--accent-soft)' : 'transparent',
             transition: 'background-color var(--transition-fast)'
           }}
@@ -1329,7 +1449,7 @@ function InlineTextInput({ depth, initialValue, placeholder, onSubmit, onCancel 
         fontSize: 'var(--font-sm)',
         fontFamily: 'inherit',
         border: '1px solid var(--accent)',
-        borderRadius: 'var(--radius-sm)',
+        borderRadius: 'var(--radius-row)',
         background: 'var(--bg)',
         color: 'inherit'
       }}
@@ -1371,13 +1491,26 @@ const wordmarkMarkStyle: CSSProperties = {
 const sidebarStyle: CSSProperties = {
   // Proportional rather than a hard 240px: at higher zoom the window fits fewer CSS pixels, so a
   // fixed width would eat the content area and squeeze names into ellipses.
-  width: 'clamp(180px, 22vw, 300px)',
+  width: 'clamp(196px, 22vw, 300px)',
   flexShrink: 0,
-  height: '100%',
-  background: 'var(--bg-sidebar)',
-  borderRight: '1px solid var(--border)',
+  // A floating rounded panel rather than a full-height strip: inset from the window edges, soft
+  // vertical gradient, hairline border and a gentle shadow. Stretches to fill the row minus margins.
+  alignSelf: 'stretch',
+  margin: 'var(--space-3) 0 var(--space-3) var(--space-3)',
+  background: 'linear-gradient(180deg, var(--bg-sidebar), color-mix(in srgb, var(--bg-sidebar) 90%, var(--fg)))',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius-panel)',
+  boxShadow: '0 1px 2px #0000000a, 0 10px 30px #00000014',
+  overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column'
+}
+
+const sidebarHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  padding: 'var(--space-4) var(--space-3) var(--space-3)',
+  borderBottom: '1px solid var(--border)'
 }
 
 // Everything between the wordmark header and the settings footer scrolls on its own — those two
@@ -1395,22 +1528,28 @@ const sidebarScrollStyle: CSSProperties = {
 
 const sidebarFooterStyle: CSSProperties = {
   flexShrink: 0,
-  padding: 'var(--space-2)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+  padding: 'var(--space-3)',
   borderTop: '1px solid var(--border)'
 }
 
-const settingsButtonStyle: CSSProperties = {
-  width: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-  border: 'none',
-  background: 'none',
-  color: 'var(--fg-muted)',
-  cursor: 'pointer',
-  fontSize: 'var(--font-sm)',
-  padding: '6px 8px',
-  borderRadius: 'var(--radius-sm)'
+/** Footer rows (Settings, AI Admin) match the nav pills: muted until they're the current page. */
+function footerButtonStyle(active: boolean): CSSProperties {
+  return {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: 'var(--font-md)',
+    padding: '8px 14px',
+    borderRadius: 'var(--radius-pill)',
+    background: active ? 'var(--accent)' : 'none',
+    color: active ? 'var(--on-accent)' : 'var(--fg-muted)',
+    fontWeight: active ? 600 : 400
+  }
 }
 
 const navGroupLabelStyle: CSSProperties = {
@@ -1419,26 +1558,42 @@ const navGroupLabelStyle: CSSProperties = {
   letterSpacing: '0.04em',
   textTransform: 'uppercase',
   color: 'var(--fg-faint)',
-  padding: '10px 10px 3px'
+  padding: '14px 14px 4px'
 }
 
 const sectionStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: 1
+  gap: 1,
+  // Same 12px inset as the nav pills, so every row in the panel shares its left and right edges.
+  padding: '0 var(--space-3)'
 }
 
+// Collapsed: a slim rounded pill of round icon buttons, same floating treatment as the full panel.
 const collapsedSidebarStyle: CSSProperties = {
-  width: 44,
+  width: 60,
   flexShrink: 0,
-  height: '100%',
-  background: 'var(--bg-sidebar)',
-  borderRight: '1px solid var(--border)',
+  alignSelf: 'stretch',
+  margin: 'var(--space-3) 0 var(--space-3) var(--space-3)',
+  background: 'linear-gradient(180deg, var(--bg-sidebar), color-mix(in srgb, var(--bg-sidebar) 90%, var(--fg)))',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius-panel)',
+  boxShadow: '0 1px 2px #0000000a, 0 10px 30px #00000014',
   padding: 'var(--space-3) 0',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: 'var(--space-2)'
+  gap: 4,
+  overflowY: 'auto',
+  overflowX: 'hidden'
+}
+
+const railDividerStyle: CSSProperties = {
+  width: 24,
+  height: 1,
+  background: 'var(--border)',
+  margin: '4px 0',
+  flexShrink: 0
 }
 
 const collapsedMarkButtonStyle: CSSProperties = {
@@ -1446,7 +1601,7 @@ const collapsedMarkButtonStyle: CSSProperties = {
   background: 'none',
   cursor: 'pointer',
   padding: 6,
-  borderRadius: 'var(--radius-sm)'
+  borderRadius: 'var(--radius-row)'
 }
 
 // Shared by both the expand (in the collapsed rail) and collapse (in the full sidebar's wordmark
@@ -1459,7 +1614,7 @@ const collapseToggleStyle: CSSProperties = {
   fontSize: 'var(--font-md)',
   lineHeight: 1,
   padding: '4px 6px',
-  borderRadius: 'var(--radius-sm)',
+  borderRadius: 'var(--radius-row)',
   flexShrink: 0
 }
 
@@ -1467,7 +1622,8 @@ const sectionHeaderRow: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 2,
-  padding: '0 var(--space-2)',
+  // With the section's own 12px inset, this puts the caret glyph on the same line as the nav icons above.
+  padding: '0 12px',
   marginBottom: 2
 }
 
@@ -1518,7 +1674,7 @@ const docGroupRowStyle: CSSProperties = {
   cursor: 'pointer',
   fontSize: 'var(--font-sm)',
   padding: '2px 6px',
-  borderRadius: 'var(--radius-sm)'
+  borderRadius: 'var(--radius-row)'
 }
 
 const navFolderTitleStyle: CSSProperties = {
