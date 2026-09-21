@@ -5,417 +5,335 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Outcisura — Flashcards cut straight from the source</title>
 <meta name="description" content="Outcisura turns PDF/PPTX slides and paused video frames into spaced-repetition flashcards, with a one-click backlink to exactly where each card came from." />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23191919'/%3E%3Crect x='4' y='4.5' width='16' height='3.2' rx='0.6' fill='%23e86b0f'/%3E%3Crect x='4' y='16.3' width='16' height='3.2' rx='0.6' fill='%23e86b0f'/%3E%3Crect x='7.4' y='7.9' width='9.2' height='8.2' fill='%23ff9d42'/%3E%3C/svg%3E" />
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23e86b0f'/%3E%3Crect x='5' y='5' width='14' height='3' rx='0.8' fill='%231d1100'/%3E%3Crect x='5' y='16' width='14' height='3' rx='0.8' fill='%231d1100'/%3E%3Crect x='8' y='8.6' width='8' height='6.8' fill='%231d1100'/%3E%3C/svg%3E" />
 <style>
   :root {
-    --ground: #f6f1e6;
-    --ground-raised: #efe6d2;
-    --ink: #211c15;
-    --ink-muted: #6d6252;
-    --ink-faint: #a49873;
-    --rule: #ddd0b3;
-    --accent: #d9660f;
-    --accent-deep: #a8430c;
-    --accent-soft: #d9660f1c;
-    --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
-    --font-body: Optima, Candara, 'Noto Sans', 'Segoe UI', sans-serif;
-    --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --bg-soft: #f7f7f5;
+    --fg: #191919;
+    --fg-muted: #6b6b68;
+    --fg-faint: #9b9b98;
+    --border: #e7e7e4;
+    --accent: #e86b0f;
+    --accent-soft: #e86b0f1f;
+    --on-accent: #1d1100;
+    --glass-rim: linear-gradient(150deg, #fffffff5 0%, #ffffff59 34%, #ffffff00 58%, #ffffffb8 100%);
+    --glass-fill: #ffffffe6;
+    --glass-ring: #0000000d;
+    --shadow: 0 24px 60px #00000018;
+    --page-glow: radial-gradient(60% 50% at 50% 0%, #e86b0f1c, transparent 70%);
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   }
-
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme='light']) {
-      --ground: #17130e;
-      --ground-raised: #1f1a13;
-      --ink: #ece4d3;
-      --ink-muted: #b2a488;
-      --ink-faint: #7c6f57;
-      --rule: #362d20;
-      --accent: #ff9548;
-      --accent-deep: #ffb877;
-      --accent-soft: #ff95482b;
+    :root {
+      --bg: #191919;
+      --bg-soft: #202020;
+      --fg: #e9e9e7;
+      --fg-muted: #9b9b98;
+      --fg-faint: #6b6b68;
+      --border: #2f2f2e;
+      --accent: #ff9d42;
+      --accent-soft: #ff9d4229;
+      --glass-rim: linear-gradient(150deg, #ffffff40 0%, #ffffff14 34%, #ffffff00 58%, #ffffff2e 100%);
+      --glass-fill: #202020e8;
+      --glass-ring: #000000a6;
+      --shadow: 0 24px 60px #00000080;
+      --page-glow: radial-gradient(60% 50% at 50% 0%, #ff9d4224, transparent 70%);
     }
-  }
-  :root[data-theme='dark'] {
-    --ground: #17130e;
-    --ground-raised: #1f1a13;
-    --ink: #ece4d3;
-    --ink-muted: #b2a488;
-    --ink-faint: #7c6f57;
-    --rule: #362d20;
-    --accent: #ff9548;
-    --accent-deep: #ffb877;
-    --accent-soft: #ff95482b;
   }
 
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
   body {
-    background: var(--ground);
-    color: var(--ink);
-    font-family: var(--font-body);
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font);
     -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
     overflow-x: hidden;
   }
-  @media (prefers-reduced-motion: reduce) {
-    * { animation: none !important; transition: none !important; }
-  }
+  body::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 640px; background: var(--page-glow); pointer-events: none; z-index: -1; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
 
-  a { color: inherit; }
+  /* ---------- buttons (same shapes as the app) ---------- */
+  .btn { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 15px; border-radius: 999px; padding: 11px 22px; cursor: pointer; transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease; }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent); color: var(--on-accent); font-weight: 600; border: none; box-shadow: inset 0 1px 0 #ffffff73, inset 0 0 0 1px #ffffff2e, 0 2px 8px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 #ffffff73, inset 0 0 0 1px #ffffff2e, 0 6px 18px color-mix(in srgb, var(--accent) 50%, transparent); }
+  .btn-secondary { background: var(--bg); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--bg-soft); }
 
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 32px; }
-
-  /* ---------- header ---------- */
-  header.site {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 28px 32px;
-    max-width: 1040px;
-    margin: 0 auto;
+  /* ---------- floating glass nav ---------- */
+  nav.top { position: sticky; top: 14px; z-index: 20; display: flex; justify-content: center; padding: 0 16px; }
+  .nav-pill {
+    display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 16px; border-radius: 999px;
+    border: 1px solid transparent;
+    background: linear-gradient(var(--glass-fill), var(--glass-fill)) padding-box, var(--glass-rim) border-box;
+    -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4);
+    box-shadow: 0 0 0 1px var(--glass-ring), 0 8px 28px #00000014;
   }
-  .mark-row { display: flex; align-items: center; gap: 10px; }
-  .mark-row svg { width: 22px; height: 22px; }
-  .wordmark {
-    font-family: var(--font-mono);
-    font-size: 13px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--ink);
-  }
-  .header-link {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    text-decoration: none;
-    color: var(--ink-muted);
-    border-bottom: 1px solid var(--rule);
-    padding-bottom: 2px;
-  }
-  .header-link:hover { color: var(--accent-deep); border-color: var(--accent); }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -0.01em; margin-right: 14px; }
+  .brand svg { width: 22px; height: 22px; }
+  .nav-link { font-size: 14px; color: var(--fg-muted); padding: 7px 12px; border-radius: 999px; transition: background-color 120ms ease, color 120ms ease; }
+  .nav-link:hover { background: var(--accent-soft); color: var(--fg); }
+  .nav-pill .btn { padding: 8px 16px; font-size: 14px; margin-left: 4px; }
+  @media (max-width: 640px) { .nav-link { display: none; } }
 
   /* ---------- hero ---------- */
-  .hero { text-align: center; padding: 56px 32px 8px; }
-  .eyebrow {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: var(--accent-deep);
-    margin-bottom: 22px;
-  }
-  h1.headline {
-    font-family: var(--font-display);
-    font-weight: 400;
-    font-size: clamp(40px, 6vw, 66px);
-    line-height: 1.08;
-    letter-spacing: -0.01em;
-    margin: 0 auto;
-    max-width: 780px;
-    text-wrap: balance;
-  }
-  h1.headline em {
-    font-style: italic;
-    color: var(--accent-deep);
-  }
-  .sub {
-    font-size: 18px;
-    line-height: 1.6;
-    color: var(--ink-muted);
-    max-width: 560px;
-    margin: 24px auto 0;
-  }
+  .hero { text-align: center; padding: 72px 0 40px; }
+  .eyebrow { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); padding: 6px 14px; border-radius: 999px; }
+  h1 { font-size: clamp(38px, 6.4vw, 68px); line-height: 1.04; letter-spacing: -0.035em; margin: 22px auto 0; max-width: 780px; text-wrap: balance; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .sub { font-size: 18px; color: var(--fg-muted); max-width: 560px; margin: 22px auto 0; text-wrap: pretty; }
+  .cta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 32px; }
+  .cta-note { font-size: 12.5px; color: var(--fg-faint); margin-top: 14px; }
 
-  .cta-row {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    margin-top: 36px;
-  }
-  .cta {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    letter-spacing: 0.06em;
-    text-decoration: none;
-    color: var(--ground);
-    background: var(--ink);
-    padding: 14px 26px;
-    border: 1px solid var(--ink);
-    transition: background 140ms ease, color 140ms ease, transform 140ms ease;
-  }
-  .cta:hover { background: var(--accent-deep); border-color: var(--accent-deep); transform: translateY(-1px); }
-  .cta-note { font-size: 12px; color: var(--ink-faint); font-family: var(--font-mono); letter-spacing: 0.04em; }
+  /* ---------- product mock (built from the app's own styles) ---------- */
+  .stage { margin: 48px auto 0; max-width: 940px; padding: 10px; border-radius: 30px; border: 1px solid transparent;
+    background: linear-gradient(var(--bg-soft), var(--bg-soft)) padding-box, var(--glass-rim) border-box; box-shadow: 0 0 0 1px var(--glass-ring), var(--shadow); }
+  .app { display: flex; gap: 12px; height: 420px; border-radius: 22px; background: var(--bg-soft); overflow: hidden; text-align: left; }
+  .side { width: 200px; flex-shrink: 0; margin: 10px 0 10px 10px; padding: 12px 10px; border-radius: 22px; border: 1px solid transparent;
+    background: linear-gradient(var(--bg), var(--bg)) padding-box, var(--glass-rim) border-box; box-shadow: 0 0 0 1px var(--glass-ring); display: flex; flex-direction: column; gap: 3px; font-size: 13.5px; }
+  .side .logo { display: flex; align-items: center; gap: 8px; font-weight: 700; padding: 4px 8px 10px; }
+  .side .logo svg { width: 18px; height: 18px; }
+  .nav-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 14px; color: var(--fg-muted); }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .nav-item.active { background: var(--accent); color: var(--on-accent); font-weight: 600; box-shadow: inset 0 1px 0 #ffffff73, inset 0 0 0 1px #ffffff2e, 0 1px 3px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .nav-item .badge { margin-left: auto; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+  .nav-item.active .badge { background: #1d110026; color: var(--on-accent); }
+  .side .label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg-faint); padding: 12px 10px 4px; }
+  .main { flex: 1; min-width: 0; padding: 22px 22px 0 10px; display: flex; flex-direction: column; gap: 14px; }
+  .main h3 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
+  .main .hint { margin: 2px 0 0; font-size: 12.5px; color: var(--fg-muted); }
+  .grid2 { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; }
+  .panel { border: 1px solid var(--border); border-radius: 18px; background: var(--bg); padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .eyebrow-s { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg-faint); }
+  .big { font-size: 44px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
+  .panel.hot { background: linear-gradient(var(--accent-soft), transparent 70%), var(--bg); }
+  .mini { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 8px; }
+  .mini b { display: block; font-size: 20px; letter-spacing: -0.02em; }
+  .pill-btn { align-self: flex-start; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 12.5px; border-radius: 999px; padding: 7px 14px; }
+  .row { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; padding: 5px 0; }
+  .row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row span:last-child { color: var(--fg-faint); flex-shrink: 0; }
+  @media (max-width: 760px) { .side { display: none; } .app { height: 360px; } .main { padding-left: 22px; } .grid2 { grid-template-columns: 1fr; } .grid2 > :nth-child(2) { display: none; } }
 
-  /* ---------- colonnade ---------- */
-  .colonnade-stage {
-    margin-top: 64px;
-    padding: 0 0 0;
-    position: relative;
-  }
-  .colonnade-svg { display: block; width: 100%; height: auto; }
+  /* ---------- sections ---------- */
+  section.block { padding: 96px 0 0; }
+  .section-head { text-align: center; max-width: 620px; margin: 0 auto 44px; }
+  .section-head h2 { font-size: clamp(28px, 4.2vw, 42px); letter-spacing: -0.03em; line-height: 1.1; margin: 14px 0 0; text-wrap: balance; }
+  .section-head p { color: var(--fg-muted); font-size: 17px; margin: 14px 0 0; }
 
-  /* ---------- frieze features ---------- */
-  .frieze {
-    border-top: 1px solid var(--rule);
-    border-bottom: 1px solid var(--rule);
-    margin-top: 8px;
-  }
-  .frieze-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    max-width: 1040px;
-    margin: 0 auto;
-  }
-  @media (max-width: 780px) {
-    .frieze-grid { grid-template-columns: repeat(2, 1fr); }
-  }
-  .frieze-item {
-    padding: 30px 24px;
-    border-left: 1px solid var(--rule);
-  }
-  .frieze-item:first-child { border-left: none; }
-  @media (max-width: 780px) {
-    .frieze-item:nth-child(2n+1) { border-left: none; }
-    .frieze-item:nth-child(n+3) { border-top: 1px solid var(--rule); }
-  }
-  .frieze-num {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--accent);
-    letter-spacing: 0.1em;
-    display: block;
-    margin-bottom: 10px;
-  }
-  .frieze-item h3 {
-    font-family: var(--font-display);
-    font-weight: 400;
-    font-size: 19px;
-    margin: 0 0 8px;
-  }
-  .frieze-item p {
-    font-size: 13.5px;
-    line-height: 1.55;
-    color: var(--ink-muted);
-    margin: 0;
-  }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+  .step { border: 1px solid var(--border); border-radius: 22px; overflow: hidden; background: var(--bg); }
+  .scene { position: relative; height: 200px; background: linear-gradient(180deg, var(--accent-soft), transparent); border-bottom: 1px solid var(--border); overflow: hidden; }
+  .step-body { padding: 20px 22px 24px; }
+  .step-body .n { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: 0.08em; }
+  .step-body h3 { margin: 6px 0 6px; font-size: 20px; letter-spacing: -0.02em; }
+  .step-body p { margin: 0; color: var(--fg-muted); font-size: 15px; }
 
-  /* ---------- inscription / philosophy ---------- */
-  .inscription {
-    max-width: 640px;
-    margin: 84px auto;
-    text-align: center;
-    padding: 0 32px;
-  }
-  .inscription blockquote {
-    font-family: var(--font-display);
-    font-style: italic;
-    font-size: 24px;
-    line-height: 1.5;
-    color: var(--ink);
-    margin: 0;
-    text-wrap: balance;
-  }
-  .inscription cite {
-    display: block;
-    margin-top: 18px;
-    font-family: var(--font-mono);
-    font-style: normal;
-    font-size: 11px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-  }
+  .features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .feature { border: 1px solid var(--border); border-radius: 22px; padding: 22px; background: var(--bg); transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
+  .feature:hover { border-color: var(--accent); box-shadow: 0 6px 22px color-mix(in srgb, var(--accent) 16%, transparent); transform: translateY(-2px); }
+  .feature.wide { grid-column: span 2; }
+  .feature .ico { width: 38px; height: 38px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; margin-bottom: 14px; }
+  .feature .ico svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .feature h3 { margin: 0 0 6px; font-size: 17px; letter-spacing: -0.01em; }
+  .feature p { margin: 0; color: var(--fg-muted); font-size: 14.5px; }
+  @media (max-width: 900px) { .features { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .features { grid-template-columns: 1fr; } .feature.wide { grid-column: auto; } }
 
-  /* ---------- footer ---------- */
-  footer.site {
-    border-top: 1px solid var(--rule);
-    padding: 26px 32px 40px;
+  .cta-panel { margin-top: 96px; text-align: center; padding: 56px 24px; border-radius: 30px; border: 1px solid var(--border); background: linear-gradient(var(--accent-soft), transparent 80%), var(--bg); }
+  .cta-panel h2 { font-size: clamp(28px, 4.2vw, 40px); letter-spacing: -0.03em; margin: 0; }
+  .cta-panel p { color: var(--fg-muted); margin: 12px auto 0; max-width: 460px; }
+
+  footer { margin-top: 72px; padding: 26px 0 44px; border-top: 1px solid var(--border); }
+  .foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--fg-faint); }
+  .foot .links { display: flex; gap: 18px; }
+  .foot a:hover { color: var(--accent); }
+
+  /* ---------- animated scenes (same ones as the in-app tour) ---------- */
+  .abs { position: absolute; }
+  .chip { position: absolute; left: 50%; top: 22px; width: 46px; height: 54px; margin-left: -23px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--accent); box-shadow: 0 4px 12px #0000001a; animation: bundle 3.6s cubic-bezier(.45,0,.25,1) infinite both; }
+  .chip svg, .tray svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .tray { position: absolute; left: 0; right: 0; bottom: 18px; display: flex; justify-content: center; }
+  .tray span { display: flex; align-items: center; gap: 6px; padding: 8px 22px; border-radius: 999px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 13px; animation: pulse 3.6s ease-in-out infinite; }
+  .tray svg { width: 16px; height: 16px; }
+  @keyframes bundle {
+    0% { opacity: 0; transform: translate(var(--dx), -6px) rotate(0) scale(.9); }
+    12% { opacity: 1; }
+    38%, 58% { opacity: 1; transform: translate(0, 22px) rotate(var(--rot)) scale(1); }
+    80% { opacity: 1; transform: translate(0, 108px) rotate(var(--rot)) scale(.4); }
+    86%, 100% { opacity: 0; transform: translate(0, 116px) rotate(var(--rot)) scale(.25); }
   }
-  .footer-row {
-    max-width: 1040px;
-    margin: 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 12px;
+  @keyframes pulse { 0%, 74% { transform: scale(1); box-shadow: none; } 84% { transform: scale(1.09); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent); } 96%, 100% { transform: scale(1); box-shadow: none; } }
+
+  .mslide { position: absolute; left: 9%; top: 24px; width: 54%; height: 150px; padding: 14px; display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); box-shadow: 0 4px 12px #0000001a; }
+  .ln { display: block; height: 6px; border-radius: 999px; background: var(--border); }
+  .sel { position: absolute; left: 10px; top: 44px; width: 80%; height: 42px; border: 2px dashed var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 12%, transparent); transform-origin: left top; animation: draw 3.2s ease-in-out infinite both; }
+  .mcard { position: absolute; right: 7%; top: 62px; width: 28%; padding: 12px; display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--accent); border-radius: 12px; background: var(--bg); box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 25%, transparent); animation: cardin 3.2s ease-in-out infinite both; }
+  @keyframes draw { 0%, 10% { transform: scale(0, .4); opacity: 0; } 40%, 85% { transform: scale(1); opacity: 1; } 100% { opacity: 0; } }
+  @keyframes cardin { 0%, 42% { opacity: 0; transform: translateX(-24px) scale(.85); } 58%, 90% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+  .flipwrap { position: absolute; left: 0; right: 0; top: 34%; display: flex; justify-content: center; perspective: 600px; }
+  .flip { position: relative; width: 210px; height: 88px; transform-style: preserve-3d; animation: flip 4s ease-in-out infinite; }
+  .face { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 12px; font-weight: 600; font-size: 13px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg); backface-visibility: hidden; box-shadow: 0 6px 16px #0000001a; }
+  .face.back { transform: rotateY(180deg); background: var(--accent-soft); color: var(--accent); }
+  @keyframes flip { 0%, 30% { transform: rotateY(0); } 45%, 80% { transform: rotateY(180deg); } 95%, 100% { transform: rotateY(360deg); } }
+  .rates { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; justify-content: center; gap: 8px; }
+  .rate { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); font-size: 11.5px; font-weight: 600; color: var(--fg-muted); animation: lit 2.4s ease-in-out infinite both; }
+  @keyframes lit { 0%, 100% { background: var(--bg); color: var(--fg-muted); transform: none; } 12%, 30% { background: var(--accent); color: var(--on-accent); transform: translateY(-3px); } 45% { background: var(--bg); color: var(--fg-muted); transform: none; } }
+
+  /* ---------- entrance + reveal ---------- */
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .hero > * { animation: rise 640ms cubic-bezier(.2,.8,.2,1) both; }
+  .hero > *:nth-child(2) { animation-delay: 70ms; } .hero > *:nth-child(3) { animation-delay: 140ms; } .hero > *:nth-child(4) { animation-delay: 210ms; } .hero > *:nth-child(5) { animation-delay: 260ms; }
+  .stage { animation: rise 800ms cubic-bezier(.2,.8,.2,1) 320ms both; }
+  .js .reveal { opacity: 0; transform: translateY(16px); transition: opacity 600ms ease, transform 600ms cubic-bezier(.2,.8,.2,1); transition-delay: var(--d, 0ms); }
+  .js .reveal.in { opacity: 1; transform: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .js .reveal { opacity: 1; transform: none; }
+    .chip { opacity: 1; transform: translate(0, 22px) rotate(var(--rot)); }
+    .sel { opacity: 1; } .mcard { opacity: 1; }
   }
-  .footer-row .mark-row svg { width: 16px; height: 16px; }
-  .footer-row .wordmark { font-size: 11px; color: var(--ink-faint); }
-  .footer-links { display: flex; gap: 20px; font-family: var(--font-mono); font-size: 11px; }
-  .footer-links a { text-decoration: none; color: var(--ink-faint); letter-spacing: 0.06em; }
-  .footer-links a:hover { color: var(--accent-deep); }
 </style>
 </head>
 <body>
+<script>document.documentElement.classList.add('js')</script>
 
-<header class="site">
-  <div class="mark-row">
-    <svg viewBox="0 0 24 24" fill="none">
-      <rect x="4" y="4" width="16" height="3.4" rx="0.6" fill="currentColor" />
-      <rect x="4" y="16.6" width="16" height="3.4" rx="0.6" fill="currentColor" />
-      <rect x="7.4" y="7.6" width="9.2" height="8.8" fill="currentColor" />
-    </svg>
-    <span class="wordmark">Outcisura</span>
+<nav class="top">
+  <div class="nav-pill">
+    <a class="brand" href="#top" aria-label="Outcisura home">
+      <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="var(--accent)"/><rect x="5" y="5" width="14" height="3" rx=".8" fill="var(--on-accent)"/><rect x="5" y="16" width="14" height="3" rx=".8" fill="var(--on-accent)"/><rect x="8" y="8.6" width="8" height="6.8" fill="var(--on-accent)"/></svg>
+      Outcisura
+    </a>
+    <a class="nav-link" href="#how">How it works</a>
+    <a class="nav-link" href="#features">Features</a>
+    <a class="nav-link" href="https://github.com/bryan-li/outcisura" target="_blank" rel="noopener">GitHub</a>
+    <a class="btn btn-primary" href="https://github.com/bryan-li/outcisura/releases/latest" target="_blank" rel="noopener">Download</a>
   </div>
-  <a class="header-link" href="https://github.com/bryan-li/outcisura" target="_blank" rel="noopener">Source on GitHub ↗</a>
-</header>
+</nav>
 
-<main>
-  <section class="hero">
-    <div class="eyebrow">A study library, assembled from what you already read</div>
-    <h1 class="headline">Flashcards, <em>cut&nbsp;straight</em> from the slide.</h1>
-    <p class="sub">
-      Import a PDF or PowerPoint deck. Click the part worth remembering — it becomes a card,
-      editable and AI-sharpened, always one click from the exact slide it came from.
-    </p>
+<main class="wrap" id="top">
+  <header class="hero">
+    <span class="eyebrow">A study library, assembled from what you already read</span>
+    <h1>Flashcards, <em>cut&nbsp;straight</em> from the slide.</h1>
+    <p class="sub">Import a PDF or PowerPoint deck. Click the part worth remembering — it becomes a card, editable and AI-sharpened, always one click from the exact slide it came from.</p>
     <div class="cta-row">
-      <a class="cta" href="https://github.com/bryan-li/outcisura/releases/latest" target="_blank" rel="noopener">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1v10M4 7l4 4 4-4M2.5 14.5h11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <a class="btn btn-primary" href="https://github.com/bryan-li/outcisura/releases/latest" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1v10M4 7l4 4 4-4M2.5 14.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Download for Mac
       </a>
-      <span class="cta-note">Apple Silicon &amp; Intel · latest release on GitHub</span>
+      <a class="btn btn-secondary" href="https://github.com/bryan-li/outcisura" target="_blank" rel="noopener">View source</a>
     </div>
+    <div class="cta-note">Apple Silicon &amp; Intel · latest release on GitHub</div>
 
-    <div class="colonnade-stage">
-      <svg class="colonnade-svg" viewBox="0 0 1040 260" preserveAspectRatio="xMidYMax meet" role="img" aria-label="A row of columns, with flashcards resting between them">
-        <!-- architrave -->
-        <rect x="40" y="18" width="960" height="14" fill="var(--ink)" opacity="0.86"/>
-        <!-- columns -->
-        <g id="cols"></g>
-        <!-- ground line -->
-        <rect x="20" y="236" width="1000" height="3" fill="var(--rule)"/>
-      </svg>
+    <div class="stage" aria-hidden="true">
+      <div class="app">
+        <div class="side">
+          <div class="logo"><svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="var(--accent)"/><rect x="5" y="5" width="14" height="3" rx=".8" fill="var(--on-accent)"/><rect x="5" y="16" width="14" height="3" rx=".8" fill="var(--on-accent)"/><rect x="8" y="8.6" width="8" height="6.8" fill="var(--on-accent)"/></svg>Outcisura</div>
+          <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>Home</div>
+          <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0114-5.3M20 12a8 8 0 01-14 5.3M18 3v4h-4M6 21v-4h4"/></svg>Review<span class="badge">43</span></div>
+          <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16"/></svg>All cards</div>
+          <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 11l8-4M8 13l8 4"/></svg>Graph</div>
+          <div class="label">Library</div>
+          <div class="nav-item">Lecture 1 — Renal.pptx</div>
+          <div class="label">Folders</div>
+          <div class="nav-item">Physiology</div>
+        </div>
+        <div class="main">
+          <div><h3>Review</h3><p class="hint">Start a session, or pick the folders you want to focus on.</p></div>
+          <div class="grid2">
+            <div class="panel hot"><span class="eyebrow-s">Session</span><span class="big">43</span><span class="hint" style="margin:0">cards due across all your cards</span><span class="pill-btn">Start review</span></div>
+            <div class="panel"><div class="mini">
+              <div><span class="eyebrow-s">Today</span><b>18</b></div><div><span class="eyebrow-s">Streak</span><b>6</b></div>
+              <div><span class="eyebrow-s">Due now</span><b>43</b></div><div><span class="eyebrow-s">Avg session</span><b>9m</b></div>
+            </div></div>
+          </div>
+          <div class="panel"><span class="eyebrow-s">Due next</span>
+            <div class="row"><span>Which pituitary cell type secretes prolactin?</span><span>now</span></div>
+            <div class="row"><span>Steps of tubuloglomerular feedback?</span><span>now</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section class="block" id="how">
+    <div class="section-head reveal"><span class="eyebrow">How it works</span><h2>From lecture slide to long-term memory</h2><p>Three moves, and the source stays attached the whole way.</p></div>
+    <div class="steps">
+      <article class="step reveal">
+        <div class="scene" aria-hidden="true">
+          <div class="chip" style="--dx:-96px;--rot:-12deg"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/></svg></div>
+          <div class="chip" style="--dx:0px;--rot:3deg;animation-delay:.06s"><svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg></div>
+          <div class="chip" style="--dx:96px;--rot:14deg;animation-delay:.12s"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg></div>
+          <div class="tray"><span><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>Library</span></div>
+        </div>
+        <div class="step-body"><span class="n">01</span><h3>Bring in your material</h3><p>PowerPoints, PDFs and lecture videos go into your Library. Nothing to retype.</p></div>
+      </article>
+      <article class="step reveal" style="--d:90ms">
+        <div class="scene" aria-hidden="true">
+          <div class="mslide"><span class="ln" style="width:55%;height:8px;background:var(--fg-muted)"></span><span class="ln" style="width:85%"></span><span class="ln" style="width:70%"></span><span class="sel"></span></div>
+          <div class="mcard"><span class="ln" style="width:60%;height:7px;background:var(--accent)"></span><span class="ln" style="width:90%"></span><span class="ln" style="width:45%"></span></div>
+        </div>
+        <div class="step-body"><span class="n">02</span><h3>Capture, don’t retype</h3><p>Drag a box around text or a diagram. It becomes a card with a backlink to its slide.</p></div>
+      </article>
+      <article class="step reveal" style="--d:180ms">
+        <div class="scene" aria-hidden="true">
+          <div class="flipwrap"><div class="flip"><div class="face">What is spaced repetition?</div><div class="face back">Reviews timed just before you forget</div></div></div>
+          <div class="rates"><span class="rate">Again</span><span class="rate" style="animation-delay:.5s">Hard</span><span class="rate" style="animation-delay:1s">Good</span><span class="rate" style="animation-delay:1.5s">Easy</span></div>
+        </div>
+        <div class="step-body"><span class="n">03</span><h3>Review at the right moment</h3><p>An SM-2 schedule brings each card back right before you’d have forgotten it.</p></div>
+      </article>
     </div>
   </section>
 
-  <section class="frieze">
-    <div class="frieze-grid">
-      <div class="frieze-item">
-        <span class="frieze-num">I</span>
-        <h3>Click to capture</h3>
-        <p>Drag a box around any region of a slide — text, a diagram, an equation — and it's staged as a card in seconds.</p>
-      </div>
-      <div class="frieze-item">
-        <span class="frieze-num">II</span>
-        <h3>AI regeneration</h3>
-        <p>Let Claude rewrite a rough capture into a proper question and answer, or leave it exactly as written.</p>
-      </div>
-      <div class="frieze-item">
-        <span class="frieze-num">III</span>
-        <h3>Video, too</h3>
-        <p>Pause a lecture recording, OCR the frame, or mark a transcript range — the timeline remembers where every card came from.</p>
-      </div>
-      <div class="frieze-item">
-        <span class="frieze-num">IV</span>
-        <h3>Spaced repetition</h3>
-        <p>An SM-2 schedule decides what's due, so you meet each card again right before you'd have forgotten it.</p>
-      </div>
+  <section class="block" id="features">
+    <div class="section-head reveal"><span class="eyebrow">Features</span><h2>Everything a study library needs</h2></div>
+    <div class="features">
+      <div class="feature wide reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.2 5.8L21 11l-5.8 2.2L13 19l-2.2-5.8L5 11l5.8-2.2z"/></svg></div><h3>AI regeneration</h3><p>Let Claude rewrite a rough capture into a proper question and answer — or leave it exactly as written. Bring your own key, or use the built-in allowance.</p></div>
+      <div class="feature wide reveal" style="--d:70ms"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg></div><h3>Video, too</h3><p>Pause a lecture recording, OCR the frame, or mark a transcript range — the timeline remembers where every card came from.</p></div>
+      <div class="feature reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2z"/></svg></div><h3>Folders &amp; tags</h3><p>Nest folders as deep as you like and tag across them.</p></div>
+      <div class="feature reveal" style="--d:70ms"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 11l8-4M8 13l8 4"/></svg></div><h3>Card graph</h3><p>See how cards, folders and source slides connect.</p></div>
+      <div class="feature reveal" style="--d:140ms"><div class="ico"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0114-5.3M20 12a8 8 0 01-14 5.3M18 3v4h-4M6 21v-4h4"/></svg></div><h3>Anki import &amp; export</h3><p>Bring in an Anki deck, or take yours with you anytime.</p></div>
+      <div class="feature reveal" style="--d:210ms"><div class="ico"><svg viewBox="0 0 24 24"><path d="M4 12h3l2-5 4 10 2-5h5"/></svg></div><h3>Live sessions</h3><p>Host a quiz from any prepared folder; friends join with a code.</p></div>
     </div>
   </section>
 
-  <section class="inscription">
-    <blockquote>“The slide already did the work of explaining it. Outcisura just keeps the part worth remembering.”</blockquote>
-    <cite>— on why cards carry a backlink to their source</cite>
+  <section class="cta-panel reveal">
+    <h2>Stop retyping your lectures.</h2>
+    <p>Download Outcisura, drop in a deck, and make your first card in under a minute.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/bryan-li/outcisura/releases/latest" target="_blank" rel="noopener">Download for Mac</a>
+      <a class="btn btn-secondary" href="https://github.com/bryan-li/outcisura" target="_blank" rel="noopener">View source</a>
+    </div>
   </section>
 </main>
 
-<footer class="site">
-  <div class="footer-row">
-    <div class="mark-row">
-      <svg viewBox="0 0 24 24" fill="none">
-        <rect x="4" y="4" width="16" height="3.4" rx="0.6" fill="currentColor" />
-        <rect x="4" y="16.6" width="16" height="3.4" rx="0.6" fill="currentColor" />
-        <rect x="7.4" y="7.6" width="9.2" height="8.8" fill="currentColor" />
-      </svg>
-      <span class="wordmark">Outcisura — a personal study library</span>
-    </div>
-    <div class="footer-links">
-      <a href="https://github.com/bryan-li/outcisura/releases/latest" target="_blank" rel="noopener">Download</a>
-      <a href="https://github.com/bryan-li/outcisura" target="_blank" rel="noopener">GitHub</a>
-    </div>
+<footer>
+  <div class="wrap foot">
+    <span>Outcisura — a personal study library</span>
+    <span class="links"><a href="https://github.com/bryan-li/outcisura/releases/latest" target="_blank" rel="noopener">Download</a><a href="https://github.com/bryan-li/outcisura" target="_blank" rel="noopener">GitHub</a></span>
   </div>
 </footer>
 
 <script>
   (function () {
-    var g = document.getElementById('cols');
-    var n = 7;
-    var startX = 60, endX = 980, y0 = 32, shaftH = 190, baseH = 14, capH = 12;
-    var spacing = (endX - startX) / (n - 1);
-    var cardAt = [1, 4]; // indices where a card peeks between columns
-    for (var i = 0; i < n; i++) {
-      var cx = startX + i * spacing;
-      var w = 26;
-      var ns = 'http://www.w3.org/2000/svg';
-
-      var cap = document.createElementNS(ns, 'rect');
-      cap.setAttribute('x', cx - w / 2 - 3);
-      cap.setAttribute('y', y0);
-      cap.setAttribute('width', w + 6);
-      cap.setAttribute('height', capH);
-      cap.setAttribute('fill', 'var(--ink)');
-      cap.setAttribute('opacity', '0.86');
-      g.appendChild(cap);
-
-      var shaft = document.createElementNS(ns, 'rect');
-      shaft.setAttribute('x', cx - w / 2);
-      shaft.setAttribute('y', y0 + capH);
-      shaft.setAttribute('width', w);
-      shaft.setAttribute('height', shaftH);
-      shaft.setAttribute('fill', 'var(--ground-raised)');
-      shaft.setAttribute('stroke', 'var(--ink)');
-      shaft.setAttribute('stroke-opacity', '0.5');
-      shaft.setAttribute('stroke-width', '1');
-      g.appendChild(shaft);
-
-      // flutes
-      for (var f = 1; f < 4; f++) {
-        var fl = document.createElementNS(ns, 'line');
-        fl.setAttribute('x1', cx - w / 2 + (w / 4) * f);
-        fl.setAttribute('x2', cx - w / 2 + (w / 4) * f);
-        fl.setAttribute('y1', y0 + capH + 4);
-        fl.setAttribute('y2', y0 + capH + shaftH - 4);
-        fl.setAttribute('stroke', 'var(--ink)');
-        fl.setAttribute('stroke-opacity', '0.14');
-        fl.setAttribute('stroke-width', '1');
-        g.appendChild(fl);
-      }
-
-      var base = document.createElementNS(ns, 'rect');
-      base.setAttribute('x', cx - w / 2 - 3);
-      base.setAttribute('y', y0 + capH + shaftH);
-      base.setAttribute('width', w + 6);
-      base.setAttribute('height', baseH);
-      base.setAttribute('fill', 'var(--ink)');
-      base.setAttribute('opacity', '0.86');
-      g.appendChild(base);
-
-      if (cardAt.indexOf(i) !== -1) {
-        var card = document.createElementNS(ns, 'g');
-        card.setAttribute('transform', 'translate(' + (cx + spacing / 2) + ' ' + (y0 + capH + shaftH - 46) + ') rotate(-4)');
-        var cardRect = document.createElementNS(ns, 'rect');
-        cardRect.setAttribute('x', -30);
-        cardRect.setAttribute('y', -22);
-        cardRect.setAttribute('width', 60);
-        cardRect.setAttribute('height', 44);
-        cardRect.setAttribute('fill', 'var(--ground)');
-        cardRect.setAttribute('stroke', 'var(--accent)');
-        cardRect.setAttribute('stroke-width', '1.4');
-        cardRect.setAttribute('stroke-dasharray', '3 3');
-        card.appendChild(cardRect);
-        var l1 = document.createElementNS(ns, 'rect');
-        l1.setAttribute('x', -20); l1.setAttribute('y', -8); l1.setAttribute('width', 40); l1.setAttribute('height', 3); l1.setAttribute('fill', 'var(--ink-muted)');
-        card.appendChild(l1);
-        var l2 = document.createElementNS(ns, 'rect');
-        l2.setAttribute('x', -20); l2.setAttribute('y', 1); l2.setAttribute('width', 26); l2.setAttribute('height', 3); l2.setAttribute('fill', 'var(--ink-faint)');
-        card.appendChild(l2);
-        g.appendChild(card);
-      }
-    }
+    var els = document.querySelectorAll('.reveal');
+    if (!('IntersectionObserver' in window)) { els.forEach(function (e) { e.classList.add('in'); }); return; }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+    els.forEach(function (e) { io.observe(e); });
   })();
 </script>
 </body>
