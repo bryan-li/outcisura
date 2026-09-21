@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent } from 'react'
 import type { CardRecord } from '../../../../shared/types'
 import { useCardsStore } from '../../state/cardsStore'
 import { useReviewLogStore } from '../../state/reviewLogStore'
 import { useTagsStore } from '../../state/tagsStore'
 import { useUiStore } from '../../state/uiStore'
-import { backTextToLines, blockTextToCard, cardToBlockText } from '../../utils/blockCard'
+import { backTextToLines } from '../../utils/blockCard'
 import { computeCardReorder } from '../../utils/cardOrder'
 import { firstImageSourcePath, maskBBoxesFor, hasFaceTaggedImages, imageSourcesForFace } from '../../utils/occlusion'
 import { parseCloze } from '../../utils/cloze'
+import { CardInlineEditor } from './CardInlineEditor'
 import { OcclusionImage } from './OcclusionImage'
 import { Icon } from '../Icon'
 
@@ -54,12 +55,10 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
 
   const [expanded, setExpanded] = useState(false)
   const [editing, setEditing] = useState(false)
-  const [draftText, setDraftText] = useState('')
   const [hovered, setHovered] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
   const [sourceMenuOpen, setSourceMenuOpen] = useState(false)
   const [dropPosition, setDropPosition] = useState<'before' | 'after' | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -125,38 +124,15 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
   const isCloze = card.cardType === 'cloze'
 
   function startEditing(): void {
-    // A cloze card is one plain-text passage, not a front/back pair — the `:>` block convention
-    // doesn't apply (and back stays empty for cloze cards), so it's edited as-is instead.
-    setDraftText(isCloze ? card.front : cardToBlockText(card.front, card.back))
     setEditing(true)
     setExpanded(true)
-    requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
-  function commitEdit(): void {
-    const { front, back } = isCloze ? { front: draftText.trim(), back: '' } : blockTextToCard(draftText)
+  function commitEdit(result: { front: string; back: string }): void {
     setEditing(false)
-    if (front !== card.front || back !== card.back) updateCard(card.id, { front, back })
-  }
-
-  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>): void {
-    if (e.key !== 'Tab') return
-    e.preventDefault()
-    const el = e.currentTarget
-    const { selectionStart, selectionEnd, value } = el
-    if (!e.shiftKey) {
-      const next = value.slice(0, selectionStart) + '  ' + value.slice(selectionEnd)
-      setDraftText(next)
-      requestAnimationFrame(() => el.setSelectionRange(selectionStart + 2, selectionStart + 2))
-    } else {
-      const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1
-      const removeCount = value.slice(lineStart, lineStart + 2) === '  ' ? 2 : value[lineStart] === ' ' ? 1 : 0
-      if (removeCount > 0) {
-        const next = value.slice(0, lineStart) + value.slice(lineStart + removeCount)
-        setDraftText(next)
-        requestAnimationFrame(() => el.setSelectionRange(selectionStart - removeCount, selectionStart - removeCount))
-      }
-    }
+    // A cloze card is one passage with no back, so only its front is ever edited.
+    const back = isCloze ? '' : result.back
+    if (result.front !== card.front || back !== card.back) updateCard(card.id, { front: result.front, back })
   }
 
   async function handleRegenerate(): Promise<void> {
@@ -267,15 +243,7 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
 
         <div style={{ flex: 1, minWidth: 0 }}>
           {editing ? (
-            <textarea
-              ref={textareaRef}
-              value={draftText}
-              onChange={(e) => setDraftText(e.target.value)}
-              onBlur={commitEdit}
-              onKeyDown={handleKeyDown}
-              rows={Math.max(2, draftText.split('\n').length)}
-              style={editTextareaStyle}
-            />
+            <CardInlineEditor front={card.front} back={card.back} isCloze={isCloze} onCommit={commitEdit} />
           ) : (
             // Click flips (same as the ▶/▼ arrow button — toggling here too just gives a bigger,
             // more obvious hit target); double-click edits, matching the fast "click to edit"
@@ -663,17 +631,6 @@ const gutterButtonStyle: CSSProperties = {
   transition: 'opacity var(--transition-fast)'
 }
 
-const editTextareaStyle: CSSProperties = {
-  width: '100%',
-  fontFamily: 'inherit',
-  fontSize: 'var(--font-md)',
-  padding: '2px 4px',
-  border: '1px solid var(--accent)',
-  borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg)',
-  color: 'inherit',
-  resize: 'vertical'
-}
 
 const toolbarStyle: CSSProperties = {
   position: 'absolute',
