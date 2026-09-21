@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { createAnthropicClient, featureHeader } from './anthropicClient'
 import { app } from 'electron'
 import { readFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
@@ -67,16 +68,16 @@ interface RawRegion {
  *  degraded mode), and no Repository dependency (the IPC handler persists results, this just
  *  returns detections). */
 export class OcrService {
-  private client: Anthropic | null
+  private client: Anthropic
 
   constructor(apiKey: string | null) {
-    this.client = apiKey ? new Anthropic({ apiKey }) : null
+    this.client = createAnthropicClient(apiKey)
   }
 
   /** Called when the user sets/changes/clears the key from Settings — takes effect immediately,
    *  no restart needed. */
   setApiKey(apiKey: string | null): void {
-    this.client = apiKey ? new Anthropic({ apiKey }) : null
+    this.client = createAnthropicClient(apiKey)
   }
 
   async recognize(
@@ -117,8 +118,6 @@ export class OcrService {
     imagePath: string,
     originalDims: { width: number; height: number }
   ): Promise<OcrDetection[]> {
-    if (!this.client) throw new Error('Claude Vision OCR unavailable: set ANTHROPIC_API_KEY')
-
     const data = readFileSync(imagePath).toString('base64')
     const message = await this.client.messages.create({
       model: MODEL,
@@ -143,7 +142,7 @@ export class OcrService {
           ]
         }
       ]
-    })
+    }, featureHeader('ocr'))
 
     const toolUse = message.content.find(
       (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use' && block.name === 'report_text_regions'

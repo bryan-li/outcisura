@@ -92,6 +92,7 @@ export const IpcChannels = {
   ankiExportAll: 'anki:exportAll',
   ankiImport: 'anki:import',
   authDeepLink: 'auth:deep-link',
+  authSetAiSession: 'auth:setAiSession',
   syncGetPendingOps: 'sync:getPendingOps',
   syncRemoveOps: 'sync:removeOps',
   syncGetMeta: 'sync:getMeta',
@@ -257,6 +258,10 @@ export interface FlashcardApi {
   auth: {
     /** Opens a URL in the system's default browser (via Electron's `shell.openExternal`). */
     openOAuthUrl(url: string): void
+    /** Hands the main process the signed-in user's Supabase access token, so AI requests can go through
+     *  the ai-proxy Edge Function instead of needing a local API key. Called on every auth change/refresh
+     *  (null on sign-out). */
+    setAiSession(session: { accessToken: string; supabaseUrl: string } | null): Promise<void>
     /** Fires with the full `outcisura://...` URL whenever the OS hands one to this app. Returns
      *  an unsubscribe function. */
     onDeepLink(callback: (url: string) => void): () => void

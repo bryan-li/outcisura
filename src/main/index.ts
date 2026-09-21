@@ -143,9 +143,8 @@ app.whenReady().then(() => {
   // Settings view can update them live, with no restart, when the user saves/clears a key there.
   const apiKey = getApiKey()
   const ai = new AiService(apiKey, repo)
-  if (!apiKey) {
-    console.warn('No Anthropic API key set — AI regenerate and Claude Vision OCR will be unavailable until one is added in Settings.')
-  }
+  // No personal key is fine: AI requests go through the ai-proxy Edge Function using the signed-in
+  // user's session instead (see anthropicClient.ts).
   const ocr = new OcrService(apiKey)
   // Same shape again: the local Whisper engine needs no key, only the OpenAI engine does.
   const transcription = new TranscriptionService(getOpenAiApiKey())

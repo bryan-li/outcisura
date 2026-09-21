@@ -67,6 +67,16 @@ async function ensureProfile(session: Session, set: (partial: Partial<AuthState>
   }
 }
 
+/** The main process makes the Anthropic calls (see anthropicClient.ts) but has no Supabase client, so it
+ *  gets the current access token from here — on every change, including Supabase's own refreshes. */
+function syncAiSession(session: Session | null): void {
+  void window.api.auth.setAiSession(
+    session && !session.user.is_anonymous
+      ? { accessToken: session.access_token, supabaseUrl: import.meta.env.VITE_SUPABASE_URL }
+      : null
+  )
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   loading: true,
@@ -75,12 +85,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   init: () => {
     supabase.auth.getSession().then(({ data }) => {
       set({ session: data.session, loading: false })
+      syncAiSession(data.session)
       if (data.session) void ensureProfile(data.session, set)
     })
     // Keeps session state current across sign-in/out from this call and token refreshes Supabase
     // performs on its own — not just a one-time load.
     supabase.auth.onAuthStateChange((_event, session) => {
       set({ session })
+      syncAiSession(session)
       if (session) void ensureProfile(session, set)
     })
     window.api.auth.onDeepLink((url) => handleAuthDeepLink(url, set))

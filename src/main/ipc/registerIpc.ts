@@ -35,6 +35,7 @@ import type { TranscriptionService } from '../transcriptionService'
 import type { Repository } from '../db/repository'
 import { readImageAsDataUrl, saveDataUrlImage, saveImageBuffer } from '../imageStore'
 import { buildAnkiPackage, parseAnkiPackage } from '../anki'
+import { setProxySession } from '../anthropicClient'
 import { convertPptxToPdf } from '../pptxConverter'
 import { getApiKeyStatus, setApiKey, getOpenAiApiKeyStatus, setOpenAiApiKey } from '../settingsStore'
 
@@ -150,6 +151,10 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
 
   ipcMain.handle(IpcChannels.cardImagesAdd, (_event, cardId: string, imagePaths: string[]) => repo.addCardImages(cardId, imagePaths))
   ipcMain.handle(IpcChannels.cardImagesRemove, (_event, cardId: string, sourceId: string) => repo.removeCardImage(cardId, sourceId))
+
+  ipcMain.handle(IpcChannels.authSetAiSession, (_event, session: { accessToken: string; supabaseUrl: string } | null) => {
+    setProxySession(session)
+  })
 
   ipcMain.handle(IpcChannels.ankiExportAll, async () => {
     const cards = repo.listCards()

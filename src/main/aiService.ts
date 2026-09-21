@@ -13,26 +13,26 @@ import type {
 } from '../shared/types'
 import { Repository } from './db/repository'
 import { imageMediaType } from './imageUtils'
+import { createAnthropicClient, featureHeader } from './anthropicClient'
 
 const MODEL = 'claude-sonnet-5'
 
 type ContentBlock = Anthropic.TextBlockParam | Anthropic.ImageBlockParam
 
 export class AiService {
-  private client: Anthropic | null
+  private client: Anthropic
 
   constructor(apiKey: string | null, private repo: Repository) {
-    this.client = apiKey ? new Anthropic({ apiKey }) : null
+    this.client = createAnthropicClient(apiKey)
   }
 
   /** Called when the user sets/changes/clears the key from Settings — takes effect immediately,
    *  no restart needed, mirroring OcrService's own setApiKey. */
   setApiKey(apiKey: string | null): void {
-    this.client = apiKey ? new Anthropic({ apiKey }) : null
+    this.client = createAnthropicClient(apiKey)
   }
 
   async regenerate(req: AiRegenerateRequest): Promise<AiRegenerateResult> {
-    if (!this.client) throw new Error('AI service unavailable: set an API key in Settings')
     const client = this.client
 
     const content: ContentBlock[] = [{ type: 'text', text: this.buildPrompt(req) }]
@@ -56,7 +56,7 @@ export class AiService {
       model: MODEL,
       max_tokens: 1024,
       messages: [{ role: 'user', content }]
-    })
+    }, featureHeader('regenerate'))
 
     const text = message.content
       .filter((block): block is Anthropic.TextBlock => block.type === 'text')
@@ -76,13 +76,12 @@ export class AiService {
    *  Anthropic tool-use/forced-schema mode: that's real additional machinery that would only start
    *  paying for itself once there's a second structured-output call type in this file. */
   async prepareForSharing(req: AiSharePrepRequest): Promise<AiSharePrepResult> {
-    if (!this.client) throw new Error('AI service unavailable: set an API key in Settings')
 
     const message = await this.client.messages.create({
       model: MODEL,
       max_tokens: 1024,
       messages: [{ role: 'user', content: this.buildSharePrepPrompt(req) }]
-    })
+    }, featureHeader('share_prep'))
 
     const text = message.content
       .filter((block): block is Anthropic.TextBlock => block.type === 'text')
@@ -143,14 +142,13 @@ export class AiService {
    *  only on the host's machine (live sessions can't exist without a connected host), never called
    *  from a guest's client. */
   async judgeFreeTextAnswers(req: AiJudgeFreeTextRequest): Promise<AiJudgeFreeTextResult> {
-    if (!this.client) throw new Error('AI service unavailable: set an API key in Settings')
     if (req.answers.length === 0) return { judgments: [] }
 
     const message = await this.client.messages.create({
       model: MODEL,
       max_tokens: 1536,
       messages: [{ role: 'user', content: this.buildJudgePrompt(req) }]
-    })
+    }, featureHeader('judge_free_text'))
 
     const text = message.content
       .filter((block): block is Anthropic.TextBlock => block.type === 'text')
@@ -215,7 +213,6 @@ export class AiService {
    *  no OCR'd text) just contribute nothing to the summary, same as they'd contribute nothing to a
    *  human skimming the deck's outline. */
   async summarizeDocument(documentId: string): Promise<AiSummarizeResult> {
-    if (!this.client) throw new Error('AI service unavailable: set an API key in Settings')
 
     const pages = this.repo.getPages(documentId)
     const text = pages
@@ -236,7 +233,7 @@ export class AiService {
       model: MODEL,
       max_tokens: 1024,
       messages: [{ role: 'user', content: this.buildSummarizePrompt(text) }]
-    })
+    }, featureHeader('summarize'))
 
     const summary = message.content
       .filter((block): block is Anthropic.TextBlock => block.type === 'text')

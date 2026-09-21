@@ -5,6 +5,7 @@ import { useUiStore, type Theme } from '../../state/uiStore'
 import { useSyncEnabledStore } from '../../state/syncEnabledStore'
 import { useConnectivityStore } from '../../state/connectivityStore'
 import { useCardsStore } from '../../state/cardsStore'
+import { AiAccessSection } from './AiAccessSection'
 import { runSyncCycle } from '../../lib/syncEngine'
 import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useZoomFactor } from '../../hooks/useZoomFactor'
 
@@ -256,12 +257,14 @@ export function SettingsView(): JSX.Element {
         {ankiMessage && <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>{ankiMessage}</p>}
       </section>
 
+      <AiAccessSection />
+
       <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>Anthropic API key</h2>
-        <p style={hintStyle}>Used for AI card regeneration and Claude Vision OCR. Stored locally, never leaves this device except to call Anthropic's API.</p>
+        <h2 style={sectionTitleStyle}>Your own Anthropic key (optional)</h2>
+        <p style={hintStyle}>AI features normally run on your AI allowance above. Set your own key to bill your own Anthropic account instead, with no monthly limit from here. Stored locally, never leaves this device except to call Anthropic's API.</p>
         {keyStatus && (
           <p style={{ fontSize: 'var(--font-sm)', color: keyStatus.hasKey ? 'var(--fg)' : 'var(--fg-muted)' }}>
-            {keyStatus.hasKey ? `Key set, ending in ...${keyStatus.last4}` : 'No key set — AI features are unavailable.'}
+            {keyStatus.hasKey ? `Key set, ending in ...${keyStatus.last4}` : 'No personal key set — AI uses your allowance above.'}
           </p>
         )}
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
