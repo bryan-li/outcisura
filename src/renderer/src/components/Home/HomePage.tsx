@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties, type ReactNode } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import type { CardRecord, ReviewLogEntry } from '../../../../shared/types'
 import { useAuthStore } from '../../state/authStore'
 import { useCardsStore } from '../../state/cardsStore'
@@ -10,6 +10,20 @@ import { computeReviewStats } from '../../utils/reviewStats'
 import { dueCards } from '../../utils/srsQueue'
 import { formatDuration } from '../../utils/formatDuration'
 import { DocTypeIcon, Icon } from '../Icon'
+import {
+  bigNumberStyle,
+  countPillStyle,
+  EmptyHint,
+  eyebrowStyle,
+  listStyle,
+  panelStyle,
+  panelTitleStyle,
+  primaryPillStyle as primaryButtonStyle,
+  rowLabelStyle,
+  rowMetaStyle,
+  rowStyle,
+  secondaryPillStyle as secondaryButtonStyle
+} from '../dashboardKit'
 
 const DAY_MS = 86400000
 const ACTIVITY_DAYS = 14
@@ -362,25 +376,6 @@ function Stat({ label, value, onClick }: { label: string; value: number; onClick
   )
 }
 
-/** Kept exported: the Review dashboard reuses this tile for its own stats. */
-export function StatTile({ label, value, onClick }: { label: ReactNode; value: number | string; onClick?: () => void }): JSX.Element {
-  const Tag = onClick ? 'button' : 'div'
-  return (
-    <Tag
-      onClick={onClick}
-      className={onClick ? 'hover-lift' : undefined}
-      style={{ ...statTileStyle, cursor: onClick ? 'pointer' : 'default' }}
-    >
-      <div style={{ fontSize: 'var(--font-xxl)', fontWeight: 600, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', marginTop: 'var(--space-1)' }}>{label}</div>
-    </Tag>
-  )
-}
-
-function EmptyHint({ text }: { text: string }): JSX.Element {
-  return <p style={{ color: 'var(--fg-faint)', fontSize: 'var(--font-sm)', margin: 0 }}>{text}</p>
-}
-
 const pageStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 940 }
 
 const heroRowStyle: CSSProperties = { display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(190px, 1fr)', gap: 'var(--space-4)' }
@@ -394,17 +389,6 @@ const columnsStyle: CSSProperties = {
   alignItems: 'start'
 }
 
-const panelStyle: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 'var(--space-3)',
-  padding: 'var(--space-4) var(--space-4)',
-  border: '1px solid var(--border)',
-  borderRadius: 18,
-  background: 'var(--bg)',
-  minWidth: 0
-}
-
 const todayPanelStyle: CSSProperties = {
   flexDirection: 'row',
   alignItems: 'center',
@@ -415,42 +399,6 @@ const todayPanelStyle: CSSProperties = {
 }
 
 const streakPanelStyle: CSSProperties = { justifyContent: 'center', gap: 'var(--space-3)', padding: 'var(--space-5)' }
-
-const eyebrowStyle: CSSProperties = {
-  fontSize: 'var(--font-xs)',
-  fontWeight: 600,
-  letterSpacing: '0.07em',
-  textTransform: 'uppercase',
-  color: 'var(--fg-faint)'
-}
-
-const bigNumberStyle: CSSProperties = { fontSize: 44, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }
-
-const panelTitleStyle: CSSProperties = { fontSize: 'var(--font-md)', fontWeight: 600, margin: 0 }
-
-const primaryButtonStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  border: 'none',
-  background: 'var(--accent)',
-  color: 'var(--on-accent)',
-  fontWeight: 600,
-  fontSize: 'var(--font-md)',
-  borderRadius: 'var(--radius-pill)',
-  padding: '8px 18px',
-  cursor: 'pointer'
-}
-
-const secondaryButtonStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  border: '1px solid var(--border)',
-  background: 'var(--bg)',
-  fontSize: 'var(--font-sm)',
-  borderRadius: 'var(--radius-pill)',
-  padding: '7px 14px',
-  cursor: 'pointer'
-}
 
 const statStripStyle: CSSProperties = {
   display: 'flex',
@@ -473,47 +421,3 @@ const statStyle: CSSProperties = {
   color: 'inherit'
 }
 
-const listStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 2, margin: '0 -8px' }
-
-const rowStyle: CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  gap: 'var(--space-2)',
-  border: 'none',
-  textAlign: 'left',
-  padding: '7px 8px',
-  borderRadius: 'var(--radius-row)',
-  cursor: 'pointer',
-  color: 'inherit',
-  fontSize: 'var(--font-sm)'
-}
-
-const rowLabelStyle: CSSProperties = { display: 'flex', alignItems: 'center', minWidth: 0, flex: 1 }
-
-const rowMetaStyle: CSSProperties = { color: 'var(--fg-faint)', fontSize: 'var(--font-xs)', flexShrink: 0, maxWidth: '40%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
-
-const countPillStyle: CSSProperties = {
-  minWidth: 22,
-  height: 20,
-  padding: '0 7px',
-  borderRadius: 'var(--radius-pill)',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: 11,
-  fontWeight: 700,
-  fontVariantNumeric: 'tabular-nums',
-  background: 'var(--accent-soft)',
-  color: 'var(--accent)',
-  flexShrink: 0
-}
-
-const statTileStyle: CSSProperties = {
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-lg)',
-  padding: 'var(--space-4)',
-  background: 'var(--bg)',
-  textAlign: 'left',
-  transition: 'border-color var(--transition-fast), background-color var(--transition-fast)'
-}
