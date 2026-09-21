@@ -20,6 +20,7 @@ import { MarqueeSelect } from '../Grid/MarqueeSelect'
 import type { ImportProgress } from '../../types/importProgress'
 import { ImportProgressBar } from './ImportProgressBar'
 import { RowMenu } from './RowMenu'
+import { Logo } from '../Logo'
 import { DocTypeIcon, Icon, type IconName } from '../Icon'
 
 function ext(file: File): string | undefined {
@@ -237,7 +238,7 @@ export function Sidebar(): JSX.Element {
     return (
       <aside style={collapsedSidebarStyle}>
         <button onClick={() => setView({ type: 'home' })} title="Outcisura" style={collapsedMarkButtonStyle}>
-          <pre aria-hidden="true" style={wordmarkMarkStyle}>{PILLAR_MARK}</pre>
+          <Logo size={24} />
         </button>
         <button onClick={() => setCollapsed(false)} title="Expand sidebar" style={collapseToggleStyle}>
           <Icon name="chevrons-right" bare />
@@ -286,7 +287,7 @@ export function Sidebar(): JSX.Element {
           title="Outcisura"
           style={{ ...wordmarkStyle, flex: 1, minWidth: 0 }}
         >
-          <pre aria-hidden="true" style={wordmarkMarkStyle}>{PILLAR_MARK}</pre>
+          <Logo size={20} />
           Outcisura
         </button>
         <button onClick={() => setCollapsed(true)} title="Collapse sidebar" style={collapseToggleStyle}>
@@ -1541,7 +1542,7 @@ function InlineTextInput({ depth, initialValue, placeholder, onSubmit, onCancel 
 const wordmarkStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: 6,
+  gap: 8,
   margin: '0 var(--space-2)',
   padding: '2px 8px 2px 6px',
   border: 'none',
@@ -1552,21 +1553,6 @@ const wordmarkStyle: CSSProperties = {
   letterSpacing: '-0.01em',
   color: 'var(--fg)',
   textAlign: 'left'
-}
-
-// A tiny ascii-art column — capital, fluted shaft, base — kept to the wordmark's own line height
-// (font-size 6 * line-height 0.62 * 5 rows ≈ text cap-height) so it sits flush next to the text
-// instead of towering over it like a full-size illustration would.
-const PILLAR_MARK = '▛▀▀▀▜\n ▐█▌ \n ▐█▌ \n ▐█▌ \n▙▄▄▄▟'
-
-const wordmarkMarkStyle: CSSProperties = {
-  margin: 0,
-  fontFamily: 'ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace',
-  fontSize: 6,
-  lineHeight: 0.62,
-  color: 'var(--accent)',
-  userSelect: 'none',
-  flexShrink: 0
 }
 
 /** The panel's glass finish: a thin gradient border that catches light at opposite corners (the
