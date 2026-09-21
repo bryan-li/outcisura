@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Email confirmed — Outcisura</title>
+<meta name="robots" content="noindex" />
+<meta name="referrer" content="no-referrer" />
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23f2a255'/%3E%3Crect x='5' y='5' width='14' height='3' rx='0.8' fill='%231d1100'/%3E%3Crect x='5' y='16' width='14' height='3' rx='0.8' fill='%231d1100'/%3E%3Crect x='8' y='8.6' width='8' height='6.8' fill='%231d1100'/%3E%3C/svg%3E" />
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --bg-soft: #f7f7f5;
+    --fg: #191919;
+    --fg-muted: #6b6b68;
+    --fg-faint: #9b9b98;
+    --border: #e7e7e4;
+    --accent: #e86b0f;
+    --accent-soft: #e86b0f1f;
+    --on-accent: #1d1100;
+    --danger: #e5484d;
+    --danger-soft: #e5484d1f;
+    --glass-rim: linear-gradient(150deg, #fffffff5 0%, #ffffff59 34%, #ffffff00 58%, #ffffffb8 100%);
+    --glass-fill: #ffffffe6;
+    --glass-ring: #0000000d;
+    --shadow: 0 24px 60px #00000018;
+    --page-glow: radial-gradient(60% 50% at 50% 0%, #e86b0f1c, transparent 70%);
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #191919;
+      --bg-soft: #202020;
+      --fg: #e9e9e7;
+      --fg-muted: #9b9b98;
+      --fg-faint: #6b6b68;
+      --border: #2f2f2e;
+      --accent: #ff9d42;
+      --accent-soft: #ff9d4229;
+      --danger: #ff6369;
+      --danger-soft: #ff636929;
+      --glass-rim: linear-gradient(150deg, #ffffff40 0%, #ffffff14 34%, #ffffff00 58%, #ffffff2e 100%);
+      --glass-fill: #202020e8;
+      --glass-ring: #000000a6;
+      --shadow: 0 24px 60px #00000080;
+      --page-glow: radial-gradient(60% 50% at 50% 0%, #ff9d4224, transparent 70%);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0; display: flex; flex-direction: column; min-height: 100vh;
+    background: var(--bg); color: var(--fg); font-family: var(--font);
+    -webkit-font-smoothing: antialiased; line-height: 1.5; overflow-x: hidden;
+  }
+  body::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 640px; background: var(--page-glow); pointer-events: none; z-index: -1; }
+  a { color: inherit; text-decoration: none; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  /* ---------- buttons (same shapes as the app) ---------- */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-size: 15px; border-radius: 999px; padding: 11px 22px; cursor: pointer; transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease; }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent); color: var(--on-accent); font-weight: 600; border: none; box-shadow: inset 0 1px 0 #ffffff73, inset 0 0 0 1px #ffffff2e, 0 2px 8px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 #ffffff73, inset 0 0 0 1px #ffffff2e, 0 6px 18px color-mix(in srgb, var(--accent) 50%, transparent); }
+  .btn-secondary { background: var(--bg); border: 1px solid var(--border); color: var(--fg); }
+  .btn-secondary:hover { background: var(--bg-soft); }
+
+  /* ---------- floating glass nav ---------- */
+  nav.top { position: sticky; top: 14px; z-index: 20; display: flex; justify-content: center; padding: 0 16px; }
+  .nav-pill {
+    display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 16px; border-radius: 999px;
+    border: 1px solid transparent;
+    background: linear-gradient(var(--glass-fill), var(--glass-fill)) padding-box, var(--glass-rim) border-box;
+    -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4);
+    box-shadow: 0 0 0 1px var(--glass-ring), 0 8px 28px #00000014;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -0.01em; margin-right: 14px; }
+  .brand svg { width: 22px; height: 22px; }
+  .nav-link { font-size: 14px; color: var(--fg-muted); padding: 7px 12px; border-radius: 999px; transition: background-color 120ms ease, color 120ms ease; }
+  .nav-link:hover { background: var(--accent-soft); color: var(--fg); }
+  .nav-pill .btn { padding: 8px 16px; font-size: 14px; margin-left: 4px; }
+  @media (max-width: 520px) { .nav-link { display: none; } }
+
+  /* ---------- confirmation card ---------- */
+  main { flex: 1; display: grid; place-items: center; padding: 56px 20px 24px; }
+  .stage {
+    width: 100%; max-width: 520px; padding: 10px; border-radius: 30px; border: 1px solid transparent;
+    background: linear-gradient(var(--bg-soft), var(--bg-soft)) padding-box, var(--glass-rim) border-box;
+    box-shadow: 0 0 0 1px var(--glass-ring), var(--shadow);
+    animation: rise 520ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  .card { border-radius: 22px; background: var(--bg); border: 1px solid var(--border); padding: 44px 32px 32px; text-align: center; }
+  .badge {
+    position: relative; width: 76px; height: 76px; margin: 0 auto 22px; border-radius: 50%;
+    display: grid; place-items: center; background: var(--accent-soft); color: var(--accent);
+  }
+  .badge::after { content: ''; position: absolute; inset: -8px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+  .badge svg { width: 38px; height: 38px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .badge .tick { stroke-dasharray: 26; stroke-dashoffset: 26; animation: draw 520ms 260ms ease-out forwards; }
+  [data-state='error'] .badge { background: var(--danger-soft); color: var(--danger); }
+  [data-state='error'] .badge::after { border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+  .eyebrow { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); padding: 5px 12px; border-radius: 999px; }
+  [data-state='error'] .eyebrow { color: var(--danger); background: var(--danger-soft); }
+  h1 { font-size: clamp(28px, 6vw, 36px); line-height: 1.1; letter-spacing: -0.03em; margin: 16px 0 0; text-wrap: balance; }
+  .lede { color: var(--fg-muted); font-size: 16px; margin: 12px auto 0; max-width: 400px; text-wrap: pretty; }
+  .detail { margin: 14px auto 0; max-width: 400px; font-size: 13px; color: var(--fg-faint); }
+  .actions { display: flex; flex-direction: column; gap: 10px; margin: 28px auto 0; max-width: 300px; }
+  .hint { margin: 18px 0 0; font-size: 13px; color: var(--fg-faint); }
+  .hint a { color: var(--fg-muted); text-decoration: underline; text-underline-offset: 3px; }
+  .hint a:hover { color: var(--accent); }
+
+  .only-ok, .only-error { display: none; }
+  [data-state='ok'] .only-ok { display: revert; }
+  [data-state='error'] .only-error { display: revert; }
+  .actions.only-ok, .actions.only-error { display: none; }
+  [data-state='ok'] .actions.only-ok, [data-state='error'] .actions.only-error { display: flex; }
+
+  footer { padding: 26px 24px 40px; }
+  .foot { max-width: 1040px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--fg-faint); }
+  .foot .links { display: flex; gap: 18px; }
+  .foot a:hover { color: var(--accent); }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .stage { animation: none; }
+    .badge .tick { animation: none; stroke-dashoffset: 0; }
+  }
+</style>
+</head>
+<body data-state="ok">
+
+<nav class="top">
+  <div class="nav-pill">
+    <a class="brand" href="/" aria-label="Outcisura home">
+      <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="var(--accent)"/><rect x="5" y="5" width="14" height="3" rx=".8" fill="var(--on-accent)"/><rect x="5" y="16" width="14" height="3" rx=".8" fill="var(--on-accent)"/><rect x="8" y="8.6" width="8" height="6.8" fill="var(--on-accent)"/></svg>
+      Outcisura
+    </a>
+    <a class="nav-link" href="/">Home</a>
+    <a class="nav-link" href="https://github.com/bryan-li/outcisura" target="_blank" rel="noopener">GitHub</a>
+    <a class="btn btn-primary" href="https://github.com/bryan-li/outcisura/releases/latest" target="_blank" rel="noopener">Download</a>
+  </div>
+</nav>
+
+<main>
+  <div class="stage" role="status" aria-live="polite">
+    <div class="card">
+      <div class="badge" aria-hidden="true">
+        <svg class="only-ok" viewBox="0 0 24 24"><path class="tick" d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+        <svg class="only-error" viewBox="0 0 24 24"><path d="M12 4 2.8 19.5h18.4L12 4z"/><path d="M12 10v4.5"/><path d="M12 17.3v.1"/></svg>
+      </div>
+
+      <span class="eyebrow only-ok" id="eyebrow-ok">Account ready</span>
+      <span class="eyebrow only-error">Link problem</span>
+
+      <h1 class="only-ok" id="title-ok">Email confirmed</h1>
+      <h1 class="only-error">That link didn’t work</h1>
+
+      <p class="lede only-ok" id="lede-ok">Your Outcisura account is ready. Head back to the app and sign in with the email and password you chose.</p>
+      <p class="lede only-error">Confirmation links expire and only work once. If yours has, sign up again in the app with the same email and we’ll send a fresh one.</p>
+      <p class="detail only-error" id="error-detail" hidden></p>
+
+      <div class="actions only-ok">
+        <a class="btn btn-primary" id="open-app" href="outcisura://confirmed">Open Outcisura</a>
+        <a class="btn btn-secondary" href="https://github.com/bryan-li/outcisura/releases/latest" target="_blank" rel="noopener">Download for Mac</a>
+      </div>
+      <div class="actions only-error">
+        <a class="btn btn-primary" href="outcisura://confirmed">Open Outcisura</a>
+        <a class="btn btn-secondary" href="https://github.com/bryan-li/outcisura/releases/latest" target="_blank" rel="noopener">Download for Mac</a>
+      </div>
+
+      <p class="hint only-ok">Nothing happened? Launch Outcisura yourself — or <a href="https://github.com/bryan-li/outcisura/releases/latest" target="_blank" rel="noopener">install it</a> first.</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="foot">
+    <span>Outcisura — a personal study library</span>
+    <span class="links"><a href="/">Home</a><a href="https://github.com/bryan-li/outcisura/releases/latest" target="_blank" rel="noopener">Download</a><a href="https://github.com/bryan-li/outcisura" target="_blank" rel="noopener">GitHub</a></span>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    // Supabase appends its result to the redirect URL — the hash for the implicit flow
+    // (#access_token=…&type=signup, or #error=…&error_description=…), the query string otherwise.
+    // Nothing here is sent anywhere: the page only reads it to pick a state, then scrubs it from the
+    // address bar so a session token never lingers in history or a screenshot.
+    var params = new URLSearchParams(location.search);
+    new URLSearchParams(location.hash.replace(/^#/, '')).forEach(function (v, k) { params.set(k, v); });
+
+    var failed = params.has('error') || params.has('error_code') || params.has('error_description');
+    document.body.setAttribute('data-state', failed ? 'error' : 'ok');
+
+    if (failed) {
+      var raw = params.get('error_description') || params.get('error') || '';
+      var detail = document.getElementById('error-detail');
+      if (raw) { detail.textContent = raw.replace(/\+/g, ' '); detail.hidden = false; }
+      document.title = 'Confirmation link problem — Outcisura';
+    } else if (params.get('type') === 'email_change') {
+      document.title = 'Email updated — Outcisura';
+      document.getElementById('title-ok').textContent = 'Email updated';
+      document.getElementById('eyebrow-ok').textContent = 'All set';
+      document.getElementById('lede-ok').textContent = 'Your new email address is confirmed. You can head back to the app.';
+    }
+
+    if (location.hash || location.search) history.replaceState(null, '', location.pathname);
+  })();
+</script>
+</body>
+</html>
