@@ -175,7 +175,7 @@ function WelcomeArt(): JSX.Element {
   ]
   return (
     <Frame>
-      <div style={{ ...centerStyle, top: '52%' }}>
+      <div style={{ ...centerStyle, top: '48%' }}>
         {cards.map((c, i) => (
           <div
             key={i}
@@ -422,7 +422,8 @@ const trayStyle: CSSProperties = {
 
 const welcomeCardStyle: CSSProperties = {
   position: 'absolute',
-  left: -55,
+  left: '50%',
+  marginLeft: -55,
   top: -50,
   width: 110,
   height: 100,
