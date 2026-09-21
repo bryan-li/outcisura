@@ -1,21 +1,14 @@
-/** Polished, springy scrolling for the main content pane and the sidebar list.
+/** Smooth mouse-wheel scrolling for the main content pane and the sidebar list: a notched wheel
+ *  sends big discrete steps, so each one moves a target and the real scroll position eases toward it
+ *  (like YouTube or Chrome's own smooth scrolling). Trackpad scrolling is left to the browser, which
+ *  already has momentum.
  *
- *  Two things, both driven from one document-level wheel listener:
- *   - Mouse wheels (which arrive as big discrete steps) glide: each notch moves a target and the real
- *     scroll position eases toward it, like YouTube or Chrome's own smooth scrolling.
- *   - Pushing past either end (mouse or trackpad) stretches the content and springs it back — the
- *     rubber-band feel macOS gives the whole page but Chromium doesn't give scrolling panels.
- *  Trackpad scrolling inside the panel is left to the browser, which already has momentum.
- *
- *  Skipped entirely for reduced-motion users, for pinch-zoom, for horizontal gestures, and whenever
- *  the pointer is over a nested scroller that can still move in that direction. */
+ *  Skipped for reduced-motion users, pinch-zoom, horizontal gestures, and whenever the pointer is over
+ *  a nested scroller that can still move in that direction. */
 
 const CONTAINER_SELECTOR = 'main, .sidebar-scroll'
 /** Half-life-ish easing: the fraction of the remaining distance covered per second is 1 - e^(-k). */
 const GLIDE_RATE = 14
-const MAX_STRETCH = 84
-const SPRING_STIFFNESS = 380
-const SPRING_DAMPING = 28
 const GESTURE_GAP_MS = 90
 
 interface ScrollState {
@@ -24,9 +17,6 @@ interface ScrollState {
   /** The scrollTop we last wrote, so an outside change (scrollbar drag, scrollTo, page change) can be told apart. */
   lastWritten: number
   gliding: boolean
-  stretch: number
-  velocity: number
-  springing: boolean
   lastWheelAt: number
   /** Decided at the start of each wheel gesture: true for a notched mouse wheel. */
   mouseGesture: boolean
@@ -38,7 +28,7 @@ const states = new WeakMap<HTMLElement, ScrollState>()
 function stateFor(el: HTMLElement): ScrollState {
   let s = states.get(el)
   if (!s) {
-    s = { target: el.scrollTop, lastWritten: el.scrollTop, gliding: false, stretch: 0, velocity: 0, springing: false, lastWheelAt: 0, mouseGesture: false, lastFrame: 0 }
+    s = { target: el.scrollTop, lastWritten: el.scrollTop, gliding: false, lastWheelAt: 0, mouseGesture: false, lastFrame: 0 }
     states.set(el, s)
     // Any scroll we didn't cause (scrollbar drag, keyboard, scrollTo, navigating) resets the glide.
     el.addEventListener('scroll', () => {
@@ -55,16 +45,6 @@ function stateFor(el: HTMLElement): ScrollState {
 
 function maxScroll(el: HTMLElement): number {
   return Math.max(0, el.scrollHeight - el.clientHeight)
-}
-
-/** The element that gets stretched: the pane's own content, so its scrollbar and padding stay put. */
-function stretchTarget(el: HTMLElement): HTMLElement | null {
-  return el.firstElementChild instanceof HTMLElement ? el.firstElementChild : null
-}
-
-function applyStretch(el: HTMLElement, px: number): void {
-  const t = stretchTarget(el)
-  if (t) t.style.transform = Math.abs(px) < 0.05 ? '' : `translate3d(0, ${px.toFixed(2)}px, 0)`
 }
 
 /** True when something between the pointer and the container can itself scroll in this direction. */
@@ -102,29 +82,6 @@ function startGlide(el: HTMLElement, s: ScrollState): void {
   requestAnimationFrame(step)
 }
 
-function startSpring(el: HTMLElement, s: ScrollState): void {
-  if (s.springing) return
-  s.springing = true
-  s.lastFrame = performance.now()
-  const step = (now: number): void => {
-    const dt = Math.min(0.04, (now - s.lastFrame) / 1000)
-    s.lastFrame = now
-    const accel = -SPRING_STIFFNESS * s.stretch - SPRING_DAMPING * s.velocity
-    s.velocity += accel * dt
-    s.stretch += s.velocity * dt
-    if (Math.abs(s.stretch) < 0.15 && Math.abs(s.velocity) < 1) {
-      s.stretch = 0
-      s.velocity = 0
-      s.springing = false
-      applyStretch(el, 0)
-      return
-    }
-    applyStretch(el, s.stretch)
-    requestAnimationFrame(step)
-  }
-  requestAnimationFrame(step)
-}
-
 function onWheel(e: WheelEvent): void {
   if (e.ctrlKey || e.defaultPrevented || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return
   if (!(e.target instanceof Element)) return
@@ -143,33 +100,6 @@ function onWheel(e: WheelEvent): void {
   s.lastWheelAt = now
 
   const max = maxScroll(container)
-  const atTop = container.scrollTop <= 0.5
-  const atBottom = container.scrollTop >= max - 0.5
-
-  // Already stretched, so the first thing a wheel does is un-stretch (below), before any real scrolling.
-  const pushingOut = (atTop && dy < 0) || (atBottom && dy > 0)
-  if (pushingOut) {
-    e.preventDefault()
-    s.gliding = false
-    s.target = container.scrollTop
-    const room = 1 - Math.min(1, Math.abs(s.stretch) / MAX_STRETCH)
-    s.stretch += -dy * 0.9 * room
-    s.stretch = Math.max(-MAX_STRETCH, Math.min(MAX_STRETCH, s.stretch))
-    applyStretch(container, s.stretch)
-    startSpring(container, s)
-    return
-  }
-  if (s.stretch !== 0) {
-    // Scrolling back the other way while stretched: unwind first, and swallow the event.
-    e.preventDefault()
-    const before = s.stretch
-    s.stretch -= dy * 0.5
-    if (Math.sign(before) !== Math.sign(s.stretch)) s.stretch = 0
-    applyStretch(container, s.stretch)
-    startSpring(container, s)
-    return
-  }
-
   if (s.mouseGesture) {
     e.preventDefault()
     const base = s.gliding ? s.target : container.scrollTop
