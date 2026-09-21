@@ -5,6 +5,7 @@ import { computeReadinessForFolders, type FolderReadiness } from '../../lib/live
 import { listPublicDecks, type PublicDeckSummary } from '../../lib/liveSession/hostableDecks'
 import { BentoGrid, BentoTile } from '../Grid/Bento'
 import { Icon } from '../Icon'
+import { PageHeader, pageStyle, panelTitleStyle } from '../dashboardKit'
 
 /** Decks ready to host: the current user's own prepped folders, plus public premade decks from any
  *  user. Doesn't build the actual "start a session" flow (M1, not built yet) — "Your decks" tiles
@@ -52,20 +53,16 @@ export function HostableDecksView(): JSX.Element {
   const yourReadyFolders = folders.filter((f) => readinessByFolder.get(f.id)?.isReady)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-      <div>
-        <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0 }}>
-          <Icon name="broadcast" />Hostable Decks
-        </h1>
-        <p style={{ color: 'var(--fg-muted)', marginTop: 'var(--space-1)' }}>
-          Decks ready for a live session — prepare a folder from its own page, then it shows up here.
-        </p>
-      </div>
+    <div style={pageStyle}>
+      <PageHeader
+        title="Hostable decks"
+        subtitle="Decks ready for a live session — prepare a folder from its own page, then it shows up here."
+      />
 
       {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
 
       <div>
-        <h2 style={{ fontSize: 'var(--font-lg)', margin: '0 0 var(--space-2)' }}>Your decks</h2>
+        <h2 style={{ ...panelTitleStyle, margin: '0 0 var(--space-2)' }}>Your decks</h2>
         {yourReadyFolders.length === 0 ? (
           <p style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-sm)' }}>
             Nothing ready yet — open a folder and click "Prepare for hosting."
@@ -91,7 +88,7 @@ export function HostableDecksView(): JSX.Element {
       </div>
 
       <div>
-        <h2 style={{ fontSize: 'var(--font-lg)', margin: '0 0 var(--space-2)' }}>Public decks</h2>
+        <h2 style={{ ...panelTitleStyle, margin: '0 0 var(--space-2)' }}>Public decks</h2>
         {publicDecks === null ? (
           <p style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-sm)' }}>Loading…</p>
         ) : publicDecks.length === 0 ? (

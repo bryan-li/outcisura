@@ -207,7 +207,7 @@ function GroupSection({
   )
 }
 
-const pageStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', width: '100%', maxWidth: 940, margin: '0 auto' }
+const pageStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', width: '100%', maxWidth: 940 }
 
 const titleStyle: CSSProperties = { fontSize: 'var(--font-xxl)', margin: 0 }
 

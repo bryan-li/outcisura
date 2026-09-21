@@ -11,6 +11,7 @@ import { parsePptx } from '../../parsers/pptxParser'
 import { parseVideoFile } from '../../parsers/videoParser'
 import { formatDuration } from '../../utils/formatDuration'
 import { DocTypeIcon, Icon } from '../Icon'
+import { PageHeader, secondaryPillStyle } from '../dashboardKit'
 
 /** Sources a cross-device pull couldn't resolve locally (see repository.ts's applyRemoteCardUpsert/
  *  replaceOrphanedSource/recaptureOrphanedSource/dismissOrphanedSource). Three ways to resolve one:
@@ -227,14 +228,12 @@ export function MissingSourcesView(): JSX.Element {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 640 }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-        <button onClick={goBack} style={backButtonStyle} title="Back">
-          <Icon name="arrow-left" />Back
-        </button>
-      </header>
-
+      <PageHeader title="Missing sources" actions={
+          <button onClick={goBack} style={secondaryPillStyle} title="Back">
+            <Icon name="arrow-left" />Back
+          </button>
+        } />
       <div>
-        <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0 }}>Missing sources</h1>
         <p style={hintStyle}>
           Cards pulled from another device can reference a document, page, or image that only exists
           there — documents and images stay local to each device, only card content syncs. Recapture
@@ -405,14 +404,6 @@ function OrphanRow({
   )
 }
 
-const backButtonStyle: CSSProperties = {
-  border: 'none',
-  background: 'none',
-  color: 'var(--fg-muted)',
-  cursor: 'pointer',
-  fontSize: 'var(--font-sm)',
-  padding: '4px 6px'
-}
 
 const hintStyle: CSSProperties = {
   fontSize: 'var(--font-sm)',

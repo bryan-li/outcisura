@@ -44,10 +44,12 @@ export function BentoTile({ onClick, children, wide, tall }: BentoTileProps): JS
       onMouseEnter={(e) => {
         e.currentTarget.style.borderColor = 'var(--accent)'
         e.currentTarget.style.background = 'var(--bg-hover)'
+        e.currentTarget.style.boxShadow = '0 2px 10px color-mix(in srgb, var(--accent) 14%, transparent)'
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.borderColor = 'var(--border)'
         e.currentTarget.style.background = 'var(--bg)'
+        e.currentTarget.style.boxShadow = 'none'
       }}
     >
       {children}
@@ -64,10 +66,10 @@ const tileStyle: CSSProperties = {
   textAlign: 'left',
   padding: 'var(--space-3)',
   border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-lg)',
+  borderRadius: 18,
   background: 'var(--bg)',
   cursor: 'pointer',
   overflow: 'hidden',
   transition:
-    'border-color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast)'
+    'border-color var(--transition-fast), background-color var(--transition-fast), box-shadow var(--transition-fast)'
 }

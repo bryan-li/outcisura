@@ -3,6 +3,7 @@ import { useAuthStore } from '../../state/authStore'
 import { useUiStore } from '../../state/uiStore'
 import { supabase } from '../../lib/supabase'
 import { Icon } from '../Icon'
+import { primaryPillStyle } from '../dashboardKit'
 
 interface FindSessionRow {
   id: string
@@ -63,7 +64,7 @@ export function JoinLiveSessionView(): JSX.Element {
   return (
     <div style={pageStyle}>
       <form onSubmit={handleSubmit} style={cardStyle}>
-        <h1 style={{ fontSize: 'var(--font-xl)', margin: 0 }}>
+        <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0, letterSpacing: '-0.02em' }}>
           <Icon name="join" />Join a session
         </h1>
         <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>
@@ -82,7 +83,7 @@ export function JoinLiveSessionView(): JSX.Element {
 
         {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
 
-        <button type="submit" disabled={joining} style={primaryButtonStyle}>
+        <button type="submit" disabled={joining} style={{ ...primaryPillStyle, justifyContent: 'center' }}>
           {joining ? 'Joining…' : 'Join'}
         </button>
       </form>
@@ -104,24 +105,14 @@ const cardStyle: CSSProperties = {
   width: 320,
   padding: 'var(--space-6)',
   border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-lg)'
+  borderRadius: 18
 }
 
 const inputStyle: CSSProperties = {
   fontSize: 'var(--font-sm)',
   padding: '8px 10px',
   border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-sm)',
+  borderRadius: 'var(--radius-row)',
   background: 'var(--bg)',
   color: 'inherit'
-}
-
-const primaryButtonStyle: CSSProperties = {
-  border: '1px solid var(--accent)',
-  background: 'var(--accent-soft)',
-  color: 'var(--accent)',
-  fontWeight: 600,
-  borderRadius: 'var(--radius-sm)',
-  padding: '8px 14px',
-  cursor: 'pointer'
 }

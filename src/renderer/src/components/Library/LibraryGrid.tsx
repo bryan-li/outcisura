@@ -6,6 +6,7 @@ import { useDocumentThumbnail } from '../../hooks/useDocumentThumbnail'
 import { formatDuration } from '../../utils/formatDuration'
 import { BentoGrid, BentoTile } from '../Grid/Bento'
 import { DocTypeIcon } from '../Icon'
+import { PageHeader, pageStyle } from '../dashboardKit'
 
 export function LibraryGrid(): JSX.Element {
   const documents = useDocumentsStore((s) => s.documents)
@@ -19,15 +20,15 @@ export function LibraryGrid(): JSX.Element {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-      <div>
-        <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0 }}>Library</h1>
-        <p style={{ color: 'var(--fg-muted)', marginTop: 'var(--space-1)' }}>
-          {documents.length === 0
+    <div style={pageStyle}>
+      <PageHeader
+        title="Library"
+        subtitle={
+          documents.length === 0
             ? 'Nothing imported yet — use the plus next to Library in the sidebar.'
-            : `${documents.length} document${documents.length === 1 ? '' : 's'}`}
-        </p>
-      </div>
+            : `${documents.length} document${documents.length === 1 ? '' : 's'}`
+        }
+      />
 
       {documents.length > 0 && (
         <BentoGrid>

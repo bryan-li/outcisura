@@ -4,6 +4,7 @@ import { useUiStore } from '../../state/uiStore'
 import { getChildren } from '../../utils/folderTree'
 import { BentoGrid, BentoTile } from '../Grid/Bento'
 import { Icon } from '../Icon'
+import { PageHeader, pageStyle } from '../dashboardKit'
 
 export function FoldersGrid(): JSX.Element {
   const folders = useFoldersStore((s) => s.folders)
@@ -13,15 +14,15 @@ export function FoldersGrid(): JSX.Element {
   const unfiledCount = cards.filter((c) => !c.folderId).length
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-      <div>
-        <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0 }}>Folders</h1>
-        <p style={{ color: 'var(--fg-muted)', marginTop: 'var(--space-1)' }}>
-          {folders.length === 0
+    <div style={pageStyle}>
+      <PageHeader
+        title="Folders"
+        subtitle={
+          folders.length === 0
             ? 'No folders yet — use the plus next to Folders in the sidebar.'
-            : `${folders.length} folder${folders.length === 1 ? '' : 's'}`}
-        </p>
-      </div>
+            : `${folders.length} folder${folders.length === 1 ? '' : 's'}`
+        }
+      />
 
       <BentoGrid>
         {folders.map((folder, i) => {

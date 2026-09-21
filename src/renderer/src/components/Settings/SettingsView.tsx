@@ -9,6 +9,7 @@ import { AiAccessSection } from './AiAccessSection'
 import { runSyncCycle } from '../../lib/syncEngine'
 import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useZoomFactor } from '../../hooks/useZoomFactor'
 import { Icon } from '../Icon'
+import { PageHeader, secondaryPillStyle } from '../dashboardKit'
 
 function formatSyncedAt(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime()
@@ -168,14 +169,12 @@ export function SettingsView(): JSX.Element {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 480 }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-        <button onClick={goBack} style={backButtonStyle} title="Back">
-          <Icon name="arrow-left" />Back
-        </button>
-      </header>
-
-      <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0 }}>Settings</h1>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 640 }}>
+      <PageHeader title="Settings" actions={
+          <button onClick={goBack} style={secondaryPillStyle} title="Back">
+            <Icon name="arrow-left" />Back
+          </button>
+        } />
 
       <div role="tablist" style={tabListStyle}>
         {TABS.map((t) => (
@@ -356,14 +355,6 @@ export function SettingsView(): JSX.Element {
   )
 }
 
-const backButtonStyle: CSSProperties = {
-  border: 'none',
-  background: 'none',
-  color: 'var(--fg-muted)',
-  cursor: 'pointer',
-  fontSize: 'var(--font-sm)',
-  padding: '4px 6px'
-}
 
 const sectionStyle: CSSProperties = {
   display: 'flex',

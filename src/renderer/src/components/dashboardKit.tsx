@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 /** Shared building blocks for the dashboard-style pages (Home, Review): the same rounded panels,
  *  eyebrow labels, big numbers, pill buttons and list rows, so the pages read as one family. */
@@ -98,4 +98,20 @@ export const countPillStyle: CSSProperties = {
 
 export function EmptyHint({ text }: { text: string }): JSX.Element {
   return <p style={{ color: 'var(--fg-faint)', fontSize: 'var(--font-sm)', margin: 0 }}>{text}</p>
+}
+
+/** The column every sidebar page lives in, so titles and panels line up from page to page. */
+export const pageStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', width: '100%', maxWidth: 940 }
+
+/** Page title with an optional one-line subtitle and right-aligned actions. */
+export function PageHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }): JSX.Element {
+  return (
+    <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+      <div style={{ minWidth: 0 }}>
+        <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0, letterSpacing: '-0.02em' }}>{title}</h1>
+        {subtitle && <p style={{ color: 'var(--fg-muted)', margin: 'var(--space-1) 0 0', fontSize: 'var(--font-md)' }}>{subtitle}</p>}
+      </div>
+      {actions && <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>{actions}</div>}
+    </header>
+  )
 }

@@ -13,6 +13,7 @@ import { CardItem } from './CardItem'
 import { MarqueeSelect } from '../Grid/MarqueeSelect'
 import { SharePreviewModal } from './SharePreviewModal'
 import { Icon } from '../Icon'
+import { PageHeader, eyebrowStyle, pageStyle, panelStyle, primaryPillStyle, secondaryPillStyle } from '../dashboardKit'
 
 interface FolderCardsViewProps {
   folderId: string
@@ -112,8 +113,8 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', width: '100%' }}>
-      <div>
+    <div style={pageStyle}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
         {breadcrumb.length > 0 && (
           <div style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', marginBottom: 4 }}>
             {breadcrumb.map((b) => (
@@ -129,12 +130,18 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
             ))}
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <h1 style={{ fontSize: 'var(--font-xl)', margin: 0 }}>
-            <Icon name="folder" />
-            {folder.name}
-          </h1>
+        <PageHeader
+          title={
+            <>
+              <Icon name="folder" />
+              {folder.name}
+            </>
+          }
+          subtitle={`${totalCount} card${totalCount === 1 ? '' : 's'}${dueCount > 0 ? ` · ${dueCount} due` : ''}`}
+          actions={
+            <>
           <button
+            style={{ ...primaryPillStyle, ...(dueCount === 0 ? disabledPill : null) }}
             disabled={dueCount === 0}
             title={dueCount === 0 ? 'Nothing due in this folder' : undefined}
             onClick={() =>
@@ -144,6 +151,7 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
             <Icon name="review" />Review this folder {dueCount > 0 ? `(${dueCount} due)` : ''}
           </button>
           <button
+            style={secondaryPillStyle}
             disabled={totalCount === 0}
             title={totalCount === 0 ? 'No cards in this folder yet' : 'Review every card in this folder, regardless of when it’s due'}
             onClick={() =>
@@ -157,7 +165,13 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
           >
             <Icon name="flame" />Review All {totalCount > 0 ? `(${totalCount})` : ''}
           </button>
+            </>
+          }
+        />
+        <div style={{ ...panelStyle, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3)' }}>
+          <span style={{ ...eyebrowStyle, marginRight: 'var(--space-2)' }}>Live sessions</span>
           <button
+            style={secondaryPillStyle}
             disabled={totalCount === 0 || (activeFolderId !== null && !isThisFolderPrepping)}
             title={
               totalCount === 0
@@ -184,6 +198,7 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
             )}
           </button>
           <button
+            style={secondaryPillStyle}
             disabled={!readiness?.isReady || publicToggleBusy}
             title={!readiness?.isReady ? 'Prepare this folder for hosting first' : undefined}
             onClick={togglePublic}
@@ -199,6 +214,7 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
             )}
           </button>
           <button
+            style={secondaryPillStyle}
             disabled={!readiness || readiness.readyCards === 0}
             title={!readiness || readiness.readyCards === 0 ? 'No cards prepared yet' : "See each card's generated question format, distractors, and rubric"}
             onClick={() => setPreviewOpen(true)}
@@ -206,6 +222,7 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
             <Icon name="eye" />Preview questions
           </button>
           <button
+            style={secondaryPillStyle}
             disabled={!readiness?.isReady || hostBusy}
             title={!readiness?.isReady ? 'Prepare this folder for hosting first' : undefined}
             onClick={() => void handleHostSession()}
@@ -283,6 +300,8 @@ function NewCardComposer({ folderId }: { folderId: string }): JSX.Element {
     </div>
   )
 }
+
+const disabledPill: CSSProperties = { opacity: 0.45, cursor: 'default' }
 
 const composerGutterStyle: CSSProperties = {
   width: 16,

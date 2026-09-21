@@ -1,6 +1,7 @@
 import { useCardsStore } from '../../state/cardsStore'
 import { useDocumentsStore } from '../../state/documentsStore'
 import { useFoldersStore } from '../../state/foldersStore'
+import { PageHeader, pageStyle } from '../dashboardKit'
 import { CardGraph } from './CardGraph'
 
 export function GraphPage(): JSX.Element {
@@ -9,13 +10,8 @@ export function GraphPage(): JSX.Element {
   const documents = useDocumentsStore((s) => s.documents)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: 960 }}>
-      <div>
-        <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0 }}>Graph</h1>
-        <p style={{ color: 'var(--fg-muted)', marginTop: 'var(--space-1)' }}>
-          How your cards, folders, and source documents connect.
-        </p>
-      </div>
+    <div style={pageStyle}>
+      <PageHeader title="Graph" subtitle="How your cards, folders, and source documents connect." />
       <CardGraph cards={cards} folders={folders} documents={documents} />
     </div>
   )

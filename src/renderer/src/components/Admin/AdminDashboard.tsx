@@ -113,7 +113,7 @@ export function AdminDashboard(): JSX.Element {
   return (
     <div style={pageStyle}>
       <header style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)' }}>
-        <h1 style={{ fontSize: 'var(--font-xl)', margin: 0 }}>AI admin</h1>
+        <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0, letterSpacing: '-0.02em' }}>AI admin</h1>
         <span style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)' }}>Shared Anthropic key · budgets reset on the 1st (UTC)</span>
         <button onClick={() => void loadAll()} disabled={loading} style={{ ...quietButtonStyle, marginLeft: 'auto' }}>
           {loading ? 'Refreshing…' : 'Refresh'}
