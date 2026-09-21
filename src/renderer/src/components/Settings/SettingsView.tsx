@@ -10,6 +10,8 @@ import { runSyncCycle } from '../../lib/syncEngine'
 import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useZoomFactor } from '../../hooks/useZoomFactor'
 import { Icon } from '../Icon'
 import { PageHeader, secondaryPillStyle } from '../dashboardKit'
+import { useOnboardingStore } from '../../state/onboardingStore'
+import { importSampleDeck } from '../../lib/sampleDeck'
 
 function formatSyncedAt(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime()
@@ -42,6 +44,8 @@ export function SettingsView(): JSX.Element {
   const theme = useUiStore((s) => s.theme)
   const setTheme = useUiStore((s) => s.setTheme)
   const [zoom, setZoom] = useZoomFactor()
+  const [sampleBusy, setSampleBusy] = useState(false)
+  const [sampleMessage, setSampleMessage] = useState<string | null>(null)
   const [tab, setTab] = useState<SettingsTab>('account')
 
   const [keyStatus, setKeyStatus] = useState<ApiKeyStatus | null>(null)
@@ -348,6 +352,31 @@ export function SettingsView(): JSX.Element {
             Reset
           </button>
         </div>
+      </section>
+
+      <section style={sectionStyle}>
+        <h2 style={sectionTitleStyle}>Intro (debug)</h2>
+        <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>
+          New accounts see this walkthrough automatically. Replay it here, or add the sample deck to your Library.
+        </p>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+          <button onClick={() => useOnboardingStore.getState().start()} style={secondaryPillStyle}>
+            Replay intro tour
+          </button>
+          <button
+            disabled={sampleBusy}
+            onClick={async () => {
+              setSampleBusy(true)
+              const id = await importSampleDeck()
+              setSampleBusy(false)
+              setSampleMessage(id ? 'Sample deck is in your Library.' : 'Couldn’t add the sample deck (is LibreOffice available?).')
+            }}
+            style={secondaryPillStyle}
+          >
+            {sampleBusy ? 'Adding…' : 'Add sample deck'}
+          </button>
+        </div>
+        {sampleMessage && <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>{sampleMessage}</p>}
       </section>
         </>
       )}

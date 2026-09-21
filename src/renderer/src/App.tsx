@@ -8,6 +8,8 @@ import { useTagsStore } from './state/tagsStore'
 import { useAiAdminStore } from './state/aiAdminStore'
 import { AdminDashboard } from './components/Admin/AdminDashboard'
 import { useUiStore } from './state/uiStore'
+import { IntroTour } from './components/Onboarding/IntroTour'
+import { hasSeenIntro, isFreshAccount, useOnboardingStore } from './state/onboardingStore'
 import { useSyncEnabledStore } from './state/syncEnabledStore'
 import { useConnectivityStore } from './state/connectivityStore'
 import { startSyncEngine, stopSyncEngine } from './lib/syncEngine'
@@ -78,6 +80,13 @@ function AppShell(): JSX.Element {
   const loadAiAdmin = useAiAdminStore((s) => s.load)
   const syncEnabled = useSyncEnabledStore((s) => s.enabled)
   const lastSyncedAt = useConnectivityStore((s) => s.lastSyncedAt)
+  const user = useAuthStore((s) => s.session?.user)
+  const startTour = useOnboardingStore((s) => s.start)
+
+  // New accounts get the intro tour once; everyone else can replay it from Settings.
+  useEffect(() => {
+    if (user && !user.is_anonymous && isFreshAccount(user.created_at) && !hasSeenIntro(user.id)) startTour()
+  }, [user, startTour])
 
   useEffect(() => {
     loadDocuments()
@@ -156,6 +165,7 @@ function AppShell(): JSX.Element {
       <PomodoroTimer />
       <SearchPalette />
       <HostPrepToast />
+      <IntroTour />
     </div>
   )
 }
