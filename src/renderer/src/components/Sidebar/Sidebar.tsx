@@ -1595,7 +1595,7 @@ const sidebarStyle: CSSProperties = {
   // Collapsing/expanding is the same <aside> element in both states (React reuses it), so animating
   // width here is what makes the panel glide instead of popping.
   transition: 'width 260ms cubic-bezier(0.22, 1, 0.36, 1), padding 260ms cubic-bezier(0.22, 1, 0.36, 1)',
-  margin: 'var(--space-2) 0 var(--space-2) var(--space-2)',
+  margin: 'var(--space-4) 0 var(--space-4) var(--space-2)',
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column'
@@ -1686,7 +1686,7 @@ const collapsedSidebarStyle: CSSProperties = {
   flexShrink: 0,
   alignSelf: 'stretch',
   transition: 'width 260ms cubic-bezier(0.22, 1, 0.36, 1), padding 260ms cubic-bezier(0.22, 1, 0.36, 1)',
-  margin: 'var(--space-2) 0 var(--space-2) var(--space-2)',
+  margin: 'var(--space-4) 0 var(--space-4) var(--space-2)',
   padding: 'var(--space-2) 0',
   display: 'flex',
   flexDirection: 'column',
