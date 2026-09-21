@@ -251,7 +251,7 @@ export function Sidebar(): JSX.Element {
       </div>
 
       <div className="sidebar-scroll" style={sidebarScrollStyle}>
-      <div style={{ padding: '0 var(--space-3)' }}>
+      <div style={{ padding: '0 10px' }}>
         <NavItem label={<><Icon name="search" />Search</>} active={false} onClick={openSearch} title="Search cards and documents (⌘K)" />
 
         <NavGroupLabel>Study</NavGroupLabel>
@@ -608,14 +608,14 @@ function NavItem({
         flex: grow ? 1 : undefined,
         minWidth: 0,
         textAlign: 'left',
-        padding: '8px 14px',
+        padding: '6px 12px',
         borderRadius: 'var(--radius-pill)',
         border: 'none',
-        // The current page is a solid accent pill (text flips to --on-accent); hover is a soft wash.
-        background: active ? 'var(--accent)' : 'transparent',
+        // The current page is a lit accent pill (text flips to --on-accent); hover is a soft wash.
+        ...(active ? activePill : { background: 'transparent', boxShadow: 'none' }),
         color: active ? 'var(--on-accent)' : 'inherit',
         cursor: 'pointer',
-        fontSize: 'var(--font-md)',
+        fontSize: 13,
         fontWeight: active ? 600 : 400,
         transition: 'background-color var(--transition-fast)'
       }}
@@ -654,8 +654,8 @@ function RailButton({
       aria-label={title}
       style={{
         position: 'relative',
-        width: 40,
-        height: 40,
+        width: 34,
+        height: 34,
         padding: 0,
         border: 'none',
         borderRadius: '50%',
@@ -664,7 +664,7 @@ function RailButton({
         justifyContent: 'center',
         flexShrink: 0,
         cursor: 'pointer',
-        background: active ? 'var(--accent)' : 'transparent',
+        ...(active ? activePill : { background: 'transparent', boxShadow: 'none' }),
         color: active ? 'var(--on-accent)' : 'var(--fg-muted)'
       }}
       onMouseEnter={(e) => {
@@ -674,15 +674,15 @@ function RailButton({
         if (!active) e.currentTarget.style.background = 'transparent'
       }}
     >
-      <Icon name={icon} bare size={19} />
+      <Icon name={icon} bare size={17} />
       {dot && (
         <span
           style={{
             position: 'absolute',
-            top: 8,
-            right: 8,
-            width: 8,
-            height: 8,
+            top: 6,
+            right: 6,
+            width: 7,
+            height: 7,
             borderRadius: '50%',
             background: active ? 'var(--on-accent)' : 'var(--accent)',
             border: '1.5px solid var(--bg-sidebar)'
@@ -699,16 +699,16 @@ function CountBadge({ count, onAccent }: { count: number; onAccent: boolean }): 
   return (
     <span
       style={{
-        minWidth: 20,
-        height: 20,
+        minWidth: 18,
+        height: 18,
         // Negative margin so the badge doesn't make its row taller than rows without one.
         margin: '-2px 0',
-        padding: '0 6px',
+        padding: '0 5px',
         borderRadius: 'var(--radius-pill)',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: 700,
         fontVariantNumeric: 'tabular-nums',
         flexShrink: 0,
@@ -757,6 +757,7 @@ function DocumentRow({
         paddingRight: 6,
         borderRadius: 'var(--radius-row)',
         background: active ? 'var(--bg-active)' : 'transparent',
+        boxShadow: active ? 'var(--glass-pill)' : undefined,
         transition: 'background-color var(--transition-fast)'
       }}
       onMouseEnter={(e) => {
@@ -818,8 +819,9 @@ function SectionHeader({
           textAlign: 'left',
           border: 'none',
           background: active ? 'var(--bg-active)' : 'transparent',
+          boxShadow: active ? 'var(--glass-pill)' : undefined,
           cursor: 'pointer',
-          padding: '2px 4px',
+          padding: '2px 6px',
           borderRadius: 'var(--radius-row)',
           color: active ? 'var(--accent)' : 'var(--fg-faint)'
         }}
@@ -1108,6 +1110,7 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
             borderRadius: 'var(--radius-row)',
             background:
               cardDropActive || dropIndicator === 'inside' ? 'var(--accent-soft)' : active ? 'var(--bg-active)' : 'transparent',
+            boxShadow: active && !cardDropActive && !dropIndicator ? 'var(--glass-pill)' : undefined,
             borderTop: dropIndicator === 'before' ? '2px solid var(--accent)' : '2px solid transparent',
             borderBottom: dropIndicator === 'after' ? '2px solid var(--accent)' : '2px solid transparent',
             transition: 'background-color var(--transition-fast)'
@@ -1466,7 +1469,7 @@ const wordmarkStyle: CSSProperties = {
   border: 'none',
   background: 'none',
   cursor: 'pointer',
-  fontSize: 'var(--font-lg)',
+  fontSize: 15,
   fontWeight: 700,
   letterSpacing: '-0.01em',
   color: 'var(--fg)',
@@ -1488,19 +1491,34 @@ const wordmarkMarkStyle: CSSProperties = {
   flexShrink: 0
 }
 
+/** The panel's glass finish: a thin gradient border that catches light at opposite corners (the
+ *  "rim"), a faint sheen over the top, and the body gradient — all layered as backgrounds so the rim
+ *  follows the rounded corners. Colours come from --glass-* tokens, tuned separately per theme. */
+const glassPanel: CSSProperties = {
+  border: '1.5px solid transparent',
+  background:
+    'var(--glass-sheen) padding-box, linear-gradient(180deg, var(--bg-sidebar), color-mix(in srgb, var(--bg-sidebar) 90%, var(--fg))) padding-box, var(--glass-rim) border-box',
+  boxShadow: '0 0 0 1px var(--glass-ring), 0 1px 2px #0000000a, 0 10px 28px #00000012, var(--glass-inner)',
+  borderRadius: 'var(--radius-panel)'
+}
+
+/** The current page: a solid accent pill lit from above — slightly lighter at the top, a bright
+ *  inner top edge and a faint ring, like a raised glass button rather than a flat fill. */
+const activePill: CSSProperties = {
+  background: 'linear-gradient(180deg, color-mix(in srgb, var(--accent) 78%, #fff), var(--accent))',
+  boxShadow: 'inset 0 1px 0 #ffffff73, inset 0 0 0 1px #ffffff2e, 0 1px 3px color-mix(in srgb, var(--accent) 45%, transparent)'
+}
+
 const sidebarStyle: CSSProperties = {
+  ...glassPanel,
   // Proportional rather than a hard 240px: at higher zoom the window fits fewer CSS pixels, so a
   // fixed width would eat the content area and squeeze names into ellipses.
-  width: 'clamp(196px, 22vw, 300px)',
+  width: 'clamp(188px, 20vw, 264px)',
   flexShrink: 0,
-  // A floating rounded panel rather than a full-height strip: inset from the window edges, soft
-  // vertical gradient, hairline border and a gentle shadow. Stretches to fill the row minus margins.
+  // A floating panel rather than a full-height strip: inset from the window edges, stretched to fill
+  // the row minus its margins.
   alignSelf: 'stretch',
-  margin: 'var(--space-3) 0 var(--space-3) var(--space-3)',
-  background: 'linear-gradient(180deg, var(--bg-sidebar), color-mix(in srgb, var(--bg-sidebar) 90%, var(--fg)))',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-panel)',
-  boxShadow: '0 1px 2px #0000000a, 0 10px 30px #00000014',
+  margin: 'var(--space-2) 0 var(--space-2) var(--space-2)',
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column'
@@ -1509,8 +1527,8 @@ const sidebarStyle: CSSProperties = {
 const sidebarHeaderStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  padding: 'var(--space-4) var(--space-3) var(--space-3)',
-  borderBottom: '1px solid var(--border)'
+  padding: 'var(--space-3) var(--space-2) var(--space-2)',
+  borderBottom: '1px solid color-mix(in srgb, var(--border) 70%, transparent)'
 }
 
 // Everything between the wordmark header and the settings footer scrolls on its own — those two
@@ -1530,9 +1548,9 @@ const sidebarFooterStyle: CSSProperties = {
   flexShrink: 0,
   display: 'flex',
   flexDirection: 'column',
-  gap: 2,
-  padding: 'var(--space-3)',
-  borderTop: '1px solid var(--border)'
+  gap: 1,
+  padding: 'var(--space-2) 10px',
+  borderTop: '1px solid color-mix(in srgb, var(--border) 70%, transparent)'
 }
 
 /** Footer rows (Settings, AI Admin) match the nav pills: muted until they're the current page. */
@@ -1543,56 +1561,53 @@ function footerButtonStyle(active: boolean): CSSProperties {
     alignItems: 'center',
     border: 'none',
     cursor: 'pointer',
-    fontSize: 'var(--font-md)',
-    padding: '8px 14px',
+    fontSize: 13,
+    padding: '6px 12px',
     borderRadius: 'var(--radius-pill)',
-    background: active ? 'var(--accent)' : 'none',
+    ...(active ? activePill : { background: 'none', boxShadow: 'none' }),
     color: active ? 'var(--on-accent)' : 'var(--fg-muted)',
     fontWeight: active ? 600 : 400
   }
 }
 
 const navGroupLabelStyle: CSSProperties = {
-  fontSize: 'var(--font-xs)',
-  fontWeight: 700,
-  letterSpacing: '0.04em',
+  fontSize: 10.5,
+  fontWeight: 600,
+  letterSpacing: '0.07em',
   textTransform: 'uppercase',
   color: 'var(--fg-faint)',
-  padding: '14px 14px 4px'
+  padding: '12px 12px 3px'
 }
 
 const sectionStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: 1,
-  // Same 12px inset as the nav pills, so every row in the panel shares its left and right edges.
-  padding: '0 var(--space-3)'
+  // Same 10px inset as the nav pills, so every row in the panel shares its left and right edges.
+  padding: '0 10px'
 }
 
-// Collapsed: a slim rounded pill of round icon buttons, same floating treatment as the full panel.
+// Collapsed: a slim rounded pill of round icon buttons, same glass finish as the full panel.
 const collapsedSidebarStyle: CSSProperties = {
-  width: 60,
+  ...glassPanel,
+  width: 52,
   flexShrink: 0,
   alignSelf: 'stretch',
-  margin: 'var(--space-3) 0 var(--space-3) var(--space-3)',
-  background: 'linear-gradient(180deg, var(--bg-sidebar), color-mix(in srgb, var(--bg-sidebar) 90%, var(--fg)))',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-panel)',
-  boxShadow: '0 1px 2px #0000000a, 0 10px 30px #00000014',
-  padding: 'var(--space-3) 0',
+  margin: 'var(--space-2) 0 var(--space-2) var(--space-2)',
+  padding: 'var(--space-2) 0',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: 4,
+  gap: 2,
   overflowY: 'auto',
   overflowX: 'hidden'
 }
 
 const railDividerStyle: CSSProperties = {
-  width: 24,
+  width: 20,
   height: 1,
-  background: 'var(--border)',
-  margin: '4px 0',
+  background: 'color-mix(in srgb, var(--border) 70%, transparent)',
+  margin: '3px 0',
   flexShrink: 0
 }
 
@@ -1622,8 +1637,8 @@ const sectionHeaderRow: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 2,
-  // With the section's own 12px inset, this puts the caret glyph on the same line as the nav icons above.
-  padding: '0 12px',
+  // With the section's own 10px inset, this puts the caret glyph on the same line as the nav icons above.
+  padding: '0 10px',
   marginBottom: 2
 }
 
@@ -1685,9 +1700,9 @@ const navFolderTitleStyle: CSSProperties = {
   border: 'none',
   background: 'none',
   cursor: 'pointer',
-  fontSize: 'var(--font-md)',
+  fontSize: 13,
   fontFamily: 'inherit',
   textAlign: 'left',
-  padding: '4px 0',
+  padding: '3px 0',
   color: 'inherit'
 }
