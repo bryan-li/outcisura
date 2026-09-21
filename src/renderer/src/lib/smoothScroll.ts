@@ -14,8 +14,8 @@ const CONTAINER_SELECTOR = 'main, .sidebar-scroll'
 /** Half-life-ish easing: the fraction of the remaining distance covered per second is 1 - e^(-k). */
 const GLIDE_RATE = 14
 const MAX_STRETCH = 84
-const SPRING_STIFFNESS = 260
-const SPRING_DAMPING = 20
+const SPRING_STIFFNESS = 380
+const SPRING_DAMPING = 28
 const GESTURE_GAP_MS = 90
 
 interface ScrollState {
@@ -107,12 +107,6 @@ function startSpring(el: HTMLElement, s: ScrollState): void {
   s.springing = true
   s.lastFrame = performance.now()
   const step = (now: number): void => {
-    // Still being pushed: hold the stretch and check again next frame.
-    if (now - s.lastWheelAt < GESTURE_GAP_MS) {
-      s.lastFrame = now
-      requestAnimationFrame(step)
-      return
-    }
     const dt = Math.min(0.04, (now - s.lastFrame) / 1000)
     s.lastFrame = now
     const accel = -SPRING_STIFFNESS * s.stretch - SPRING_DAMPING * s.velocity
@@ -159,9 +153,8 @@ function onWheel(e: WheelEvent): void {
     s.gliding = false
     s.target = container.scrollTop
     const room = 1 - Math.min(1, Math.abs(s.stretch) / MAX_STRETCH)
-    s.stretch += -dy * 0.28 * room
+    s.stretch += -dy * 0.9 * room
     s.stretch = Math.max(-MAX_STRETCH, Math.min(MAX_STRETCH, s.stretch))
-    s.velocity = 0
     applyStretch(container, s.stretch)
     startSpring(container, s)
     return
