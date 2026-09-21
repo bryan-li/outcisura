@@ -9,16 +9,14 @@ export function setProxySession(session: { accessToken: string; supabaseUrl: str
   proxySession = session
 }
 
-/** A user's own key (Settings > "use your own key") talks to Anthropic directly, exactly as before.
- *  With no key set, requests go through the ai-proxy Edge Function instead, which holds the shared
- *  key and enforces this user's budget — see supabase/migrations/0014_ai_proxy.sql. The proxy speaks
- *  Anthropic's own Messages API, so callers use the SDK identically either way.
+/** Every AI request goes through the ai-proxy Edge Function, which holds the one Anthropic key and
+ *  enforces the signed-in user's plan and credits — see supabase/migrations/0014_ai_proxy.sql and
+ *  0018_ai_plans_credits.sql. The proxy speaks Anthropic's own Messages API, so callers use the SDK
+ *  exactly as if they were talking to Anthropic directly.
  *
- *  The SDK's `apiKey` is required by its constructor but meaningless in proxy mode (the proxy
- *  authenticates via the Supabase JWT, and ignores x-api-key). */
-export function createAnthropicClient(ownApiKey: string | null): Anthropic {
-  if (ownApiKey) return new Anthropic({ apiKey: ownApiKey })
-
+ *  The SDK's `apiKey` is required by its constructor but meaningless here (the proxy authenticates via
+ *  the Supabase JWT, and ignores x-api-key). */
+export function createAnthropicClient(): Anthropic {
   return new Anthropic({
     apiKey: 'proxy',
     // Placeholder until a session arrives; the fetch wrapper below swaps in the real URL.
@@ -43,7 +41,7 @@ export function createAnthropicClient(ownApiKey: string | null): Anthropic {
 }
 
 /** Tags a request with the app feature that made it, so the admin usage log can say what the money
- *  was spent on (ignored by Anthropic itself when calling directly with a personal key). */
+ *  was spent on, and lets the proxy apply a per-feature credit multiplier. */
 export function featureHeader(feature: string): { headers: Record<string, string> } {
   return { headers: { 'x-outcisura-feature': feature } }
 }

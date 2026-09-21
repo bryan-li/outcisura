@@ -2,13 +2,15 @@
 // the signed-in user's Supabase JWT instead of an API key; this function is the only thing that
 // ever holds the real key (Edge Function secret ANTHROPIC_API_KEY).
 //
-// Per request: authenticate -> reject guests -> check the model is allowed -> check the account
-// isn't disabled, is within its per-minute rate limit and has budget left this month -> forward
-// to Anthropic verbatim -> log what it cost. The request/response bodies are Anthropic's own
+// Per request: authenticate -> reject guests -> load the user's entitlement (plan, credits left,
+// rate limit; see ai_entitlement in migration 0018) -> check the model exists, is enabled and is on
+// their plan, the account isn't disabled, is within its rate limit and has credits left -> forward
+// to Anthropic verbatim -> log what it cost in CREDITS (what users are limited by) and USD (what it
+// cost us, for margin tracking only). The request/response bodies are Anthropic's own
 // Messages API shapes, untouched, so the app's existing call sites keep working unchanged.
 //
 // Limits are checked BEFORE the call and usage recorded AFTER it, so a burst of concurrent
-// requests can overshoot a budget by a request or two. Fine at this scale; a hard cap would need a
+// requests can overshoot an allowance by a request or two. Fine at this scale; a hard cap would need a
 // reserve-then-settle step.
 //
 // verify_jwt is off at the gateway on purpose: this function authenticates the caller itself via
@@ -24,6 +26,20 @@ const MAX_TOKENS_CAP = 8192
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
   auth: { persistSession: false, autoRefreshToken: false }
 })
+
+/** Row shape returned by ai_entitlement (supabase/migrations/0018_ai_plans_credits.sql). */
+interface Entitlement {
+  plan_id: string
+  plan_name: string
+  credits_allowance: number
+  credits_used: number
+  credits_remaining: number
+  requests_per_minute: number
+  disabled: boolean
+  models: string[] | null
+  period_start: string
+  period_end: string
+}
 
 /** Anthropic-shaped error body, so the SDK on the client raises a readable message. */
 function fail(status: number, type: string, message: string, extraHeaders: Record<string, string> = {}): Response {
@@ -57,31 +73,44 @@ Deno.serve(async (req) => {
   const model = typeof body.model === 'string' ? body.model : ''
   const feature = req.headers.get('x-outcisura-feature') ?? 'unknown'
 
-  const { data: price } = await supabase.from('ai_model_prices').select('*').eq('model', model).maybeSingle()
+  // Entitlement, the model's weights and the feature's multiplier are independent lookups.
+  const [entRes, priceRes, weightRes] = await Promise.all([
+    supabase.rpc('ai_entitlement', { p_user: user.id }).single(),
+    supabase.from('ai_model_prices').select('*').eq('model', model).maybeSingle(),
+    supabase.from('ai_feature_weights').select('multiplier').eq('feature', feature).maybeSingle()
+  ])
+  const ent = entRes.data as Entitlement | null
+  const price = priceRes.data
+  if (!ent) {
+    console.error('ai-proxy: ai_entitlement failed', entRes.error)
+    return fail(500, 'api_error', 'Could not check your AI allowance. Try again in a moment.')
+  }
   if (!price || !price.enabled) return fail(400, 'invalid_request_error', `Model "${model}" is not available on this server.`)
 
-  // --- May they? (403 not 429 for budget/disabled: the SDK retries 429s, which would just repeat the refusal) ---
-  const { data: quota } = await supabase.from('ai_quotas').select('*').eq('user_id', user.id).maybeSingle()
-  const budget = Number(quota?.monthly_budget_usd ?? 0)
-  const rpm = Number(quota?.requests_per_minute ?? 20)
-  if (quota?.disabled) return fail(403, 'permission_error', 'Your AI access has been turned off. Ask the admin.')
+  // --- May they? (403 not 429 for plan/credits/disabled: the SDK retries 429s, which would just repeat the refusal) ---
+  if (ent.disabled) return fail(403, 'permission_error', 'Your AI access has been turned off. Ask the admin.')
+  if (ent.models && !ent.models.includes(model)) {
+    return fail(403, 'permission_error', `The ${model} model isn't included in the ${ent.plan_name} plan.`)
+  }
 
   const { count: recent } = await supabase
     .from('ai_usage')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
     .gte('created_at', new Date(Date.now() - 60_000).toISOString())
-  if ((recent ?? 0) >= rpm) return fail(429, 'rate_limit_error', 'Too many AI requests this minute — try again shortly.', { 'retry-after': '15' })
+  if ((recent ?? 0) >= ent.requests_per_minute) {
+    return fail(429, 'rate_limit_error', 'Too many AI requests this minute — try again shortly.', { 'retry-after': '15' })
+  }
 
-  const { data: spentData } = await supabase.rpc('ai_spent_month', { p_user: user.id })
-  const spent = Number(spentData ?? 0)
-  if (spent >= budget) {
+  if (Number(ent.credits_remaining) <= 0) {
+    const resets = new Date(ent.period_end).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })
+    const allowance = Math.round(Number(ent.credits_allowance)).toLocaleString('en-GB')
     return fail(
       403,
       'permission_error',
-      budget === 0
-        ? 'You have no AI budget yet. Ask the admin to enable it for your account.'
-        : `You've used your AI budget for this month ($${spent.toFixed(2)} of $${budget.toFixed(2)}). It resets on the 1st.`
+      Number(ent.credits_allowance) === 0
+        ? `The ${ent.plan_name} plan has no AI credits.`
+        : `You've used all ${allowance} AI credits on the ${ent.plan_name} plan. They reset on ${resets}.`
     )
   }
 
@@ -117,12 +146,19 @@ Deno.serve(async (req) => {
         inputTokens + Number(usage.cache_creation_input_tokens ?? 0) * 1.25 + Number(usage.cache_read_input_tokens ?? 0) * 0.1
       const cost =
         (inputEquivalent * Number(price.input_usd_per_mtok) + outputTokens * Number(price.output_usd_per_mtok)) / 1_000_000
+      // Credits use their own per-model weights (not USD x a constant) so re-pricing a model or
+      // reweighting a feature never changes what a plan promises — see migration 0018.
+      const multiplier = Number(weightRes.data?.multiplier ?? 1)
+      const credits =
+        ((inputEquivalent * Number(price.input_credits_per_mtok) + outputTokens * Number(price.output_credits_per_mtok)) / 1_000_000) *
+        multiplier
       await supabase.from('ai_usage').insert({
         user_id: user.id,
         feature,
         model,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
+        credits: credits.toFixed(3),
         cost_usd: cost.toFixed(6)
       })
     } catch (err) {

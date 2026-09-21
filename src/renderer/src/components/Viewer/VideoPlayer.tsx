@@ -36,13 +36,9 @@ function readStoredEngine(): OcrEngine {
   return stored === 'tesseract' || stored === 'claude-vision' ? stored : DEFAULT_OCR_ENGINE
 }
 
-const TRANSCRIPTION_ENGINE_KEY = 'transcription-engine'
-const DEFAULT_TRANSCRIPTION_ENGINE: TranscriptionEngine = 'whisper-local'
-
-function readStoredTranscriptionEngine(): TranscriptionEngine {
-  const stored = window.localStorage.getItem(TRANSCRIPTION_ENGINE_KEY)
-  return stored === 'whisper-local' || stored === 'openai-whisper' ? stored : DEFAULT_TRANSCRIPTION_ENGINE
-}
+// The on-device engine is the only one (the hosted OpenAI engine needed a personal key, which the app
+// no longer takes) — kept as a typed constant so a credit-metered engine can slot in later.
+const TRANSCRIPTION_ENGINE: TranscriptionEngine = 'whisper-local'
 
 export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -80,7 +76,6 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
   const [selectedElementIds, setSelectedElementIds] = useState<Set<string>>(new Set())
   const [creatingCard, setCreatingCard] = useState(false)
 
-  const [transcriptionEngine, setTranscriptionEngine] = useState<TranscriptionEngine>(readStoredTranscriptionEngine)
   const [rangeSelectMode, setRangeSelectMode] = useState(false)
   const [selectedRange, setSelectedRange] = useState<TimeRange | null>(null)
   // The paused instant "Set start" was clicked at — an alternative to dragging on the timeline for
@@ -334,11 +329,6 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
     }
   }
 
-  function updateTranscriptionEngine(engine: TranscriptionEngine): void {
-    setTranscriptionEngine(engine)
-    window.localStorage.setItem(TRANSCRIPTION_ENGINE_KEY, engine)
-  }
-
   /** Transcribes one already-decoded audio slice and ships it over IPC — a defensive byte-range
    *  slice first, same as documentsConvertPptxToPdf's return: getChannelData's view could in
    *  principle have a nonzero byteOffset, and IPC should ship exactly these bytes, not whatever else
@@ -347,7 +337,7 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
     const audioData = await sliceForTranscription(audioBufferRef.current!, range.startSeconds, range.endSeconds)
     return window.api.transcription.transcribe({
       audioData: audioData.buffer.slice(audioData.byteOffset, audioData.byteOffset + audioData.byteLength) as ArrayBuffer,
-      engine: transcriptionEngine
+      engine: TRANSCRIPTION_ENGINE
     })
   }
 
@@ -365,11 +355,11 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
         audioBufferRef.current = await decodeVideoAudio(videoSrc(document.sourceVideoPath!))
       }
 
-      const coverage = await window.api.transcription.getCoverage({ documentId: document.id, engine: transcriptionEngine, range })
+      const coverage = await window.api.transcription.getCoverage({ documentId: document.id, engine: TRANSCRIPTION_ENGINE, range })
       const newSegments: { startSeconds: number; text: string }[] = []
       for (const gap of coverage.gaps) {
         const text = await transcribeSlice(gap)
-        await window.api.transcription.saveSegment({ documentId: document.id, engine: transcriptionEngine, range: gap, text })
+        await window.api.transcription.saveSegment({ documentId: document.id, engine: TRANSCRIPTION_ENGINE, range: gap, text })
         newSegments.push({ startSeconds: gap.startSeconds, text })
       }
 
@@ -514,15 +504,6 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
           <Icon name="mic" />
           {rangeSelectMode ? 'Cancel range' : 'Mark transcript range'}
         </button>
-        <select
-          value={transcriptionEngine}
-          onChange={(e) => updateTranscriptionEngine(e.target.value as TranscriptionEngine)}
-          title="Which engine transcribes the audio"
-          style={selectStyle}
-        >
-          <option value="whisper-local">Whisper-tiny (local)</option>
-          <option value="openai-whisper">OpenAI Whisper</option>
-        </select>
 
         <span style={dividerStyle} />
 

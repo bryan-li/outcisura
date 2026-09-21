@@ -10,7 +10,6 @@ import { TranscriptionService } from './transcriptionService'
 import { registerIpc } from './ipc/registerIpc'
 import { startUpdater } from './updater'
 import { registerVideoProtocolPrivileges, registerVideoProtocolHandler } from './videoProtocol'
-import { getApiKey, getOpenAiApiKey } from './settingsStore'
 import { IpcChannels } from '../shared/ipc'
 
 /** Custom scheme for OS-level deep links back into the app — currently only the Google OAuth
@@ -139,16 +138,11 @@ app.whenReady().then(() => {
   const db = openDatabase(dbPath)
   const repo = new Repository(db)
 
-  // Settings-saved key wins over .env, falls back to it otherwise (see settingsStore). Both
-  // services are always constructed — like OcrService already was — and expose setApiKey so the
-  // Settings view can update them live, with no restart, when the user saves/clears a key there.
-  const apiKey = getApiKey()
-  const ai = new AiService(apiKey, repo)
-  // No personal key is fine: AI requests go through the ai-proxy Edge Function using the signed-in
-  // user's session instead (see anthropicClient.ts).
-  const ocr = new OcrService(apiKey)
-  // Same shape again: the local Whisper engine needs no key, only the OpenAI engine does.
-  const transcription = new TranscriptionService(getOpenAiApiKey())
+  // AI requests go through the ai-proxy Edge Function using the signed-in user's session (see
+  // anthropicClient.ts), so none of these services holds an API key.
+  const ai = new AiService(repo)
+  const ocr = new OcrService()
+  const transcription = new TranscriptionService()
 
   registerIpc(repo, ai, ocr, transcription)
   registerVideoProtocolHandler()

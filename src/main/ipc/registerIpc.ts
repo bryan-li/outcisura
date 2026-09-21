@@ -36,10 +36,9 @@ import type { Repository } from '../db/repository'
 import { readImageAsDataUrl, saveDataUrlImage, saveImageBuffer } from '../imageStore'
 import { buildAnkiPackage, parseAnkiPackage } from '../anki'
 import { importParsedNotes } from '../ankiImport'
-import { checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate, simulateUpdate } from '../updater'
+import { checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate, openReleasePage, simulateUpdate } from '../updater'
 import { setProxySession } from '../anthropicClient'
 import { convertPptxToPdf } from '../pptxConverter'
-import { getApiKeyStatus, setApiKey, getOpenAiApiKeyStatus, setOpenAiApiKey } from '../settingsStore'
 
 export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, transcription: TranscriptionService): void {
   ipcMain.handle(IpcChannels.documentsImport, (_event, parsed: ParsedDocument) => repo.importDocument(parsed))
@@ -163,6 +162,7 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
   ipcMain.handle(IpcChannels.updatesDownload, () => downloadUpdate())
   ipcMain.handle(IpcChannels.updatesInstall, () => installUpdate())
   ipcMain.handle(IpcChannels.updatesSimulate, () => simulateUpdate())
+  ipcMain.handle(IpcChannels.updatesOpenRelease, () => openReleasePage())
 
   ipcMain.handle(IpcChannels.ankiExportAll, async (_event, folderId?: string) => {
     const folders = repo.listFolders()
@@ -238,19 +238,4 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
   ipcMain.handle(IpcChannels.transcriptionSaveSegment, (_event, input: SaveTranscriptSegmentInput) =>
     repo.insertTranscriptSegment(input)
   )
-
-  ipcMain.handle(IpcChannels.settingsGetApiKeyStatus, () => getApiKeyStatus())
-  ipcMain.handle(IpcChannels.settingsSetApiKey, (_event, apiKey: string | null) => {
-    setApiKey(apiKey)
-    ai.setApiKey(apiKey)
-    ocr.setApiKey(apiKey)
-    return getApiKeyStatus()
-  })
-
-  ipcMain.handle(IpcChannels.settingsGetOpenAiKeyStatus, () => getOpenAiApiKeyStatus())
-  ipcMain.handle(IpcChannels.settingsSetOpenAiKey, (_event, apiKey: string | null) => {
-    setOpenAiApiKey(apiKey)
-    transcription.setApiKey(apiKey)
-    return getOpenAiApiKeyStatus()
-  })
 }

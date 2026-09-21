@@ -1,5 +1,4 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import type { ApiKeyStatus } from '../../../../shared/types'
 import { useAuthStore } from '../../state/authStore'
 import { useUiStore, type Theme } from '../../state/uiStore'
 import { useSyncEnabledStore } from '../../state/syncEnabledStore'
@@ -54,16 +53,6 @@ export function SettingsView(): JSX.Element {
   const [sampleBusy, setSampleBusy] = useState(false)
   const [sampleMessage, setSampleMessage] = useState<string | null>(null)
   const [tab, setTab] = useState<SettingsTab>('account')
-
-  const [keyStatus, setKeyStatus] = useState<ApiKeyStatus | null>(null)
-  const [keyInput, setKeyInput] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [keyError, setKeyError] = useState<string | null>(null)
-
-  const [openaiKeyStatus, setOpenaiKeyStatus] = useState<ApiKeyStatus | null>(null)
-  const [openaiKeyInput, setOpenaiKeyInput] = useState('')
-  const [openaiSaving, setOpenaiSaving] = useState(false)
-  const [openaiKeyError, setOpenaiKeyError] = useState<string | null>(null)
 
   const session = useAuthStore((s) => s.session)
   const signOut = useAuthStore((s) => s.signOut)
@@ -124,65 +113,8 @@ export function SettingsView(): JSX.Element {
     }
   }
 
-  useEffect(() => {
-    window.api.settings.getApiKeyStatus().then(setKeyStatus)
-    window.api.settings.getOpenAiKeyStatus().then(setOpenaiKeyStatus)
-  }, [])
-
   function goBack(): void {
     setView(view.type === 'settings' ? view.returnTo : { type: 'home' })
-  }
-
-  async function handleSaveKey(): Promise<void> {
-    if (!keyInput.trim()) return
-    setSaving(true)
-    setKeyError(null)
-    try {
-      setKeyStatus(await window.api.settings.setApiKey(keyInput.trim()))
-      setKeyInput('')
-    } catch (err) {
-      setKeyError(err instanceof Error ? err.message : 'Failed to save key')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handleClearKey(): Promise<void> {
-    setSaving(true)
-    setKeyError(null)
-    try {
-      setKeyStatus(await window.api.settings.setApiKey(null))
-    } catch (err) {
-      setKeyError(err instanceof Error ? err.message : 'Failed to clear key')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handleSaveOpenaiKey(): Promise<void> {
-    if (!openaiKeyInput.trim()) return
-    setOpenaiSaving(true)
-    setOpenaiKeyError(null)
-    try {
-      setOpenaiKeyStatus(await window.api.settings.setOpenAiKey(openaiKeyInput.trim()))
-      setOpenaiKeyInput('')
-    } catch (err) {
-      setOpenaiKeyError(err instanceof Error ? err.message : 'Failed to save key')
-    } finally {
-      setOpenaiSaving(false)
-    }
-  }
-
-  async function handleClearOpenaiKey(): Promise<void> {
-    setOpenaiSaving(true)
-    setOpenaiKeyError(null)
-    try {
-      setOpenaiKeyStatus(await window.api.settings.setOpenAiKey(null))
-    } catch (err) {
-      setOpenaiKeyError(err instanceof Error ? err.message : 'Failed to clear key')
-    } finally {
-      setOpenaiSaving(false)
-    }
   }
 
   return (
@@ -218,62 +150,6 @@ export function SettingsView(): JSX.Element {
       </section>
 
       <AiAccessSection />
-
-      <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>Your own Anthropic key (optional)</h2>
-        <p style={hintStyle}>AI features normally run on your AI allowance above. Set your own key to bill your own Anthropic account instead, with no monthly limit from here. Stored locally, never leaves this device except to call Anthropic's API.</p>
-        {keyStatus && (
-          <p style={{ fontSize: 'var(--font-sm)', color: keyStatus.hasKey ? 'var(--fg)' : 'var(--fg-muted)' }}>
-            {keyStatus.hasKey ? `Key set, ending in ...${keyStatus.last4}` : 'No personal key set — AI uses your allowance above.'}
-          </p>
-        )}
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <input
-            type="password"
-            value={keyInput}
-            onChange={(e) => setKeyInput(e.target.value)}
-            placeholder="sk-ant-..."
-            style={inputStyle}
-          />
-          <button disabled={saving || !keyInput.trim()} onClick={handleSaveKey} style={primaryButtonStyle}>
-            Save
-          </button>
-          {keyStatus?.hasKey && (
-            <button disabled={saving} onClick={handleClearKey} style={quietTextButtonStyle}>
-              Clear
-            </button>
-          )}
-        </div>
-        {keyError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{keyError}</p>}
-      </section>
-
-      <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>OpenAI API key</h2>
-        <p style={hintStyle}>Used for the OpenAI Whisper transcription engine on video. Stored locally, never leaves this device except to call OpenAI's API.</p>
-        {openaiKeyStatus && (
-          <p style={{ fontSize: 'var(--font-sm)', color: openaiKeyStatus.hasKey ? 'var(--fg)' : 'var(--fg-muted)' }}>
-            {openaiKeyStatus.hasKey ? `Key set, ending in ...${openaiKeyStatus.last4}` : 'No key set — the OpenAI Whisper engine is unavailable (Whisper-tiny local still works).'}
-          </p>
-        )}
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <input
-            type="password"
-            value={openaiKeyInput}
-            onChange={(e) => setOpenaiKeyInput(e.target.value)}
-            placeholder="sk-..."
-            style={inputStyle}
-          />
-          <button disabled={openaiSaving || !openaiKeyInput.trim()} onClick={handleSaveOpenaiKey} style={primaryButtonStyle}>
-            Save
-          </button>
-          {openaiKeyStatus?.hasKey && (
-            <button disabled={openaiSaving} onClick={handleClearOpenaiKey} style={quietTextButtonStyle}>
-              Clear
-            </button>
-          )}
-        </div>
-        {openaiKeyError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{openaiKeyError}</p>}
-      </section>
         </>
       )}
 
@@ -393,6 +269,11 @@ export function SettingsView(): JSX.Element {
           {updateStatus?.state === 'available' && updateStatus.canAutoInstall && (
             <button onClick={() => void downloadUpdate()} style={secondaryPillStyle}>
               Download {updateStatus.version}
+            </button>
+          )}
+          {updateStatus?.state === 'available' && !updateStatus.canAutoInstall && (
+            <button onClick={() => void window.api.updates.openRelease()} style={secondaryPillStyle}>
+              Download {updateStatus.version} manually
             </button>
           )}
           {updateStatus?.state === 'ready' && (

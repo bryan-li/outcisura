@@ -64,21 +64,11 @@ interface RawRegion {
 
 /** Generic OCR, behind one entry point regardless of engine — separate from AiService since it has
  *  different response-parsing (forced tool-use vs. AiService's prose regex), different failure
- *  semantics (must keep working with no API key at all; Tesseract is a real fallback, not a
- *  degraded mode), and no Repository dependency (the IPC handler persists results, this just
+ *  semantics (must keep working with no AI access at all — signed out or out of credits; Tesseract
+ *  is a real fallback, not a degraded mode), and no Repository dependency (the IPC handler persists results, this just
  *  returns detections). */
 export class OcrService {
-  private client: Anthropic
-
-  constructor(apiKey: string | null) {
-    this.client = createAnthropicClient(apiKey)
-  }
-
-  /** Called when the user sets/changes/clears the key from Settings — takes effect immediately,
-   *  no restart needed. */
-  setApiKey(apiKey: string | null): void {
-    this.client = createAnthropicClient(apiKey)
-  }
+  private client: Anthropic = createAnthropicClient()
 
   async recognize(
     imagePath: string,

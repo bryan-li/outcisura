@@ -81,6 +81,7 @@ const api: FlashcardApi = {
     download: () => ipcRenderer.invoke(IpcChannels.updatesDownload),
     install: () => ipcRenderer.invoke(IpcChannels.updatesInstall),
     simulate: () => ipcRenderer.invoke(IpcChannels.updatesSimulate),
+    openRelease: () => ipcRenderer.invoke(IpcChannels.updatesOpenRelease),
     onStatus: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, status: Parameters<typeof callback>[0]): void => callback(status)
       ipcRenderer.on(IpcChannels.updatesStatus, listener)
@@ -124,12 +125,6 @@ const api: FlashcardApi = {
     // coordinates (drag-select on slides, Konva mask drawing) keep working unscaled.
     setZoomFactor: (factor) => webFrame.setZoomFactor(factor),
     getZoomFactor: () => webFrame.getZoomFactor()
-  },
-  settings: {
-    getApiKeyStatus: () => ipcRenderer.invoke(IpcChannels.settingsGetApiKeyStatus),
-    setApiKey: (apiKey) => ipcRenderer.invoke(IpcChannels.settingsSetApiKey, apiKey),
-    getOpenAiKeyStatus: () => ipcRenderer.invoke(IpcChannels.settingsGetOpenAiKeyStatus),
-    setOpenAiKey: (apiKey) => ipcRenderer.invoke(IpcChannels.settingsSetOpenAiKey, apiKey)
   }
 }
 

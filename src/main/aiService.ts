@@ -20,17 +20,9 @@ const MODEL = 'claude-sonnet-5'
 type ContentBlock = Anthropic.TextBlockParam | Anthropic.ImageBlockParam
 
 export class AiService {
-  private client: Anthropic
+  private client: Anthropic = createAnthropicClient()
 
-  constructor(apiKey: string | null, private repo: Repository) {
-    this.client = createAnthropicClient(apiKey)
-  }
-
-  /** Called when the user sets/changes/clears the key from Settings — takes effect immediately,
-   *  no restart needed, mirroring OcrService's own setApiKey. */
-  setApiKey(apiKey: string | null): void {
-    this.client = createAnthropicClient(apiKey)
-  }
+  constructor(private repo: Repository) {}
 
   async regenerate(req: AiRegenerateRequest): Promise<AiRegenerateResult> {
     const client = this.client

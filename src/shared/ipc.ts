@@ -9,7 +9,6 @@ import type {
   AnkiExportResult,
   AnkiImportResult,
   UpdateStatus,
-  ApiKeyStatus,
   CardRecord,
   CardReorderItem,
   CardUpdatePatch,
@@ -97,6 +96,7 @@ export const IpcChannels = {
   updatesDownload: 'updates:download',
   updatesInstall: 'updates:install',
   updatesSimulate: 'updates:simulate',
+  updatesOpenRelease: 'updates:open-release',
   updatesStatus: 'updates:status',
   authDeepLink: 'auth:deep-link',
   authSetAiSession: 'auth:setAiSession',
@@ -119,11 +119,7 @@ export const IpcChannels = {
   ocrRecognizePage: 'ocr:recognizePage',
   transcriptionTranscribe: 'transcription:transcribe',
   transcriptionGetCoverage: 'transcription:getCoverage',
-  transcriptionSaveSegment: 'transcription:saveSegment',
-  settingsGetApiKeyStatus: 'settings:getApiKeyStatus',
-  settingsSetApiKey: 'settings:setApiKey',
-  settingsGetOpenAiKeyStatus: 'settings:getOpenAiKeyStatus',
-  settingsSetOpenAiKey: 'settings:setOpenAiKey'
+  transcriptionSaveSegment: 'transcription:saveSegment'
 } as const
 
 /** Shape of the `window.api` bridge exposed by the preload script. */
@@ -269,6 +265,7 @@ export interface FlashcardApi {
     install(): Promise<void>
     /** Dev-only: pretend a newer version exists so the update UI can be seen. */
     simulate(): Promise<UpdateStatus>
+    openRelease(): Promise<void>
     onStatus(callback: (status: UpdateStatus) => void): () => void
   }
   /** Bridges the outcisura:// custom-protocol handler (see main/index.ts) into the renderer —
@@ -335,17 +332,5 @@ export interface FlashcardApi {
     /** Scales the whole interface via real browser zoom (1 = 100%). */
     setZoomFactor(factor: number): void
     getZoomFactor(): number
-  }
-  settings: {
-    /** Never returns the raw key — just whether one is set and its last 4 characters, enough to
-     *  confirm which key without re-exposing the secret to the renderer after it's been saved. */
-    getApiKeyStatus(): Promise<ApiKeyStatus>
-    /** Pass null to clear. Takes effect immediately in the running app (AiService/OcrService both
-     *  update live) — no restart needed. */
-    setApiKey(apiKey: string | null): Promise<ApiKeyStatus>
-    /** Same shape as the Anthropic key above, for the OpenAI Whisper transcription engine. */
-    getOpenAiKeyStatus(): Promise<ApiKeyStatus>
-    /** Pass null to clear. Takes effect immediately (TranscriptionService.setApiKey) — no restart needed. */
-    setOpenAiKey(apiKey: string | null): Promise<ApiKeyStatus>
   }
 }

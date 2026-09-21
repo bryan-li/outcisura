@@ -4,63 +4,111 @@ import { useUiStore } from '../../state/uiStore'
 import { Icon } from '../Icon'
 
 interface MyStatus {
-  monthly_budget_usd: number
-  spent_month_usd: number
+  plan_id: string
+  plan_name: string
+  credits_allowance: number
+  credits_used: number
+  credits_remaining: number
   requests_per_minute: number
   disabled: boolean
+  period_end: string
+  cancel_at_period_end: boolean
   is_admin: boolean
 }
 
-const usd = (n: number): string => `$${Number(n).toFixed(2)}`
+interface Plan {
+  id: string
+  name: string
+  monthly_credits: number
+}
 
-/** Settings > AI access: every user sees their own monthly allowance; admins (rows in ai_admins — see
- *  supabase/migrations/0014_ai_proxy.sql) also get the table for granting budgets and switching
- *  accounts off. All reads/writes go through RPCs that check the admin flag server-side — nothing
- *  here is trusted just because the UI showed it. */
+/** Where "Upgrade" should send people once paid plans can actually be bought (a Stripe Checkout or
+ *  pricing-page URL — see supabase/AI_PLANS.md). Null hides the button rather than shipping a dead one. */
+const UPGRADE_URL: string | null = null
+
+const credits = (n: number): string => Math.round(Number(n)).toLocaleString()
+const day = (iso: string): string => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })
+
+/** Settings > AI credits: every user sees their plan and how many credits they've used this period;
+ *  admins (rows in ai_admins — see supabase/migrations/0014_ai_proxy.sql) also get a link to the
+ *  admin dashboard. Credits, not dollars: what a credit costs us is tuned server-side (migration
+ *  0018), so nothing here ever shows a price per request. All reads go through RPCs / RLS scoped to the
+ *  signed-in user — nothing here is trusted just because the UI showed it. */
 export function AiAccessSection(): JSX.Element {
   const [status, setStatus] = useState<MyStatus | null>(null)
+  const [plans, setPlans] = useState<Plan[]>([])
   const [error, setError] = useState<string | null>(null)
   const setView = useUiStore((s) => s.setView)
 
   const loadStatus = useCallback(async () => {
-    const { data, error: err } = await supabase.rpc('ai_my_status')
-    if (err) setError(err.message)
-    else setStatus((data as MyStatus[])[0] ?? null)
+    const [statusRes, plansRes] = await Promise.all([
+      supabase.rpc('ai_my_status'),
+      supabase.from('ai_plans').select('id, name, monthly_credits').eq('is_public', true).order('sort_order')
+    ])
+    if (statusRes.error) setError(statusRes.error.message)
+    else setStatus((statusRes.data as MyStatus[])[0] ?? null)
+    if (plansRes.data) setPlans(plansRes.data as Plan[])
   }, [])
 
   useEffect(() => {
     void loadStatus()
   }, [loadStatus])
 
-  const remaining = status ? Math.max(0, status.monthly_budget_usd - status.spent_month_usd) : 0
-  const fraction = status && status.monthly_budget_usd > 0 ? Math.min(1, status.spent_month_usd / status.monthly_budget_usd) : 0
+  const allowance = status ? Number(status.credits_allowance) : 0
+  const used = status ? Number(status.credits_used) : 0
+  const fraction = allowance > 0 ? Math.min(1, used / allowance) : 1
+  const exhausted = !!status && allowance > 0 && Number(status.credits_remaining) <= 0
 
   return (
     <section style={sectionStyle}>
-      <h2 style={sectionTitleStyle}>AI access</h2>
+      <h2 style={sectionTitleStyle}>AI credits</h2>
       {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
       {status && (
         <>
+          <p style={{ ...hintStyle, color: 'var(--fg)' }}>
+            <strong>{status.plan_name}</strong> plan
+            {status.cancel_at_period_end && ` · ends ${day(status.period_end)}`}
+          </p>
           {status.disabled ? (
-            <p style={hintStyle}>Your AI access has been turned off. Ask the admin, or use your own key below.</p>
-          ) : status.monthly_budget_usd === 0 ? (
-            <p style={hintStyle}>You don't have an AI allowance yet. Ask the admin to enable it, or use your own key below.</p>
+            <p style={hintStyle}>Your AI access has been turned off. Ask the admin.</p>
+          ) : allowance === 0 ? (
+            <p style={hintStyle}>This plan doesn't include AI credits.</p>
           ) : (
             <>
               <p style={hintStyle}>
-                {usd(status.spent_month_usd)} of {usd(status.monthly_budget_usd)} used this month — {usd(remaining)} left. Resets on
-                the 1st.
+                {credits(used)} of {credits(allowance)} credits used — {credits(status.credits_remaining)} left. Resets{' '}
+                {day(status.period_end)}.
               </p>
               <div style={{ height: 6, borderRadius: 3, background: 'var(--border)', overflow: 'hidden' }}>
-                <div
-                  style={{
-                    width: `${fraction * 100}%`,
-                    height: '100%',
-                    background: fraction > 0.9 ? 'var(--danger)' : 'var(--accent)'
-                  }}
-                />
+                <div style={{ width: `${fraction * 100}%`, height: '100%', background: fraction > 0.9 ? 'var(--danger)' : 'var(--accent)' }} />
               </div>
+              {exhausted && (
+                <p style={{ ...hintStyle, color: 'var(--danger)' }}>
+                  You're out of credits until {day(status.period_end)}. Everything that doesn't use AI still works.
+                </p>
+              )}
             </>
+          )}
+          <p style={hintStyle}>
+            Credits measure AI work — longer requests and more capable models use more. Reading, reviewing and on-device
+            OCR and transcription never use any.
+          </p>
+          {plans.length > 1 && (
+            <p style={hintStyle}>
+              {plans.map((p, i) => (
+                <span key={p.id} style={{ fontWeight: p.id === status.plan_id ? 600 : 400, color: p.id === status.plan_id ? 'var(--fg)' : undefined }}>
+                  {i > 0 && ' · '}
+                  {p.name} {credits(p.monthly_credits)}
+                </span>
+              ))}{' '}
+              credits / month
+            </p>
+          )}
+          {UPGRADE_URL && status.plan_id !== plans[plans.length - 1]?.id && (
+            <button onClick={() => window.api.auth.openOAuthUrl(UPGRADE_URL)} style={linkButtonStyle}>
+              Get more credits
+              <Icon name="arrow-right" style={{ marginRight: 0, marginLeft: '0.45em' }} />
+            </button>
           )}
           {status.is_admin && (
             <button onClick={() => setView({ type: 'admin' })} style={linkButtonStyle}>
