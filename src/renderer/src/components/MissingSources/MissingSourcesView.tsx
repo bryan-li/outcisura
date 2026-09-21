@@ -11,7 +11,7 @@ import { parsePptx } from '../../parsers/pptxParser'
 import { parseVideoFile } from '../../parsers/videoParser'
 import { formatDuration } from '../../utils/formatDuration'
 import { DocTypeIcon, Icon } from '../Icon'
-import { PageHeader, secondaryPillStyle } from '../dashboardKit'
+import { PageHeader, eyebrowStyle, panelStyle, primaryPillStyle, secondaryPillStyle } from '../dashboardKit'
 
 /** Sources a cross-device pull couldn't resolve locally (see repository.ts's applyRemoteCardUpsert/
  *  replaceOrphanedSource/recaptureOrphanedSource/dismissOrphanedSource). Three ways to resolve one:
@@ -226,8 +226,12 @@ export function MissingSourcesView(): JSX.Element {
     byCard.set(o.cardId, list)
   }
 
+  // While the manual picker is open the error belongs next to it (it says "pick below"), not at
+  // the top of a possibly long page.
+  const inlineError = menuOrphanId !== null && (orphans ?? []).some((o) => o.id === menuOrphanId)
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 640 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', width: '100%', maxWidth: 760 }}>
       <PageHeader title="Missing sources" actions={
           <button onClick={goBack} style={secondaryPillStyle} title="Back">
             <Icon name="arrow-left" />Back
@@ -242,7 +246,7 @@ export function MissingSourcesView(): JSX.Element {
         </p>
       </div>
 
-      {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
+      {error && !inlineError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
 
       {orphans === null && <p style={hintStyle}>Loading…</p>}
       {orphans !== null && orphans.length === 0 && <p style={hintStyle}>Nothing missing right now.</p>}
@@ -250,9 +254,11 @@ export function MissingSourcesView(): JSX.Element {
       {[...byCard.entries()].map(([cardId, cardOrphans]) => {
         const card = cards.find((c) => c.id === cardId)
         return (
-          <section key={cardId} style={sectionStyle}>
-            <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, margin: 0 }}>{card?.front.trim() || 'Untitled card'}</p>
-            {card?.back && <p style={hintStyle}>{card.back}</p>}
+          <section key={cardId} style={{ ...panelStyle, gap: 'var(--space-3)' }}>
+            <div>
+              <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, margin: 0, overflowWrap: 'anywhere' }}>{card?.front.trim() || 'Untitled card'}</p>
+              {card?.back && <p style={{ ...hintStyle, margin: '2px 0 0', overflowWrap: 'anywhere' }}>{card.back}</p>}
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
               {cardOrphans.map((orphan) => (
                 <OrphanRow
@@ -260,6 +266,7 @@ export function MissingSourcesView(): JSX.Element {
                   orphan={orphan}
                   documents={documents}
                   busy={busyId === orphan.id}
+                  error={menuOrphanId === orphan.id ? error : null}
                   menuOpen={menuOrphanId === orphan.id}
                   onCloseMenu={() => setMenuOrphanId(null)}
                   onUpload={(file) => handleUpload(orphan, file)}
@@ -281,6 +288,7 @@ function OrphanRow({
   orphan,
   documents,
   busy,
+  error,
   menuOpen,
   onCloseMenu,
   onUpload,
@@ -292,6 +300,7 @@ function OrphanRow({
   orphan: OrphanedSourceRecord
   documents: DocumentRecord[]
   busy: boolean
+  error: string | null
   menuOpen: boolean
   onCloseMenu: () => void
   onUpload: (file: File) => void
@@ -331,10 +340,10 @@ function OrphanRow({
   })
 
   return (
-    <div style={rowStyle}>
-      <div>
-        <p style={{ margin: 0, fontSize: 'var(--font-sm)' }}>{orphan.label}</p>
-        <p style={{ ...hintStyle, margin: 0 }}>{hint}</p>
+    <div style={rowStyle} ref={menuRef}>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 'var(--font-sm)', fontWeight: 600, overflowWrap: 'anywhere' }}>{orphan.label}</p>
+        <p style={{ ...hintStyle, margin: '2px 0 0', overflowWrap: 'anywhere' }}>{hint}</p>
       </div>
       <input
         ref={uploadInputRef}
@@ -358,36 +367,35 @@ function OrphanRow({
           e.target.value = ''
         }}
       />
-      <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0, position: 'relative' }} ref={menuRef}>
-        <button disabled={busy} onClick={onDismiss} style={quietTextButtonStyle}>
-          {busy ? '…' : 'Continue without source'}
-        </button>
-        <button disabled={busy} onClick={() => uploadInputRef.current?.click()} style={quietTextButtonStyle}>
-          {busy ? 'Uploading…' : 'Upload replacement'}
-        </button>
-        <button disabled={busy} onClick={onAutoRecapture} style={primaryButtonStyle}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <button disabled={busy} onClick={onAutoRecapture} style={primaryPillStyle}>
           {busy ? 'Working…' : 'Recapture from document'}
         </button>
-        {menuOpen && (
-          <div style={recaptureMenuStyle}>
-            {candidates.length > 0 && (
-              <>
-                {candidates.map((doc) => (
-                  <button
-                    key={doc.id}
-                    style={recaptureMenuItemStyle}
-                    onClick={() => {
-                      onCloseMenu()
-                      onRecaptureExisting(doc)
-                    }}
-                  >
-                    <DocTypeIcon type={doc.type} />
-                    {doc.filename}
-                  </button>
-                ))}
-                <div style={recaptureMenuDividerStyle} />
-              </>
-            )}
+        <button disabled={busy} onClick={() => uploadInputRef.current?.click()} style={secondaryPillStyle}>
+          Upload replacement
+        </button>
+        <button disabled={busy} onClick={onDismiss} style={quietTextButtonStyle}>
+          Continue without source
+        </button>
+      </div>
+      {menuOpen && (
+        <div style={pickerStyle}>
+          {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
+          <span style={eyebrowStyle}>Pick a document</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 220, overflowY: 'auto' }}>
+            {candidates.map((doc) => (
+              <button
+                key={doc.id}
+                style={recaptureMenuItemStyle}
+                onClick={() => {
+                  onCloseMenu()
+                  onRecaptureExisting(doc)
+                }}
+              >
+                <DocTypeIcon type={doc.type} />
+                {doc.filename}
+              </button>
+            ))}
             <button
               style={recaptureMenuItemStyle}
               onClick={() => {
@@ -398,8 +406,8 @@ function OrphanRow({
               <Icon name="upload" />Import new file…
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -411,33 +419,25 @@ const hintStyle: CSSProperties = {
   margin: 0
 }
 
-const sectionStyle: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 'var(--space-2)',
-  paddingBottom: 'var(--space-4)',
-  borderBottom: '1px solid var(--border)'
-}
 
 const rowStyle: CSSProperties = {
   display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
+  flexDirection: 'column',
   gap: 'var(--space-3)',
   border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-md)',
-  padding: 'var(--space-2) var(--space-3)'
+  borderRadius: 'var(--radius-panel)',
+  padding: 'var(--space-3)',
+  minWidth: 0
 }
 
-const primaryButtonStyle: CSSProperties = {
-  border: '1px solid var(--accent)',
-  background: 'var(--accent-soft)',
-  color: 'var(--accent)',
-  fontWeight: 600,
-  borderRadius: 'var(--radius-sm)',
-  padding: '6px 14px',
-  cursor: 'pointer',
-  whiteSpace: 'nowrap'
+const pickerStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 'var(--space-2)',
+  padding: 'var(--space-3)',
+  borderRadius: 'var(--radius-row)',
+  background: 'var(--bg-sidebar)',
+  animation: 'expand-collapse 140ms ease'
 }
 
 const quietTextButtonStyle: CSSProperties = {
@@ -449,41 +449,18 @@ const quietTextButtonStyle: CSSProperties = {
   whiteSpace: 'nowrap'
 }
 
-const recaptureMenuStyle: CSSProperties = {
-  position: 'absolute',
-  top: '100%',
-  right: 0,
-  marginTop: 4,
-  display: 'flex',
-  flexDirection: 'column',
-  minWidth: 220,
-  maxWidth: 320,
-  maxHeight: 260,
-  overflowY: 'auto',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-md)',
-  background: 'var(--bg)',
-  boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-  zIndex: 10,
-  padding: 4
-}
-
 const recaptureMenuItemStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
   border: 'none',
   background: 'none',
   color: 'inherit',
   textAlign: 'left',
   padding: '6px 8px',
-  borderRadius: 'var(--radius-sm)',
+  borderRadius: 'var(--radius-row)',
   cursor: 'pointer',
   fontSize: 'var(--font-sm)',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap'
-}
-
-const recaptureMenuDividerStyle: CSSProperties = {
-  height: 1,
-  background: 'var(--border)',
-  margin: '4px 0'
 }
