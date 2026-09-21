@@ -9,6 +9,7 @@ import { bySortOrder } from '../../utils/cardOrder'
 import { CardItem } from './CardItem'
 import { MarqueeSelect } from '../Grid/MarqueeSelect'
 import { Icon } from '../Icon'
+import { countPillStyle, eyebrowStyle, panelStyle } from '../dashboardKit'
 
 /** Every card, grouped by source document — foldered cards are included too (each gets a small
  *  folder badge), since this is meant to be a literal "every card" view, not just the unfiled
@@ -25,6 +26,7 @@ export function CardList(): JSX.Element {
   // Tags are independent of folder membership, so this filter narrows across every group below
   // rather than being scoped to one — a card matches if it carries ANY selected tag.
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set())
+  const [query, setQuery] = useState('')
 
   function toggleGroup(key: string): void {
     setCollapsedGroups((prev) => {
@@ -45,12 +47,27 @@ export function CardList(): JSX.Element {
   }
 
   if (cards.length === 0) {
-    return <p style={{ color: 'var(--fg-muted)' }}>No flashcards yet — select content in the Library and hit "Create Flashcard".</p>
+    return (
+      <div style={pageStyle}>
+        <h1 style={titleStyle}>Cards</h1>
+        <div style={{ ...panelStyle, alignItems: 'flex-start' }}>
+          <span style={eyebrowStyle}>Nothing here yet</span>
+          <p style={{ margin: 0, color: 'var(--fg-muted)' }}>Select content in the Library and hit "Create Flashcard".</p>
+        </div>
+      </div>
+    )
   }
 
-  const filteredCards = selectedTagIds.size === 0 ? cards : cards.filter((c) => c.tagIds.some((id) => selectedTagIds.has(id)))
+  const needle = query.trim().toLowerCase()
+  const filteredCards = cards.filter(
+    (c) =>
+      (selectedTagIds.size === 0 || c.tagIds.some((id) => selectedTagIds.has(id))) &&
+      (needle === '' || c.front.toLowerCase().includes(needle) || c.back.toLowerCase().includes(needle))
+  )
+  const filtering = selectedTagIds.size > 0 || needle !== ''
+  const dueCount = cards.filter((c) => c.dueAt <= new Date().toISOString()).length
 
-  const tagFilterBar = allTags.length > 0 && (
+  const tagChips = allTags.length > 0 && (
     <div style={tagFilterBarStyle}>
       {allTags.map((tag) => {
         const active = selectedTagIds.has(tag.id)
@@ -90,11 +107,36 @@ export function CardList(): JSX.Element {
   }
 
   return (
-    <MarqueeSelect style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', width: '100%' }}>
-      <h1 style={{ fontSize: 'var(--font-xl)', margin: 0 }}>Cards</h1>
-      {tagFilterBar}
+    <MarqueeSelect style={{ ...pageStyle, gap: 'var(--space-4)' }}>
+      <div>
+        <h1 style={titleStyle}>Cards</h1>
+        <p style={{ color: 'var(--fg-muted)', margin: 'var(--space-1) 0 0' }}>
+          {filtering ? `${filteredCards.length} of ${cards.length} cards` : `${cards.length} card${cards.length === 1 ? '' : 's'}`}
+          {dueCount > 0 && ` · ${dueCount} due`}
+        </p>
+      </div>
+      <div style={toolbarStyle}>
+        <label style={searchStyle}>
+          <Icon name="search" bare size={14} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Filter cards"
+            aria-label="Filter cards"
+            style={searchInputStyle}
+          />
+          {query && (
+            <button onClick={() => setQuery('')} title="Clear filter" style={clearButtonStyle}>
+              <Icon name="x" bare size={12} />
+            </button>
+          )}
+        </label>
+        {tagChips}
+      </div>
       {filteredCards.length === 0 && (
-        <p style={{ color: 'var(--fg-muted)' }}>No cards match the selected tag{selectedTagIds.size === 1 ? '' : 's'}.</p>
+        <div style={panelStyle}>
+          <span style={{ color: 'var(--fg-muted)' }}>No cards match your filter.</span>
+        </div>
       )}
       {[...bySource.entries()].map(([documentId, docCards]) => {
         const sorted = [...docCards].sort(bySortOrder)
@@ -102,7 +144,8 @@ export function CardList(): JSX.Element {
         return (
           <GroupSection
             key={documentId}
-            title={`${documents.find((d) => d.id === documentId)?.filename ?? 'Unknown document'} (${sorted.length})`}
+            title={documents.find((d) => d.id === documentId)?.filename ?? 'Unknown document'}
+            count={sorted.length}
             collapsed={collapsedGroups.has(documentId)}
             onToggle={() => toggleGroup(documentId)}
           >
@@ -118,7 +161,8 @@ export function CardList(): JSX.Element {
           const ids = sorted.map((c) => c.id)
           return (
             <GroupSection
-              title={`No source (${sorted.length})`}
+              title="No source"
+              count={sorted.length}
               collapsed={collapsedGroups.has(NO_SOURCE_KEY)}
               onToggle={() => toggleGroup(NO_SOURCE_KEY)}
             >
@@ -134,25 +178,28 @@ export function CardList(): JSX.Element {
 
 function GroupSection({
   title,
+  count,
   collapsed,
   onToggle,
   children
 }: {
   title: string
+  count: number
   collapsed: boolean
   onToggle: () => void
   children: ReactNode
 }): JSX.Element {
   return (
-    <section>
-      <button onClick={onToggle} style={groupHeaderStyle} title={collapsed ? `Expand ${title}` : `Collapse ${title}`}>
+    <section style={{ ...panelStyle, gap: 0, padding: 'var(--space-2)' }}>
+      <button onClick={onToggle} style={groupHeaderStyle} title={collapsed ? `Expand ${title}` : `Collapse ${title}`} aria-expanded={!collapsed}>
         <span style={{ color: 'var(--fg-faint)', flexShrink: 0, display: 'inline-flex' }}>
           <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} bare size={12} />
         </span>
-        {title}
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+        <span style={countPillStyle}>{count}</span>
       </button>
       {!collapsed && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '3px 0', animation: 'expand-collapse 120ms ease' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '3px 4px 4px', animation: 'expand-collapse 120ms ease' }}>
           {children}
         </div>
       )}
@@ -160,12 +207,48 @@ function GroupSection({
   )
 }
 
+const pageStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', width: '100%', maxWidth: 940, margin: '0 auto' }
+
+const titleStyle: CSSProperties = { fontSize: 'var(--font-xxl)', margin: 0 }
+
+const toolbarStyle: CSSProperties = { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-2)' }
+
+const searchStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '6px 12px',
+  minWidth: 220,
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius-pill)',
+  background: 'var(--bg)',
+  color: 'var(--fg-faint)'
+}
+
+const searchInputStyle: CSSProperties = {
+  border: 'none',
+  outline: 'none',
+  background: 'none',
+  color: 'var(--fg)',
+  fontSize: 'var(--font-sm)',
+  flex: 1,
+  minWidth: 0
+}
+
+const clearButtonStyle: CSSProperties = {
+  border: 'none',
+  background: 'none',
+  cursor: 'pointer',
+  color: 'var(--fg-faint)',
+  display: 'inline-flex',
+  padding: 0
+}
+
 const tagFilterBarStyle: CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
   alignItems: 'center',
-  gap: 6,
-  marginTop: -8
+  gap: 6
 }
 
 const tagFilterChipStyle: CSSProperties = {
@@ -174,7 +257,7 @@ const tagFilterChipStyle: CSSProperties = {
   cursor: 'pointer',
   color: 'var(--fg-muted)',
   fontSize: 'var(--font-xs)',
-  padding: '2px 10px',
+  padding: '4px 12px',
   borderRadius: 999
 }
 
@@ -199,14 +282,13 @@ const groupHeaderStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 6,
-  margin: '0 0 var(--space-2)',
-  padding: '2px 4px',
+  padding: '6px 8px',
   border: 'none',
   background: 'none',
   cursor: 'pointer',
   fontSize: 'var(--font-md)',
-  color: 'var(--fg-muted)',
+  color: 'var(--fg)',
   fontWeight: 600,
   textAlign: 'left',
-  borderRadius: 'var(--radius-sm)'
+  borderRadius: 'var(--radius-row)'
 }
