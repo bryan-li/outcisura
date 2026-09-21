@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useUiStore } from '../../state/uiStore'
 import { useCardsStore } from '../../state/cardsStore'
 import { GenerationSettingsPanel } from './GenerationSettingsPanel'
+import { Icon } from '../Icon'
 
 export function CombineBasketBar(): JSX.Element {
   const basket = useUiStore((s) => s.combineBasket)
@@ -62,7 +63,7 @@ export function CombineBasketBar(): JSX.Element {
             onClick={() => removeFromBasket(i)}
             style={{ marginLeft: 6, border: 'none', background: 'none', cursor: 'pointer', color: 'inherit' }}
           >
-            ✕
+            <Icon name="x" bare size="1em" />
           </button>
         </span>
       ))}
@@ -76,7 +77,13 @@ export function CombineBasketBar(): JSX.Element {
         Clear
       </button>
       <button disabled={basket.length === 0 || creating} onClick={handleCreate}>
-        {creating ? 'Generating…' : '✨ Create combined card'}
+        {creating ? (
+          'Generating…'
+        ) : (
+          <>
+            <Icon name="sparkles" />Create combined card
+          </>
+        )}
       </button>
     </div>
   )

@@ -1,9 +1,11 @@
+import type { ReactNode } from 'react'
 import type { CSSProperties } from 'react'
 import { useCardsStore } from '../../state/cardsStore'
 import { useFoldersStore } from '../../state/foldersStore'
 import { useDocumentsStore } from '../../state/documentsStore'
 import { useUiStore } from '../../state/uiStore'
 import { dueCards } from '../../utils/srsQueue'
+import { Icon } from '../Icon'
 
 export function HomePage(): JSX.Element {
   const cards = useCardsStore((s) => s.cards)
@@ -33,14 +35,19 @@ export function HomePage(): JSX.Element {
 
       {dueCount > 0 && (
         <button onClick={goToReviewDashboard} style={reviewCtaStyle} className="hover-lift">
-          <span style={{ fontSize: 'var(--font-xl)' }}>🔁</span>
+          <span style={{ fontSize: 'var(--font-xl)', display: 'inline-flex' }}>
+            <Icon name="review" bare size="1.1em" />
+          </span>
           <span style={{ flex: 1, textAlign: 'left' }}>
             <div style={{ fontSize: 'var(--font-lg)', fontWeight: 600 }}>
               {dueCount} card{dueCount === 1 ? '' : 's'} due for review
             </div>
             <div style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)' }}>Keep your streak going.</div>
           </span>
-          <span style={{ fontWeight: 600, color: 'var(--accent)' }}>Start Review →</span>
+          <span style={{ fontWeight: 600, color: 'var(--accent)' }}>
+            Start Review
+            <Icon name="arrow-right" style={{ marginRight: 0, marginLeft: '0.45em' }} />
+          </span>
         </button>
       )}
 
@@ -101,7 +108,7 @@ export function HomePage(): JSX.Element {
   )
 }
 
-export function StatTile({ label, value, onClick }: { label: string; value: number | string; onClick?: () => void }): JSX.Element {
+export function StatTile({ label, value, onClick }: { label: ReactNode; value: number | string; onClick?: () => void }): JSX.Element {
   const Tag = onClick ? 'button' : 'div'
   return (
     <Tag

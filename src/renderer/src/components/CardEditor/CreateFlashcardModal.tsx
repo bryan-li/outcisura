@@ -2,6 +2,7 @@ import { type CSSProperties, type DragEvent } from 'react'
 import type { BBox } from '../../../../shared/types'
 import { GenerationSettingsPanel } from './GenerationSettingsPanel'
 import { OcclusionImage } from '../CardBrowser/OcclusionImage'
+import { Icon } from '../Icon'
 
 export interface StagedImage {
   id: string
@@ -104,7 +105,7 @@ export function CreateFlashcardModal({
         </div>
 
         <button onClick={onRequestScreenshot} disabled={busy} style={{ alignSelf: 'flex-start' }}>
-          📷 Add screenshot
+          <Icon name="camera" />Add screenshot
         </button>
 
         <div style={dropZoneRowStyle}>
@@ -135,7 +136,13 @@ export function CreateFlashcardModal({
             Cancel
           </button>
           <button onClick={onGenerateWithAi} disabled={busy}>
-            {generating ? 'Generating…' : '✨ Generate with AI'}
+            {generating ? (
+              'Generating…'
+            ) : (
+              <>
+                <Icon name="sparkles" />Generate with AI
+              </>
+            )}
           </button>
           <button onClick={onSave} disabled={busy}>
             {saving ? 'Creating…' : 'Create Flashcard'}
@@ -172,7 +179,7 @@ function DropZone({ label, images, onDragOver, onDrop, onDragStartImage, onRemov
           >
             <OcclusionImage imagePath={img.imagePath} maskBBoxes={[]} revealed maxWidth={80} />
             <button onClick={() => onRemoveImage(img.id)} style={removeButtonStyle} title="Remove this image">
-              ✕
+              <Icon name="x" bare size="1em" />
             </button>
           </div>
         ))}

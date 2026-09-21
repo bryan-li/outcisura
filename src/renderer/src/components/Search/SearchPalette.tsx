@@ -3,6 +3,7 @@ import type { CardRecord, DocumentRecord } from '../../../../shared/types'
 import { useCardsStore } from '../../state/cardsStore'
 import { useDocumentsStore } from '../../state/documentsStore'
 import { useUiStore } from '../../state/uiStore'
+import { DocTypeIcon } from '../Icon'
 
 const MAX_RESULTS_PER_GROUP = 8
 
@@ -100,7 +101,8 @@ export function SearchPalette(): JSX.Element | null {
               {matchedDocuments.map((doc) => (
                 <button key={doc.id} onClick={() => void openDoc(doc)} style={resultRowStyle}>
                   <span style={resultTitleStyle}>
-                    {doc.type === 'pdf' ? '📕' : doc.type === 'pptx' ? '📽' : '🎬'} {doc.filename}
+                    <DocTypeIcon type={doc.type} />
+                    {doc.filename}
                   </span>
                 </button>
               ))}

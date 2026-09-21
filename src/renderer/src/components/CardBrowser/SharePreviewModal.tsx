@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { getCardSharePreviews, type CardSharePreview } from '../../lib/liveSession/sharePreview'
 import { supabase } from '../../lib/supabase'
+import { Icon } from '../Icon'
 
 interface SharePreviewModalProps {
   folderId: string
@@ -62,9 +63,11 @@ export function SharePreviewModal({ folderId, folderName, onClose }: SharePrevie
     <div style={overlayStyle} onClick={onClose}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2 style={{ fontSize: 'var(--font-lg)', margin: 0 }}>👁 Prep preview — {folderName}</h2>
+          <h2 style={{ fontSize: 'var(--font-lg)', margin: 0 }}>
+            <Icon name="eye" />Prep preview — {folderName}
+          </h2>
           <button onClick={onClose} style={closeButtonStyle} title="Close">
-            ✕
+            <Icon name="x" bare />
           </button>
         </div>
 

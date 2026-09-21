@@ -4,6 +4,7 @@ import { useSessionChannel } from '../../lib/liveSession/realtime'
 import { computeLeaderboard, type LeaderboardEntry } from '../../lib/liveSession/leaderboard'
 import type { ShareFormat } from '../../../../shared/types'
 import { LeaderboardList } from './LeaderboardList'
+import { Icon } from '../Icon'
 
 type GuestPhase = 'waiting-for-start' | 'answering' | 'submitted' | 'revealed' | 'ended'
 
@@ -200,7 +201,8 @@ export function LiveSessionPlayer({
         {phase === 'revealed' && (
           <>
             <p style={{ fontSize: 'var(--font-xl)', margin: 0 }}>
-              {ownResult?.isCorrect ? '✅ Correct!' : '❌ Not quite'} {ownResult?.pointsAwarded ? `+${ownResult.pointsAwarded}` : ''}
+              <Icon name={ownResult?.isCorrect ? 'check-circle' : 'x-circle'} style={{ color: ownResult?.isCorrect ? 'var(--accent)' : 'var(--danger)' }} />
+              {ownResult?.isCorrect ? 'Correct!' : 'Not quite'} {ownResult?.pointsAwarded ? `+${ownResult.pointsAwarded}` : ''}
             </p>
             {revealedAnswerText && (
               <p style={{ fontSize: 'var(--font-sm)', margin: 0 }}>
@@ -220,7 +222,9 @@ export function LiveSessionPlayer({
 
         {phase === 'ended' && (
           <>
-            <h1 style={{ fontSize: 'var(--font-xl)', margin: 0 }}>🏁 Session over</h1>
+            <h1 style={{ fontSize: 'var(--font-xl)', margin: 0 }}>
+              <Icon name="flag" />Session over
+            </h1>
             <LeaderboardList entries={leaderboard} podium />
           </>
         )}

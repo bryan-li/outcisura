@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useHostSessionStore } from '../../state/hostSessionStore'
 import { useSessionChannel } from '../../lib/liveSession/realtime'
 import { LeaderboardList } from './LeaderboardList'
+import { Icon } from '../Icon'
 
 interface HostControlViewProps {
   sessionId: string
@@ -114,7 +115,7 @@ export function HostControlView({ sessionId }: HostControlViewProps): JSX.Elemen
           </span>
           <span style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: 'var(--accent)' }}>{remainingSeconds}s</span>
           <button type="button" onClick={() => void handleReveal()} style={secondaryButtonStyle}>
-            ⏹ Reveal now
+            <Icon name="stop" size="0.9em" />Reveal now
           </button>
         </div>
       )}
@@ -136,7 +137,8 @@ export function HostControlView({ sessionId }: HostControlViewProps): JSX.Elemen
               {revealedAnswers.map((a) => (
                 <div key={a.userId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-sm)' }}>
                   <span>
-                    {a.isCorrect ? '✅' : '❌'} {a.displayName}
+                    <Icon name={a.isCorrect ? 'check-circle' : 'x-circle'} style={{ color: a.isCorrect ? 'var(--accent)' : 'var(--danger)' }} />
+                    {a.displayName}
                   </span>
                   <span style={{ color: 'var(--fg-muted)' }}>{a.pointsAwarded ?? 0} pts</span>
                 </div>
@@ -153,11 +155,12 @@ export function HostControlView({ sessionId }: HostControlViewProps): JSX.Elemen
 
           {isLastQuestion ? (
             <button type="button" onClick={() => void handleEnd()} style={primaryButtonStyle}>
-              🏁 End session
+              <Icon name="flag" />End session
             </button>
           ) : (
             <button type="button" onClick={() => void handleNext()} style={primaryButtonStyle}>
-              Next question →
+              Next question
+              <Icon name="arrow-right" style={{ marginRight: 0, marginLeft: '0.45em' }} />
             </button>
           )}
         </>
@@ -165,7 +168,9 @@ export function HostControlView({ sessionId }: HostControlViewProps): JSX.Elemen
 
       {phase === 'ended' && (
         <>
-          <p style={{ fontSize: 'var(--font-lg)', fontWeight: 600, margin: 0 }}>🏁 Session over</p>
+          <p style={{ fontSize: 'var(--font-lg)', fontWeight: 600, margin: 0 }}>
+          <Icon name="flag" />Session over
+        </p>
           <LeaderboardList entries={leaderboard} podium />
         </>
       )}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { usePomodoroStore } from '../state/pomodoroStore'
 import { useZoomFactor } from '../hooks/useZoomFactor'
+import { Icon } from './Icon'
 
 function formatClock(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60)
@@ -54,7 +55,15 @@ export function PomodoroTimer(): JSX.Element {
       title="Pomodoro timer"
     >
       <span style={{ fontSize: 11, color: mode === 'work' ? 'var(--accent)' : 'var(--fg-muted)' }}>
-        {mode === 'work' ? '🍅 Work' : '☕ Break'}
+        {mode === 'work' ? (
+          <>
+            <Icon name="timer" size="1em" />Work
+          </>
+        ) : (
+          <>
+            <Icon name="coffee" size="1em" />Break
+          </>
+        )}
       </span>
       <span
         style={{
@@ -75,14 +84,14 @@ export function PomodoroTimer(): JSX.Element {
             title={running ? 'Pause' : 'Start'}
             style={{ border: 'none', background: 'none', padding: 0, fontSize: 12, cursor: 'pointer', color: 'inherit' }}
           >
-            {running ? '⏸' : '▶'}
+            <Icon name={running ? 'pause' : 'play'} bare size="1em" />
           </button>
           <button
             onClick={reset}
             title="Reset"
             style={{ border: 'none', background: 'none', padding: 0, fontSize: 11, cursor: 'pointer', color: 'inherit' }}
           >
-            ↺
+            <Icon name="refresh" bare size="1em" />
           </button>
         </>
       )}

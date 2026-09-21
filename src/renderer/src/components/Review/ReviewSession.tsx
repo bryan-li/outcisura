@@ -10,6 +10,7 @@ import { backTextToLines } from '../../utils/blockCard'
 import { firstImageSourcePath, maskBBoxesFor, hasFaceTaggedImages, imageSourcesForFace } from '../../utils/occlusion'
 import { parseCloze } from '../../utils/cloze'
 import { OcclusionImage } from '../CardBrowser/OcclusionImage'
+import { Icon } from '../Icon'
 
 interface ReviewSessionProps {
   scope: ReviewScope
@@ -210,17 +211,24 @@ export function ReviewSession({ scope, returnTo, force = false }: ReviewSessionP
           : `${scope.folderIds.length} folders`
         : null
 
-  const title = force
-    ? `🔥 Cram: ${scopeLabel ?? 'all cards'} (ignoring schedule)`
-    : scopeLabel
-      ? `Reviewing: ${scopeLabel}`
-      : 'Reviewing all due cards'
+  const title = force ? (
+    <>
+      <Icon name="flame" size="1em" />
+      {`Cram: ${scopeLabel ?? 'all cards'} (ignoring schedule)`}
+    </>
+  ) : scopeLabel ? (
+    `Reviewing: ${scopeLabel}`
+  ) : (
+    'Reviewing all due cards'
+  )
 
   if (queue.length === 0) {
     return (
       <div style={containerStyle}>
         <div style={{ textAlign: 'center', animation: 'scale-in 200ms ease' }}>
-          <div style={{ fontSize: 'var(--font-xxl)' }}>{force ? '📭' : '🎉'}</div>
+          <div style={{ fontSize: 'var(--font-xxl)' }}>
+            <Icon name={force ? 'inbox' : 'check-circle'} bare size="1.2em" />
+          </div>
           <h1 style={{ fontSize: 'var(--font-xl)', margin: 'var(--space-3) 0' }}>
             {force ? 'No cards here yet' : 'Nothing due right now'}
           </h1>
@@ -240,14 +248,16 @@ export function ReviewSession({ scope, returnTo, force = false }: ReviewSessionP
     return (
       <div style={containerStyle}>
         <div style={{ textAlign: 'center', animation: 'scale-in 200ms ease' }}>
-          <div style={{ fontSize: 'var(--font-xxl)' }}>🎉</div>
+          <div style={{ fontSize: 'var(--font-xxl)' }}>
+            <Icon name="sparkles" bare size="1.2em" />
+          </div>
           <h1 style={{ fontSize: 'var(--font-xl)', margin: 'var(--space-3) 0' }}>All caught up!</h1>
           <p style={{ color: 'var(--fg-muted)' }}>
             {total} reviewed · {counts.again} again · {counts.hard} hard · {counts.good} good · {counts.easy} easy
           </p>
           <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'center', marginTop: 'var(--space-4)' }}>
             <button disabled={!lastGrade || grading} onClick={handleUndo} title="Undo the last grade (U)">
-              ↩ Undo last grade
+              <Icon name="undo" size="1em" />Undo last grade
             </button>
             <button onClick={exit}>Done</button>
           </div>
@@ -268,7 +278,7 @@ export function ReviewSession({ scope, returnTo, force = false }: ReviewSessionP
             {index + 1} / {queue.length}
           </span>
           <button onClick={exit} title="Exit (Esc)" style={{ ...smallIconButton }}>
-            ✕
+            <Icon name="x" bare size="1.2em" />
           </button>
         </div>
         <div style={progressTrackStyle}>
@@ -303,10 +313,10 @@ export function ReviewSession({ scope, returnTo, force = false }: ReviewSessionP
           <span>{revealed ? 'Press 1–4 to grade' : 'Space to reveal'} · S to skip · U to undo · Esc to exit</span>
           <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
             <button disabled={grading} onClick={handleSkip} title="Skip this card without grading it — it stays due (S)" style={{ ...smallTextButton }}>
-              ⏭ Skip
+              <Icon name="skip-forward" size="1em" />Skip
             </button>
             <button disabled={!lastGrade || grading} onClick={handleUndo} style={{ ...smallTextButton }}>
-              ↩ Undo
+              <Icon name="undo" size="1em" />Undo
             </button>
           </div>
         </div>

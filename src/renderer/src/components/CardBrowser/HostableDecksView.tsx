@@ -4,6 +4,7 @@ import { useUiStore } from '../../state/uiStore'
 import { computeReadinessForFolders, type FolderReadiness } from '../../lib/liveSession/deckReadiness'
 import { listPublicDecks, type PublicDeckSummary } from '../../lib/liveSession/hostableDecks'
 import { BentoGrid, BentoTile } from '../Grid/Bento'
+import { Icon } from '../Icon'
 
 /** Decks ready to host: the current user's own prepped folders, plus public premade decks from any
  *  user. Doesn't build the actual "start a session" flow (M1, not built yet) — "Your decks" tiles
@@ -53,7 +54,9 @@ export function HostableDecksView(): JSX.Element {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
       <div>
-        <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0 }}>📡 Hostable Decks</h1>
+        <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0 }}>
+          <Icon name="broadcast" />Hostable Decks
+        </h1>
         <p style={{ color: 'var(--fg-muted)', marginTop: 'var(--space-1)' }}>
           Decks ready for a live session — prepare a folder from its own page, then it shows up here.
         </p>
@@ -74,10 +77,11 @@ export function HostableDecksView(): JSX.Element {
               return (
                 <BentoTile key={folder.id} onClick={() => setView({ type: 'folder', folderId: folder.id })}>
                   <div style={{ fontSize: 'var(--font-lg)', fontWeight: 600, overflowWrap: 'anywhere', lineHeight: 1.25 }}>
-                    📁 {folder.name}
+                    <Icon name="folder" />
+                    {folder.name}
                   </div>
                   <div style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>
-                    {readiness?.totalCards ?? 0} card{(readiness?.totalCards ?? 0) === 1 ? '' : 's'} · ✅ Ready to host
+                    {readiness?.totalCards ?? 0} card{(readiness?.totalCards ?? 0) === 1 ? '' : 's'} · <Icon name="check-circle" size="1em" />Ready to host
                   </div>
                 </BentoTile>
               )
@@ -97,10 +101,11 @@ export function HostableDecksView(): JSX.Element {
             {publicDecks.map((deck) => (
               <BentoTile key={deck.folderId}>
                 <div style={{ fontSize: 'var(--font-lg)', fontWeight: 600, overflowWrap: 'anywhere', lineHeight: 1.25 }}>
-                  📁 {deck.name}
+                  <Icon name="folder" />
+                  {deck.name}
                 </div>
                 <div style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>
-                  {deck.cardCount} card{deck.cardCount === 1 ? '' : 's'} · 🌐 Public
+                  {deck.cardCount} card{deck.cardCount === 1 ? '' : 's'} · <Icon name="globe" size="1em" />Public
                 </div>
               </BentoTile>
             ))}

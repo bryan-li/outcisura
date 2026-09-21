@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type FormEvent } from 'react'
 import { useAuthStore } from '../../state/authStore'
 import { JoinSessionForm } from './JoinSessionForm'
+import { Icon } from '../Icon'
 
 type Mode = 'signIn' | 'signUp' | 'join'
 
@@ -140,7 +141,8 @@ export function LoginView(): JSX.Element {
             one. */}
         {mode === 'signIn' && (
           <button type="button" onClick={() => setMode('join')} style={joinButtonStyle}>
-            Join a session with a code →
+            Join a session with a code
+            <Icon name="arrow-right" style={{ marginRight: 0, marginLeft: '0.45em' }} />
           </button>
         )}
       </form>

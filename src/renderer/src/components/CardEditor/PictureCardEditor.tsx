@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import type { BBox } from '../../../../shared/types'
 import { useResolvedImage } from '../../hooks/useResolvedImage'
 import { useCardsStore } from '../../state/cardsStore'
+import { Icon } from '../Icon'
 
 const MAX_WIDTH = 500
 
@@ -158,7 +159,13 @@ export function PictureCardEditor({
             Cancel
           </button>
           <button onClick={handleGenerateWithAi} disabled={busy}>
-            {generating ? 'Generating…' : '✨ Generate with AI'}
+            {generating ? (
+              'Generating…'
+            ) : (
+              <>
+                <Icon name="sparkles" />Generate with AI
+              </>
+            )}
           </button>
           <button onClick={handleCreate} disabled={busy}>
             {saving ? 'Creating…' : 'Create Flashcard'}

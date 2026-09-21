@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { useHostSessionStore } from '../../state/hostSessionStore'
 import { useUiStore } from '../../state/uiStore'
 import { useSessionChannel } from '../../lib/liveSession/realtime'
+import { Icon } from '../Icon'
 
 interface HostLobbyViewProps {
   sessionId: string
@@ -74,7 +75,7 @@ export function HostLobbyView({ sessionId }: HostLobbyViewProps): JSX.Element {
         {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
 
         <button type="button" onClick={() => void handleStart()} style={primaryButtonStyle}>
-          ▶ Start Session
+          <Icon name="play" size="0.9em" />Start Session
         </button>
       </div>
     </div>

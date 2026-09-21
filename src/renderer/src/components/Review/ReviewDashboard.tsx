@@ -12,6 +12,7 @@ import { getChildren } from '../../utils/folderTree'
 import { formatDuration } from '../../utils/formatDuration'
 import { StatTile } from '../Home/HomePage'
 import { ReviewHeatmap } from './ReviewHeatmap'
+import { Icon } from '../Icon'
 
 function formatDueIn(dueAt: string, now: Date): string {
   const diffDays = (new Date(dueAt).getTime() - now.getTime()) / 86400000
@@ -84,8 +85,8 @@ export function ReviewDashboard(): JSX.Element {
         <StatTile label="Mature" value={stats.matureCards} />
         <StatTile label="Total cards" value={stats.totalCards} />
         <StatTile label="Reviewed today" value={stats.reviewedToday} />
-        <StatTile label="🔥 Day streak" value={stats.streakDays} />
-        <StatTile label="⏱ Avg session" value={avgSessionSeconds !== null ? formatDuration(avgSessionSeconds) : '—'} />
+        <StatTile label={<><Icon name="flame" size="1em" />Day streak</>} value={stats.streakDays} />
+        <StatTile label={<><Icon name="clock" size="1em" />Avg session</>} value={avgSessionSeconds !== null ? formatDuration(avgSessionSeconds) : '—'} />
       </div>
 
       <div>
@@ -157,7 +158,7 @@ export function ReviewDashboard(): JSX.Element {
               onClick={startReview}
               style={{ ...primaryButtonStyle, flex: 1 }}
             >
-              ✨ Start Review{dueInScope > 0 ? ` (${dueInScope})` : ''}
+              <Icon name="sparkles" />Start Review{dueInScope > 0 ? ` (${dueInScope})` : ''}
             </button>
             <button
               disabled={totalInScope === 0}
@@ -169,7 +170,7 @@ export function ReviewDashboard(): JSX.Element {
               onClick={startCramSession}
               style={{ flex: 1 }}
             >
-              🔥 Review All{totalInScope > 0 ? ` (${totalInScope})` : ''}
+              <Icon name="flame" />Review All{totalInScope > 0 ? ` (${totalInScope})` : ''}
             </button>
           </div>
         </div>
@@ -196,7 +197,10 @@ function FolderCheckboxRow({ folder, depth, folders, cards, now, selectedFolderI
     <div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: depth * 16 + 6, padding: '3px 6px', cursor: 'pointer' }}>
         <input type="checkbox" checked={selectedFolderIds.has(folder.id)} onChange={() => onToggle(folder.id)} />
-        <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', fontSize: 'var(--font-sm)' }}>📁 {folder.name}</span>
+        <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', fontSize: 'var(--font-sm)' }}>
+          <Icon name="folder" />
+          {folder.name}
+        </span>
         {dueCount > 0 && <span style={{ color: 'var(--fg-faint)', fontSize: 'var(--font-xs)', flexShrink: 0 }}>{dueCount} due</span>}
       </label>
       {children.map((child) => (

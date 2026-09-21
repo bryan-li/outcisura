@@ -5,6 +5,7 @@ import { useUiStore } from '../../state/uiStore'
 import { useDocumentThumbnail } from '../../hooks/useDocumentThumbnail'
 import { formatDuration } from '../../utils/formatDuration'
 import { BentoGrid, BentoTile } from '../Grid/Bento'
+import { DocTypeIcon } from '../Icon'
 
 export function LibraryGrid(): JSX.Element {
   const documents = useDocumentsStore((s) => s.documents)
@@ -23,7 +24,7 @@ export function LibraryGrid(): JSX.Element {
         <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0 }}>Library</h1>
         <p style={{ color: 'var(--fg-muted)', marginTop: 'var(--space-1)' }}>
           {documents.length === 0
-            ? 'Nothing imported yet — use ＋ next to Library in the sidebar.'
+            ? 'Nothing imported yet — use the plus next to Library in the sidebar.'
             : `${documents.length} document${documents.length === 1 ? '' : 's'}`}
         </p>
       </div>
@@ -76,7 +77,9 @@ function DocumentTile({ document, cards, wide, tall, onClick }: DocumentTileProp
         {thumbnail ? (
           <img src={thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
         ) : (
-          <span style={{ fontSize: 28, opacity: 0.35 }}>{document.type === 'video' ? '🎬' : '📄'}</span>
+          <span style={{ opacity: 0.35, display: 'inline-flex' }}>
+            <DocTypeIcon type={document.type} bare size={32} />
+          </span>
         )}
       </div>
       <div style={{ flexShrink: 0 }}>

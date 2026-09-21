@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type FormEvent } from 'react'
 import { useGuestSessionStore } from '../../state/guestSessionStore'
+import { Icon } from '../Icon'
 
 /** The guest entry point — join code + display name, no email/password. Submitting signs the guest
  *  in anonymously (guestSessionStore.join), which immediately flips App.tsx's top-level branch to
@@ -55,7 +56,7 @@ export function JoinSessionForm({ title, subtitle, onBack }: { title: string; su
 
         {onBack && (
           <button type="button" onClick={onBack} style={quietTextButtonStyle}>
-            ← Back to sign in
+            <Icon name="arrow-left" />Back to sign in
           </button>
         )}
       </form>

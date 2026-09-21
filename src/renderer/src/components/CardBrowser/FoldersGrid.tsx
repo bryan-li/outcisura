@@ -3,6 +3,7 @@ import { useFoldersStore } from '../../state/foldersStore'
 import { useUiStore } from '../../state/uiStore'
 import { getChildren } from '../../utils/folderTree'
 import { BentoGrid, BentoTile } from '../Grid/Bento'
+import { Icon } from '../Icon'
 
 export function FoldersGrid(): JSX.Element {
   const folders = useFoldersStore((s) => s.folders)
@@ -17,7 +18,7 @@ export function FoldersGrid(): JSX.Element {
         <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0 }}>Folders</h1>
         <p style={{ color: 'var(--fg-muted)', marginTop: 'var(--space-1)' }}>
           {folders.length === 0
-            ? 'No folders yet — use ＋ next to Folders in the sidebar.'
+            ? 'No folders yet — use the plus next to Folders in the sidebar.'
             : `${folders.length} folder${folders.length === 1 ? '' : 's'}`}
         </p>
       </div>
@@ -38,7 +39,8 @@ export function FoldersGrid(): JSX.Element {
                   <div style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>in {parent.name}</div>
                 )}
                 <div style={{ fontSize: 'var(--font-lg)', fontWeight: 600, overflowWrap: 'anywhere', lineHeight: 1.25 }}>
-                  📁 {folder.name}
+                  <Icon name="folder" />
+                  {folder.name}
                 </div>
                 <div style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)', marginTop: 2 }}>
                   {ownCards.length} card{ownCards.length === 1 ? '' : 's'}
@@ -71,7 +73,9 @@ export function FoldersGrid(): JSX.Element {
 
         {unfiledCount > 0 && (
           <BentoTile onClick={() => setView({ type: 'cards' })}>
-            <div style={{ fontSize: 'var(--font-lg)', fontWeight: 600 }}>🗂 Unfiled</div>
+            <div style={{ fontSize: 'var(--font-lg)', fontWeight: 600 }}>
+              <Icon name="layers" />Unfiled
+            </div>
             <div style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>
               {unfiledCount} card{unfiledCount === 1 ? '' : 's'} grouped by source
             </div>

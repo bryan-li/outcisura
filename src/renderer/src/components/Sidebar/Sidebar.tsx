@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import type { CardRecord, DocumentFolderRecord, DocumentRecord, FolderRecord } from '../../../../shared/types'
 import { useDocumentsStore } from '../../state/documentsStore'
 import { useCardsStore } from '../../state/cardsStore'
@@ -20,6 +20,7 @@ import { MarqueeSelect } from '../Grid/MarqueeSelect'
 import type { ImportProgress } from '../../types/importProgress'
 import { ImportProgressBar } from './ImportProgressBar'
 import { RowMenu } from './RowMenu'
+import { DocTypeIcon, Icon } from '../Icon'
 
 function ext(file: File): string | undefined {
   return file.name.split('.').pop()?.toLowerCase()
@@ -196,14 +197,14 @@ export function Sidebar(): JSX.Element {
           <pre aria-hidden="true" style={wordmarkMarkStyle}>{PILLAR_MARK}</pre>
         </button>
         <button onClick={() => setCollapsed(false)} title="Expand sidebar" style={collapseToggleStyle}>
-          »
+          <Icon name="chevrons-right" bare />
         </button>
         <button
           onClick={() => setView({ type: 'settings', returnTo: view })}
           title="Settings"
           style={{ ...collapsedMarkButtonStyle, marginTop: 'auto', fontSize: 'var(--font-md)' }}
         >
-          ⚙️
+          <Icon name="sliders" bare size="1.2em" />
         </button>
       </aside>
     )
@@ -221,26 +222,26 @@ export function Sidebar(): JSX.Element {
           Outcisura
         </button>
         <button onClick={() => setCollapsed(true)} title="Collapse sidebar" style={collapseToggleStyle}>
-          «
+          <Icon name="chevrons-left" bare />
         </button>
       </div>
 
       <div style={sidebarScrollStyle}>
       <div style={{ padding: '0 var(--space-2)' }}>
-        <NavItem label="🔍 Search" active={false} onClick={openSearch} title="Search cards and documents (⌘K)" />
+        <NavItem label={<><Icon name="search" />Search</>} active={false} onClick={openSearch} title="Search cards and documents (⌘K)" />
 
         <NavGroupLabel>Study</NavGroupLabel>
-        <NavItem label="🏠 Home" active={isView(view, { type: 'home' })} onClick={() => setView({ type: 'home' })} />
+        <NavItem label={<><Icon name="home" />Home</>} active={isView(view, { type: 'home' })} onClick={() => setView({ type: 'home' })} />
         <NavItem
-          label={`🔁 Review${dueCount > 0 ? ` (${dueCount})` : ''}`}
+          label={<><Icon name="review" />Review{dueCount > 0 ? ` (${dueCount})` : ''}</>}
           active={view.type === 'review' || view.type === 'review-dashboard'}
           onClick={() => setView({ type: 'review-dashboard' })}
         />
-        <NavItem label="🗂 All Cards" active={isView(view, { type: 'cards' })} onClick={() => setView({ type: 'cards' })} />
-        <NavItem label="🕸️ Graph" active={isView(view, { type: 'graph' })} onClick={() => setView({ type: 'graph' })} />
+        <NavItem label={<><Icon name="layers" />All Cards</>} active={isView(view, { type: 'cards' })} onClick={() => setView({ type: 'cards' })} />
+        <NavItem label={<><Icon name="graph" />Graph</>} active={isView(view, { type: 'graph' })} onClick={() => setView({ type: 'graph' })} />
         {orphanCount > 0 && (
           <NavItem
-            label={`⚠️ Missing Sources (${orphanCount})`}
+            label={<><Icon name="warning" />Missing Sources ({orphanCount})</>}
             active={isView(view, { type: 'missing-sources' })}
             onClick={() => setView({ type: 'missing-sources' })}
           />
@@ -248,12 +249,12 @@ export function Sidebar(): JSX.Element {
 
         <NavGroupLabel>Live sessions</NavGroupLabel>
         <NavItem
-          label="📡 Host a deck"
+          label={<><Icon name="broadcast" />Host a deck</>}
           active={isView(view, { type: 'hostable-decks' })}
           onClick={() => setView({ type: 'hostable-decks' })}
         />
         <NavItem
-          label="🎮 Join a session"
+          label={<><Icon name="join" />Join a session</>}
           active={view.type === 'live-session-join' || view.type === 'live-session-play'}
           onClick={() => setView({ type: 'live-session-join' })}
         />
@@ -269,7 +270,7 @@ export function Sidebar(): JSX.Element {
           action={
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <button onClick={() => setCreatingDocFolderUnder(null)} title="New folder" style={smallIconButton}>
-                📁＋
+                <Icon name="folder-plus" bare size="1.3em" />
               </button>
               <label style={{ cursor: 'pointer', display: 'inline-flex' }}>
                 <input
@@ -283,7 +284,7 @@ export function Sidebar(): JSX.Element {
                   }}
                 />
                 <span title="Import PDF/PPTX/MP4" style={smallIconButton}>
-                  {importing ? '…' : '＋'}
+                  {importing ? '…' : <Icon name="plus" bare size="1.3em" />}
                 </span>
               </label>
             </div>
@@ -387,7 +388,7 @@ export function Sidebar(): JSX.Element {
           onOpen={() => setView({ type: 'folders-index' })}
           action={
             <button onClick={() => setCreatingUnder(null)} title="New folder" style={smallIconButton}>
-              ＋
+              <Icon name="plus" bare size="1.3em" />
             </button>
           }
         />
@@ -458,11 +459,11 @@ export function Sidebar(): JSX.Element {
             style={{ ...settingsButtonStyle, background: isView(view, { type: 'admin' }) ? 'var(--bg-active)' : 'none', fontWeight: isView(view, { type: 'admin' }) ? 600 : 400 }}
             title="Manage AI budgets and accounts"
           >
-            🛠 AI Admin
+            <Icon name="shield" />AI Admin
           </button>
         )}
         <button onClick={() => setView({ type: 'settings', returnTo: view })} style={settingsButtonStyle} title="Settings">
-          ⚙️ Settings
+          <Icon name="sliders" />Settings
         </button>
       </div>
     </aside>
@@ -524,8 +525,13 @@ function NewlyCreatedSection(): JSX.Element | null {
           return (
             <div key={key}>
               <button onClick={() => toggle(key)} style={docGroupRowStyle} title={name}>
-                <span style={{ ...caretButtonStyle, cursor: 'inherit' }}>{collapsed ? '▶' : '▼'}</span>
-                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', overflowWrap: 'anywhere' }}>📄 {name}</span>
+                <span style={{ ...caretButtonStyle, cursor: 'inherit' }}>
+                  <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} bare size={12} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', overflowWrap: 'anywhere' }}>
+                  <Icon name="file" />
+                  {name}
+                </span>
                 <span style={{ color: 'var(--fg-faint)', flexShrink: 0 }}>({sorted.length})</span>
               </button>
               {!collapsed && (
@@ -555,7 +561,7 @@ function NavItem({
   grow,
   title
 }: {
-  label: string
+  label: ReactNode
   active: boolean
   onClick: () => void
   grow?: boolean
@@ -642,7 +648,8 @@ function DocumentRow({
     >
       <span style={{ ...caretButtonStyle, visibility: 'hidden' }} />
       <button onClick={onOpen} style={{ ...navFolderTitleStyle, fontWeight: active ? 600 : 400 }}>
-        {doc.type === 'pdf' ? '📕' : doc.type === 'pptx' ? '📽' : '🎬'} {doc.filename}{' '}
+        <DocTypeIcon type={doc.type} />
+        {doc.filename}{' '}
         <span style={{ color: 'var(--fg-faint)' }}>
           (
           {doc.type === 'video'
@@ -654,7 +661,7 @@ function DocumentRow({
         </span>
       </button>
       <button className="doc-del" onClick={onDelete} title="Delete document" style={{ ...smallIconButton, color: 'var(--danger)' }}>
-        ✕
+        <Icon name="x" bare size="1.2em" />
       </button>
     </div>
   )
@@ -679,7 +686,7 @@ function SectionHeader({
   return (
     <div style={sectionHeaderRow}>
       <button onClick={onToggle} title={collapsed ? `Expand ${label}` : `Collapse ${label}`} style={{ ...caretButtonStyle, height: 16 }}>
-        {collapsed ? '▶' : '▼'}
+        <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} bare size={12} />
       </button>
       <button
         onClick={onOpen}
@@ -831,7 +838,7 @@ function CardLeaf({
           marginTop: 3
         }}
       >
-        ⠿
+        <Icon name="grip" bare size={14} />
       </span>
       {/* A plain div (not a button) so a marquee-select drag can still start here — only the
           handle above and the delete button below are excluded from that as "real" controls. */}
@@ -865,7 +872,7 @@ function CardLeaf({
         title="Delete card"
         style={{ ...smallIconButton, color: 'var(--danger)', marginTop: 3, marginRight: 4 }}
       >
-        ✕
+        <Icon name="x" bare size="1.2em" />
       </button>
     </div>
   )
@@ -993,13 +1000,14 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
           }}
         >
           <button onClick={props.onToggleCollapse} style={{ ...caretButtonStyle, visibility: hasContent ? 'visible' : 'hidden' }}>
-            {folder.collapsed ? '▶' : '▼'}
+            <Icon name={folder.collapsed ? 'chevron-right' : 'chevron-down'} bare size={12} />
           </button>
           <button
             onClick={() => props.setView({ type: 'folder', folderId: folder.id })}
             style={{ ...navFolderTitleStyle, fontWeight: active ? 600 : 400 }}
           >
-            📁 {folder.name} <span style={{ color: 'var(--fg-faint)' }}>({ownCardCount})</span>
+            <Icon name="folder" />
+            {folder.name} <span style={{ color: 'var(--fg-faint)' }}>({ownCardCount})</span>
           </button>
           <button
             onClick={() =>
@@ -1009,7 +1017,7 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
             title={dueCount === 0 ? 'Nothing due in this folder' : `Review this folder (${dueCount} due)`}
             style={smallIconButton}
           >
-            🔁
+            <Icon name="review" bare size="1.2em" />
           </button>
           <RowMenu
             items={[
@@ -1213,10 +1221,11 @@ function DocumentFolderNode(props: DocumentFolderNodeProps): JSX.Element {
           }}
         >
           <button onClick={props.onToggleCollapse} style={{ ...caretButtonStyle, visibility: hasContent ? 'visible' : 'hidden' }}>
-            {folder.collapsed ? '▶' : '▼'}
+            <Icon name={folder.collapsed ? 'chevron-right' : 'chevron-down'} bare size={12} />
           </button>
           <button onClick={props.onToggleCollapse} style={navFolderTitleStyle}>
-            📁 {folder.name} <span style={{ color: 'var(--fg-faint)' }}>({ownDocuments.length})</span>
+            <Icon name="folder" />
+            {folder.name} <span style={{ color: 'var(--fg-faint)' }}>({ownDocuments.length})</span>
           </button>
           <RowMenu
             items={[

@@ -34,7 +34,7 @@ export function LeaderboardList({ entries, podium = false }: LeaderboardListProp
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {entries.map((entry, i) => {
         const rank = i + 1
-        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null
+        const medalColor = rank === 1 ? '#C9A227' : rank === 2 ? '#9AA3AB' : rank === 3 ? '#B0743F' : null
         return (
           <div
             key={entry.userId}
@@ -44,7 +44,13 @@ export function LeaderboardList({ entries, podium = false }: LeaderboardListProp
             }}
           >
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={medalSlotStyle}>{medal ?? rank}</span>
+              <span style={medalSlotStyle}>
+                {medalColor ? (
+                  <span style={{ ...medalBadgeStyle, background: medalColor }}>{rank}</span>
+                ) : (
+                  rank
+                )}
+              </span>
               {entry.displayName}
             </span>
             <span style={{ fontWeight: 700 }}>{entry.totalPoints}</span>
@@ -89,4 +95,18 @@ const medalSlotStyle: CSSProperties = {
   display: 'inline-flex',
   width: 22,
   justifyContent: 'center'
+}
+
+/** Ranks 1-3 get a small solid disc in gold/silver/bronze instead of a medal emoji — same meaning,
+ *  but it recolours crisply and renders identically on every OS. */
+const medalBadgeStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '1.5em',
+  height: '1.5em',
+  borderRadius: '50%',
+  color: '#fff',
+  fontSize: '0.8em',
+  fontWeight: 700
 }

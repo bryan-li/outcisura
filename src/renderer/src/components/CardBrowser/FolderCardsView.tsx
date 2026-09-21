@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabase'
 import { CardItem } from './CardItem'
 import { MarqueeSelect } from '../Grid/MarqueeSelect'
 import { SharePreviewModal } from './SharePreviewModal'
+import { Icon } from '../Icon'
 
 interface FolderCardsViewProps {
   folderId: string
@@ -129,7 +130,10 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <h1 style={{ fontSize: 'var(--font-xl)', margin: 0 }}>📁 {folder.name}</h1>
+          <h1 style={{ fontSize: 'var(--font-xl)', margin: 0 }}>
+            <Icon name="folder" />
+            {folder.name}
+          </h1>
           <button
             disabled={dueCount === 0}
             title={dueCount === 0 ? 'Nothing due in this folder' : undefined}
@@ -137,7 +141,7 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
               setView({ type: 'review', scope: { kind: 'folder', folderId }, returnTo: { type: 'folder', folderId } })
             }
           >
-            🔁 Review this folder {dueCount > 0 ? `(${dueCount} due)` : ''}
+            <Icon name="review" />Review this folder {dueCount > 0 ? `(${dueCount} due)` : ''}
           </button>
           <button
             disabled={totalCount === 0}
@@ -151,7 +155,7 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
               })
             }
           >
-            🔥 Review All {totalCount > 0 ? `(${totalCount})` : ''}
+            <Icon name="flame" />Review All {totalCount > 0 ? `(${totalCount})` : ''}
           </button>
           <button
             disabled={totalCount === 0 || (activeFolderId !== null && !isThisFolderPrepping)}
@@ -164,32 +168,50 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
             }
             onClick={() => startPrep(folderId, folder.name)}
           >
-            {isThisFolderPrepping
-              ? `🚀 Preparing… (${prepProgress?.current ?? 0}/${prepProgress?.total ?? 0})`
-              : readiness?.isReady
-                ? '✅ Ready to host'
-                : '🚀 Prepare for hosting'}
+            {isThisFolderPrepping ? (
+              <>
+                <Icon name="send" />
+                {`Preparing… (${prepProgress?.current ?? 0}/${prepProgress?.total ?? 0})`}
+              </>
+            ) : readiness?.isReady ? (
+              <>
+                <Icon name="check-circle" />Ready to host
+              </>
+            ) : (
+              <>
+                <Icon name="send" />Prepare for hosting
+              </>
+            )}
           </button>
           <button
             disabled={!readiness?.isReady || publicToggleBusy}
             title={!readiness?.isReady ? 'Prepare this folder for hosting first' : undefined}
             onClick={togglePublic}
           >
-            {isPublic ? '🌐 Public — click to unpublish' : '🔒 Make public'}
+            {isPublic ? (
+              <>
+                <Icon name="globe" />Public — click to unpublish
+              </>
+            ) : (
+              <>
+                <Icon name="lock" />Make public
+              </>
+            )}
           </button>
           <button
             disabled={!readiness || readiness.readyCards === 0}
             title={!readiness || readiness.readyCards === 0 ? 'No cards prepared yet' : "See each card's generated question format, distractors, and rubric"}
             onClick={() => setPreviewOpen(true)}
           >
-            👁 Preview questions
+            <Icon name="eye" />Preview questions
           </button>
           <button
             disabled={!readiness?.isReady || hostBusy}
             title={!readiness?.isReady ? 'Prepare this folder for hosting first' : undefined}
             onClick={() => void handleHostSession()}
           >
-            {hostBusy ? '🎙 Starting…' : '🎙 Host a session'}
+            <Icon name="mic" />
+            {hostBusy ? 'Starting…' : 'Host a session'}
           </button>
         </div>
         {hostError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: '4px 0 0' }}>{hostError}</p>}

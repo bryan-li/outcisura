@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { GenerationComplexity } from '../../../../shared/types'
 import { useUiStore } from '../../state/uiStore'
+import { Icon } from '../Icon'
 
 /** A small popover for the AI-generation knobs (complexity, split, custom prompt, cloze,
  *  double-sided) — shared by every creation surface (PDF/PPTX viewer, video OCR flow, combine
@@ -34,7 +35,7 @@ export function GenerationSettingsPanel(): JSX.Element {
           color: open || nonDefault ? 'var(--accent)' : 'var(--fg-muted)'
         }}
       >
-        ⚙️ Generation{nonDefault ? ' •' : ''}
+        <Icon name="sliders" />Generation{nonDefault ? ' •' : ''}
       </button>
 
       {open && (

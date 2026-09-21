@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { CardRecord, DocumentRecord, FolderRecord } from '../../../../shared/types'
 import { useUiStore } from '../../state/uiStore'
 import { initializeNodes, tick, totalKineticEnergy, type GraphEdge, type GraphNode } from '../../utils/forceGraph'
+import { Icon } from '../Icon'
 
 const WIDTH = 900
 const HEIGHT = 560
@@ -548,7 +549,7 @@ export function CardGraph({
           (() => {
             const info = meta.get(hovered.id)
             if (!info) return null
-            const icon = info.kind === 'document' ? '📄 ' : info.kind === 'folder' ? '📁 ' : ''
+            const icon = info.kind === 'document' ? <Icon name="file" /> : info.kind === 'folder' ? <Icon name="folder" /> : null
             return (
               <div style={{ ...tooltipStyle, left: hovered.x + 12, top: hovered.y + 12 }}>
                 {icon}

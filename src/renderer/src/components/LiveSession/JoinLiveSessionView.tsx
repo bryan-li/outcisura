@@ -2,6 +2,7 @@ import { useState, type CSSProperties, type FormEvent } from 'react'
 import { useAuthStore } from '../../state/authStore'
 import { useUiStore } from '../../state/uiStore'
 import { supabase } from '../../lib/supabase'
+import { Icon } from '../Icon'
 
 interface FindSessionRow {
   id: string
@@ -62,7 +63,9 @@ export function JoinLiveSessionView(): JSX.Element {
   return (
     <div style={pageStyle}>
       <form onSubmit={handleSubmit} style={cardStyle}>
-        <h1 style={{ fontSize: 'var(--font-xl)', margin: 0 }}>🎮 Join a session</h1>
+        <h1 style={{ fontSize: 'var(--font-xl)', margin: 0 }}>
+          <Icon name="join" />Join a session
+        </h1>
         <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>
           Enter the code from your host — you'll join as yourself.
         </p>

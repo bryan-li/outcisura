@@ -8,6 +8,7 @@ import { useUiStore } from '../../state/uiStore'
 import { bySortOrder } from '../../utils/cardOrder'
 import { CardItem } from './CardItem'
 import { MarqueeSelect } from '../Grid/MarqueeSelect'
+import { Icon } from '../Icon'
 
 /** Every card, grouped by source document — foldered cards are included too (each gets a small
  *  folder badge), since this is meant to be a literal "every card" view, not just the unfiled
@@ -145,7 +146,9 @@ function GroupSection({
   return (
     <section>
       <button onClick={onToggle} style={groupHeaderStyle} title={collapsed ? `Expand ${title}` : `Collapse ${title}`}>
-        <span style={{ fontSize: 10, color: 'var(--fg-faint)', flexShrink: 0 }}>{collapsed ? '▶' : '▼'}</span>
+        <span style={{ color: 'var(--fg-faint)', flexShrink: 0, display: 'inline-flex' }}>
+          <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} bare size={12} />
+        </span>
         {title}
       </button>
       {!collapsed && (

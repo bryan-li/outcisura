@@ -13,6 +13,7 @@ import { cropImageDataUrl } from '../../utils/cropImage'
 import { useCardsStore } from '../../state/cardsStore'
 import { useDocumentsStore } from '../../state/documentsStore'
 import { useUiStore } from '../../state/uiStore'
+import { Icon } from '../Icon'
 
 interface VideoPlayerProps {
   document: DocumentRecord
@@ -464,7 +465,8 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
             color: selectMode ? 'var(--accent)' : 'var(--fg-muted)'
           }}
         >
-          ✂️ {selectMode ? 'Cancel select' : 'Select region'}
+          <Icon name="scissors" />
+          {selectMode ? 'Cancel select' : 'Select region'}
         </button>
 
         <span style={dividerStyle} />
@@ -475,7 +477,13 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
           title={paused ? 'Read the text in this frame, then pick which words become a flashcard' : 'Pause the video to OCR this frame'}
           style={quietButtonStyle}
         >
-          {ocrLoading ? 'Reading…' : '🔍 OCR this frame'}
+          {ocrLoading ? (
+            'Reading…'
+          ) : (
+            <>
+              <Icon name="search" />OCR this frame
+            </>
+          )}
         </button>
         <select
           value={ocrEngine}
@@ -503,7 +511,8 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
             color: rangeSelectMode ? 'var(--accent)' : 'var(--fg-muted)'
           }}
         >
-          🎙️ {rangeSelectMode ? 'Cancel range' : 'Mark transcript range'}
+          <Icon name="mic" />
+          {rangeSelectMode ? 'Cancel range' : 'Mark transcript range'}
         </button>
         <select
           value={transcriptionEngine}
@@ -547,7 +556,13 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
             Done
           </button>
           <button disabled={selectedElements.length === 0 || creatingCard} onClick={handleCreateOcrFlashcard} style={primaryButtonStyle}>
-            {creatingCard ? 'Creating…' : '✨ Create Flashcard'}
+            {creatingCard ? (
+              'Creating…'
+            ) : (
+              <>
+                <Icon name="sparkles" />Create Flashcard
+              </>
+            )}
           </button>
         </div>
       )}
@@ -675,7 +690,13 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
                     Done
                   </button>
                   <button disabled={creatingCard} onClick={handleCreateTranscriptFlashcard} style={primaryButtonStyle}>
-                    {creatingCard ? 'Creating…' : '✨ Create Flashcard'}
+                    {creatingCard ? (
+              'Creating…'
+            ) : (
+              <>
+                <Icon name="sparkles" />Create Flashcard
+              </>
+            )}
                   </button>
                 </div>
               </>
@@ -692,7 +713,13 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
                   Cancel
                 </button>
                 <button disabled={transcribing} onClick={() => handleTranscribeRange(selectedRange)} style={primaryButtonStyle}>
-                  {transcribing ? 'Transcribing…' : '🎙️ Transcribe'}
+                  {transcribing ? (
+                    'Transcribing…'
+                  ) : (
+                    <>
+                      <Icon name="mic" />Transcribe
+                    </>
+                  )}
                 </button>
               </div>
             </>
@@ -707,7 +734,7 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
                   Cancel
                 </button>
                 <button disabled={!paused} onClick={handleSetEnd} title={paused ? undefined : 'Pause the video to set the end'} style={primaryButtonStyle}>
-                  🏁 Set end here
+                  <Icon name="flag" />Set end here
                 </button>
               </div>
             </>
@@ -722,7 +749,7 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
                 title={paused ? undefined : 'Pause the video to set a start'}
                 style={{ ...quietButtonStyle, marginTop: 'auto' }}
               >
-                📍 Set start here
+                <Icon name="pin" />Set start here
               </button>
             </>
           )}
@@ -731,7 +758,7 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
 
       <div style={toolbarStyle}>
         <button onClick={() => skip(-10)} title="Back 10 seconds" style={quietButtonStyle}>
-          ⏪ 10s
+          <Icon name="rewind" />10s
         </button>
         <button
           onClick={() => {
@@ -743,16 +770,17 @@ export function VideoPlayer({ document }: VideoPlayerProps): JSX.Element {
           title={paused ? 'Play (or press space with the timeline below selected)' : 'Pause'}
           style={{ ...quietButtonStyle, width: 76, textAlign: 'center' }}
         >
-          {paused ? '▶️ Play' : '⏸️ Pause'}
+          <Icon name={paused ? 'play' : 'pause'} size="0.9em" />
+          {paused ? 'Play' : 'Pause'}
         </button>
         <button onClick={() => skip(10)} title="Forward 10 seconds" style={quietButtonStyle}>
-          10s ⏩
+          10s<Icon name="fast-forward" style={{ marginRight: 0, marginLeft: '0.45em' }} />
         </button>
 
         <span style={dividerStyle} />
 
         <button onClick={toggleMute} title={muted ? 'Unmute' : 'Mute'} style={quietButtonStyle}>
-          {muted || volume === 0 ? '🔇' : volume < 0.5 ? '🔉' : '🔊'}
+          <Icon name={muted || volume === 0 ? 'volume-x' : volume < 0.5 ? 'volume-1' : 'volume-2'} bare size="1.2em" />
         </button>
         <input
           type="range"

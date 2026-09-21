@@ -8,6 +8,7 @@ import { useCardsStore } from '../../state/cardsStore'
 import { AiAccessSection } from './AiAccessSection'
 import { runSyncCycle } from '../../lib/syncEngine'
 import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useZoomFactor } from '../../hooks/useZoomFactor'
+import { Icon } from '../Icon'
 
 function formatSyncedAt(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime()
@@ -170,7 +171,7 @@ export function SettingsView(): JSX.Element {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 480 }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
         <button onClick={goBack} style={backButtonStyle} title="Back">
-          ← Back
+          <Icon name="arrow-left" />Back
         </button>
       </header>
 

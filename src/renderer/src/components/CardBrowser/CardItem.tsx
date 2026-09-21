@@ -9,6 +9,7 @@ import { computeCardReorder } from '../../utils/cardOrder'
 import { firstImageSourcePath, maskBBoxesFor, hasFaceTaggedImages, imageSourcesForFace } from '../../utils/occlusion'
 import { parseCloze } from '../../utils/cloze'
 import { OcclusionImage } from './OcclusionImage'
+import { Icon } from '../Icon'
 
 export const CARD_DRAG_MIME = 'application/x-card-id'
 
@@ -243,10 +244,10 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
           title={selected && selectedCardIds.length > 1 ? `Drag ${selectedCardIds.length} cards to reorder or file into a folder` : 'Drag to reorder or file into a folder'}
           style={{ ...gutterButtonStyle, cursor: 'grab', opacity: hovered || selected ? 0.5 : 0 }}
         >
-          ⠿
+          <Icon name="grip" bare size={14} />
         </span>
         <button onClick={() => setExpanded((v) => !v)} style={{ ...gutterButtonStyle, visibility: backLines.length > 0 ? 'visible' : 'hidden' }}>
-          {expanded ? '▼' : '▶'}
+          <Icon name={expanded ? 'chevron-down' : 'chevron-right'} bare size={12} />
         </button>
 
         {/* Always-on preview, not just when expanded — glancing down a folder page should show
@@ -314,7 +315,8 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
                   }}
                   style={folderBadgeStyle}
                 >
-                  📁 {folderLabel}
+                  <Icon name="folder" size="1em" />
+                  {folderLabel}
                 </span>
               )}
               {!isCloze && expanded && backLines.length > 0 && (
@@ -373,7 +375,7 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
               )}
               {expanded && imageHiddenInBrowse && (frontImages.length > 0 || backImages.length > 0 || imagePath) && (
                 <p style={{ margin: '6px 0 0', fontSize: 'var(--font-xs)', color: 'var(--fg-faint)' }}>
-                  🖼 Image{faceTagged && frontImages.length + backImages.length > 1 ? 's' : ''} hidden until flipped in review
+                  <Icon name="image" size="1em" />Image{faceTagged && frontImages.length + backImages.length > 1 ? 's' : ''} hidden until flipped in review
                 </p>
               )}
               {expanded && (
@@ -391,13 +393,13 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
       {showToolbar && (
         <div style={toolbarStyle}>
           <IconButton title="Regenerate with AI" onClick={handleRegenerate} disabled={regenerating}>
-            {regenerating ? '…' : '✨'}
+            {regenerating ? '…' : <Icon name="sparkles" bare />}
           </IconButton>
           <IconButton title="Jump to source" onClick={handleLinkClick} disabled={jumpableSources.length === 0}>
-            🔗
+            <Icon name="link" bare />
           </IconButton>
           <IconButton title="Delete" onClick={handleDelete}>
-            🗑
+            <Icon name="trash" bare />
           </IconButton>
         </div>
       )}
@@ -413,7 +415,8 @@ export function CardItem({ card, siblingIds, folderLabel, onFolderClick }: CardI
               }}
               style={sourceMenuItemStyle}
             >
-              🔗 {s.label}
+              <Icon name="link" size="1em" />
+              {s.label}
             </button>
           ))}
         </div>
@@ -579,7 +582,14 @@ function ImageAttachControl({ cardId }: { cardId: string }): JSX.Element {
       onDrop={handleDrop}
       style={{ ...imageDropZoneStyle, borderColor: dragOver ? 'var(--accent)' : 'var(--border)' }}
     >
-      {busy ? 'Attaching image…' : '🖼 Click, then ⌘V to paste an image — or drop one here'}
+      {busy ? (
+        'Attaching image…'
+      ) : (
+        <>
+          <Icon name="image" size="1em" />
+          Click, then ⌘V to paste an image — or drop one here
+        </>
+      )}
     </div>
   )
 }

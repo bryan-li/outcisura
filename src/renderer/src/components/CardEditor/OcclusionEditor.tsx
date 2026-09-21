@@ -4,6 +4,7 @@ import type Konva from 'konva'
 import type { BBox } from '../../../../shared/types'
 import { useResolvedImage } from '../../hooks/useResolvedImage'
 import { useCardsStore } from '../../state/cardsStore'
+import { Icon } from '../Icon'
 
 const MAX_WIDTH = 700
 const GROUP_COLORS = ['#ff9500', '#4c8bf5', '#34c759', '#af52de', '#ff375f', '#5ac8fa', '#ffcc00', '#8e8e93']
@@ -224,7 +225,7 @@ export function OcclusionEditor({
         // of showing as "Untitled" — the user can rewrite either line like any other card.
         const regionLabel = groupMasks.length > 1 ? `${groupMasks.length} hidden regions` : '1 hidden region'
         await createCard({
-          front: `🖼 What is hidden here? — ${sourceLabel}`,
+          front: `What is hidden here? — ${sourceLabel}`,
           back: `• ${regionLabel} on ${documentLabel} · ${sourceLabel}`,
           cardType: 'image_occlusion',
           sources: groupMasks.map((mask, i) => ({
@@ -336,7 +337,7 @@ export function OcclusionEditor({
                   <input type="checkbox" checked={checkedMaskIds.has(m.id)} onChange={() => toggleChecked(m.id)} />
                   Mask {i + 1}
                   <button onClick={() => removeMask(m.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'inherit' }}>
-                    ✕
+                    <Icon name="x" bare size="1em" />
                   </button>
                 </label>
               ))}

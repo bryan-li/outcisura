@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useUiStore } from '../../state/uiStore'
+import { Icon } from '../Icon'
 
 interface MyStatus {
   monthly_budget_usd: number
@@ -63,7 +64,8 @@ export function AiAccessSection(): JSX.Element {
           )}
           {status.is_admin && (
             <button onClick={() => setView({ type: 'admin' })} style={linkButtonStyle}>
-              Open the AI admin dashboard →
+              Open the AI admin dashboard
+              <Icon name="arrow-right" style={{ marginRight: 0, marginLeft: '0.45em' }} />
             </button>
           )}
         </>

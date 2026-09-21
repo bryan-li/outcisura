@@ -10,6 +10,7 @@ import { parsePdf } from '../../parsers/pdfParser'
 import { parsePptx } from '../../parsers/pptxParser'
 import { parseVideoFile } from '../../parsers/videoParser'
 import { formatDuration } from '../../utils/formatDuration'
+import { DocTypeIcon, Icon } from '../Icon'
 
 /** Sources a cross-device pull couldn't resolve locally (see repository.ts's applyRemoteCardUpsert/
  *  replaceOrphanedSource/recaptureOrphanedSource/dismissOrphanedSource). Three ways to resolve one:
@@ -228,7 +229,7 @@ export function MissingSourcesView(): JSX.Element {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 640 }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
         <button onClick={goBack} style={backButtonStyle} title="Back">
-          ← Back
+          <Icon name="arrow-left" />Back
         </button>
       </header>
 
@@ -381,7 +382,8 @@ function OrphanRow({
                       onRecaptureExisting(doc)
                     }}
                   >
-                    {doc.type === 'pdf' ? '📕' : doc.type === 'pptx' ? '📽' : '🎬'} {doc.filename}
+                    <DocTypeIcon type={doc.type} />
+                    {doc.filename}
                   </button>
                 ))}
                 <div style={recaptureMenuDividerStyle} />
@@ -394,7 +396,7 @@ function OrphanRow({
                 recaptureInputRef.current?.click()
               }}
             >
-              📁 Import new file…
+              <Icon name="upload" />Import new file…
             </button>
           </div>
         )}

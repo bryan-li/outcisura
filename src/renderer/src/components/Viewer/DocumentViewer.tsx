@@ -13,6 +13,7 @@ import { GenerationSettingsPanel } from '../CardEditor/GenerationSettingsPanel'
 import type { PendingSource } from '../../types/pendingSource'
 import { cropImageDataUrl } from '../../utils/cropImage'
 import { unionBBox, padBBoxForCrop } from '../../utils/bbox'
+import { Icon } from '../Icon'
 
 interface OcclusionSource {
   imagePath: string
@@ -525,7 +526,7 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
             style={segmentButtonStyle}
             title="Previous slide"
           >
-            ←
+            <Icon name="arrow-left" bare />
           </button>
           <span style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', padding: '0 6px', whiteSpace: 'nowrap' }}>
             {activePageIndex + 1} / {pages.length}
@@ -539,7 +540,7 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
             style={segmentButtonStyle}
             title="Next slide"
           >
-            →
+            <Icon name="arrow-right" bare />
           </button>
         </div>
 
@@ -554,7 +555,7 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
           }}
           title="When on, selections from any slide/document are gathered into one combined card instead of creating separate cards immediately."
         >
-          🔗 Combine
+          <Icon name="link" />Combine
         </button>
 
         <GenerationSettingsPanel />
@@ -573,7 +574,8 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
               : 'Outline where existing flashcards on this slide came from — hover a box for a preview, click to jump to it'
           }
         >
-          🔖 {showCardSources ? 'Hide' : 'Show'} flashcards{cardSourcesOnPage.length > 0 ? ` (${cardSourcesOnPage.length})` : ''}
+          <Icon name="bookmark" />
+          {showCardSources ? 'Hide' : 'Show'} flashcards{cardSourcesOnPage.length > 0 ? ` (${cardSourcesOnPage.length})` : ''}
         </button>
 
         <div style={{ position: 'relative' }} ref={pictureMenuRef}>
@@ -595,13 +597,17 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
               color: pictureMenuOpen || freeSelectTarget ? 'var(--accent)' : 'var(--fg-muted)'
             }}
           >
-            {capturingScreenshot
-              ? 'Capturing…'
-              : freeSelectTarget === 'occlusion'
-                ? '📸 Drag to capture…'
-                : freeSelectTarget === 'picture'
-                  ? '📷 Drag to capture…'
-                  : '🖼️ Picture card'}
+            {capturingScreenshot ? (
+              'Capturing…'
+            ) : freeSelectTarget === 'occlusion' || freeSelectTarget === 'picture' ? (
+              <>
+                <Icon name="camera" />Drag to capture…
+              </>
+            ) : (
+              <>
+                <Icon name="image" />Picture card
+              </>
+            )}
           </button>
 
           {pictureMenuOpen && (
@@ -614,7 +620,7 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
                   setPictureMenuOpen(false)
                 }}
               >
-                📷 Free screenshot
+                <Icon name="camera" />Free screenshot
                 <span style={pictureMenuHintStyle}>Drag anywhere on the slide</span>
               </button>
               <button
@@ -625,7 +631,7 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
                   setPictureMenuOpen(false)
                 }}
               >
-                📸 Free occlusion
+                <Icon name="eye" />Free occlusion
                 <span style={pictureMenuHintStyle}>Drag anywhere on the slide</span>
               </button>
               <button
@@ -636,7 +642,7 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
                   setPictureMenuOpen(false)
                 }}
               >
-                🖼️ Picture card from selection
+                <Icon name="image" />Picture card from selection
                 <span style={pictureMenuHintStyle}>
                   {selectedElements.length === 0 ? 'Select something on the slide first' : 'Uses the current selection'}
                 </span>
@@ -663,7 +669,7 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
           style={quietButtonStyle}
           title="Open the full flashcard editor — front/back text, generation settings, and multiple screenshots placed on the front or back"
         >
-          🗂️ Advanced Flashcard
+          <Icon name="layers" />Advanced Flashcard
         </button>
 
         <div style={{ flex: 1 }} />
@@ -675,7 +681,15 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
         </span>
 
         <button disabled={selectedElements.length === 0 || creatingCard} onClick={handleCreateFlashcardClick} style={primaryButtonStyle}>
-          {combineMode ? 'Add to combined card' : creatingCard ? 'Generating…' : '✨ Create Flashcard'}
+          {combineMode ? (
+            'Add to combined card'
+          ) : creatingCard ? (
+            'Generating…'
+          ) : (
+            <>
+              <Icon name="sparkles" />Create Flashcard
+            </>
+          )}
         </button>
       </div>
 
@@ -783,11 +797,21 @@ function DocumentSummaryPanel({ document }: { document: DocumentRecord }): JSX.E
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
         {document.summary && (
           <button onClick={() => setExpanded((v) => !v)} style={quietButtonStyle} title={expanded ? 'Collapse summary' : 'Expand summary'}>
-            {expanded ? '▼' : '▶'} Summary
+            <Icon name={expanded ? 'chevron-down' : 'chevron-right'} size="0.9em" />Summary
           </button>
         )}
         <button disabled={generating} onClick={handleGenerate} style={document.summary ? quietButtonStyle : primaryButtonStyle}>
-          {generating ? 'Summarizing…' : document.summary ? '🔄 Regenerate summary' : '✨ Summarize document'}
+          {generating ? (
+            'Summarizing…'
+          ) : document.summary ? (
+            <>
+              <Icon name="refresh" />Regenerate summary
+            </>
+          ) : (
+            <>
+              <Icon name="sparkles" />Summarize document
+            </>
+          )}
         </button>
       </div>
       {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}

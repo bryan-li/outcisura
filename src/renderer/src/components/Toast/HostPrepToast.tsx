@@ -1,5 +1,6 @@
 import { useEffect, type CSSProperties } from 'react'
 import { useHostPrepStore } from '../../state/hostPrepStore'
+import { Icon } from '../Icon'
 
 /** The first toast/notification primitive in this app — everything else that signals "something
  *  happened" is either an inline banner (persists until explicit dismissal, e.g. DocumentViewer's
@@ -31,7 +32,9 @@ export function HostPrepToast(): JSX.Element | null {
 
   return (
     <div style={toastStyle}>
-      <span style={{ fontSize: 16 }}>{failedCount === 0 ? '✅' : '⚠️'}</span>
+      <span style={{ fontSize: 16, display: 'inline-flex' }}>
+        <Icon name={failedCount === 0 ? 'check-circle' : 'warning'} bare />
+      </span>
       <span>{message}</span>
     </div>
   )
