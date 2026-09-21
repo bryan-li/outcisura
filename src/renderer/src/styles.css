@@ -234,6 +234,26 @@ aside svg {
   display: none;
 }
 
+/* Sidebar press feedback: pills and rail buttons dip slightly while held. */
+.nav-pill:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Anyone who's asked their OS for less motion gets the sidebar without any of it: no width glide,
+   fades, rotations or press scaling — state changes are simply instant. */
+@media (prefers-reduced-motion: reduce) {
+  aside,
+  aside * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+  }
+
+  .nav-pill:active:not(:disabled) {
+    transform: none;
+  }
+}
+
 /* Tree-row "⋯" menus (see RowMenu.tsx): hidden until the row is hovered or the button itself has
    keyboard focus, and pinned visible while its menu is open. */
 .row-menu-trigger {

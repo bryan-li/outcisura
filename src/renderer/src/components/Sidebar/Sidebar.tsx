@@ -32,12 +32,33 @@ function isView(a: MainView, b: MainView): boolean {
   return true
 }
 
+const SIDEBAR_MIN = 188
+const SIDEBAR_MAX = 264
+const SIDEBAR_VW = 0.2
+
+/** The expanded sidebar's width in plain pixels: 20% of the window, kept between 188 and 264. This is
+ *  what CSS `clamp(188px, 20vw, 264px)` would give, computed here instead because browsers can't
+ *  interpolate between a clamp() and an ordinary length — with the clamp, collapsing/expanding would
+ *  flip instantly rather than glide. Uses innerWidth (CSS px), which webFrame zoom scales exactly as
+ *  it would vw. */
+function useExpandedSidebarWidth(): number {
+  const compute = (): number => Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, window.innerWidth * SIDEBAR_VW)))
+  const [width, setWidth] = useState(compute)
+  useEffect(() => {
+    const onResize = (): void => setWidth(compute())
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return width
+}
+
 export function Sidebar(): JSX.Element {
   const view = useUiStore((s) => s.view)
   const setView = useUiStore((s) => s.setView)
   const focusCard = useUiStore((s) => s.focusCard)
   const openSearch = useUiStore((s) => s.openSearch)
   const isAiAdmin = useAiAdminStore((s) => s.isAdmin)
+  const expandedWidth = useExpandedSidebarWidth()
 
   const documents = useDocumentsStore((s) => s.documents)
   const documentFolders = useDocumentsStore((s) => s.documentFolders)
@@ -235,7 +256,8 @@ export function Sidebar(): JSX.Element {
   }
 
   return (
-    <aside style={sidebarStyle}>
+    <aside style={{ ...sidebarStyle, width: expandedWidth }}>
+      <div style={{ ...sidebarInnerStyle, width: expandedWidth - 3 }}>
       <div style={sidebarHeaderStyle}>
         <button
           onClick={() => setView({ type: 'home' })}
@@ -482,15 +504,28 @@ export function Sidebar(): JSX.Element {
         {isAiAdmin && (
           <button
             onClick={() => setView({ type: 'admin' })}
+            className="nav-pill"
             style={footerButtonStyle(isView(view, { type: 'admin' }))}
             title="Manage AI budgets and accounts"
           >
-            <Icon name="shield" />AI Admin
+            <ActiveFill active={isView(view, { type: 'admin' })} />
+            <span style={{ position: 'relative' }}>
+              <Icon name="shield" />AI Admin
+            </span>
           </button>
         )}
-        <button onClick={() => setView({ type: 'settings', returnTo: view })} style={footerButtonStyle(view.type === 'settings')} title="Settings">
-          <Icon name="sliders" />Settings
+        <button
+          onClick={() => setView({ type: 'settings', returnTo: view })}
+          className="nav-pill"
+          style={footerButtonStyle(view.type === 'settings')}
+          title="Settings"
+        >
+          <ActiveFill active={view.type === 'settings'} />
+          <span style={{ position: 'relative' }}>
+            <Icon name="sliders" />Settings
+          </span>
         </button>
+      </div>
       </div>
     </aside>
   )
@@ -552,7 +587,7 @@ function NewlyCreatedSection(): JSX.Element | null {
             <div key={key}>
               <button onClick={() => toggle(key)} style={docGroupRowStyle} title={name}>
                 <span style={{ ...caretButtonStyle, cursor: 'inherit' }}>
-                  <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} bare size={12} />
+                  <Caret open={!collapsed} />
                 </span>
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', overflowWrap: 'anywhere' }}>
                   <Icon name="file" />
@@ -576,6 +611,11 @@ function NewlyCreatedSection(): JSX.Element | null {
 
 /** Small uppercase label that groups the nav items under it — same look as the Library/Folders
  *  section headers, minus the caret and click target (these groups don't collapse). */
+/** One chevron that rotates open/closed, rather than swapping between two icons. */
+function Caret({ open }: { open: boolean }): JSX.Element {
+  return <Icon name="chevron-right" bare size={12} style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 160ms ease' }} />
+}
+
 function NavGroupLabel({ children }: { children: string }): JSX.Element {
   return <div style={navGroupLabelStyle}>{children}</div>
 }
@@ -598,9 +638,11 @@ function NavItem({
 }): JSX.Element {
   return (
     <button
+      className="nav-pill"
       onClick={onClick}
       title={title}
       style={{
+        position: 'relative',
         display: 'flex',
         alignItems: 'center',
         gap: 8,
@@ -611,23 +653,29 @@ function NavItem({
         padding: '6px 12px',
         borderRadius: 'var(--radius-pill)',
         border: 'none',
-        // The current page is a lit accent pill (text flips to --on-accent); hover is a soft wash.
-        ...(active ? activePill : { background: 'transparent', boxShadow: 'none' }),
+        // The current page's fill is the <ActiveFill> layer below; this button only ever carries the
+        // hover wash, and the text colour, which eases along with the fade.
+        background: 'transparent',
         color: active ? 'var(--on-accent)' : 'inherit',
         cursor: 'pointer',
         fontSize: 13,
         fontWeight: active ? 600 : 400,
-        transition: 'background-color var(--transition-fast)'
+        transition: 'background-color var(--transition-fast), color 200ms ease, transform 80ms ease'
       }}
       onMouseEnter={(e) => {
         if (!active) e.currentTarget.style.background = 'var(--bg-hover)'
       }}
       onMouseLeave={(e) => {
-        if (!active) e.currentTarget.style.background = 'transparent'
+        e.currentTarget.style.background = 'transparent'
       }}
     >
-      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', overflowWrap: 'anywhere' }}>{label}</span>
-      {badge !== undefined && badge > 0 && <CountBadge count={badge} onAccent={active} />}
+      <ActiveFill active={active} />
+      <span style={{ position: 'relative', flex: 1, minWidth: 0, overflow: 'hidden', overflowWrap: 'anywhere' }}>{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span style={{ position: 'relative', display: 'inline-flex' }}>
+          <CountBadge count={badge} onAccent={active} />
+        </span>
+      )}
     </button>
   )
 }
@@ -652,6 +700,7 @@ function RailButton({
       onClick={onClick}
       title={title}
       aria-label={title}
+      className="nav-pill"
       style={{
         position: 'relative',
         width: 34,
@@ -664,17 +713,23 @@ function RailButton({
         justifyContent: 'center',
         flexShrink: 0,
         cursor: 'pointer',
-        ...(active ? activePill : { background: 'transparent', boxShadow: 'none' }),
-        color: active ? 'var(--on-accent)' : 'var(--fg-muted)'
+        background: 'transparent',
+        color: active ? 'var(--on-accent)' : 'var(--fg-muted)',
+        // Rail buttons fade in as the panel collapses, rather than appearing fully formed.
+        animation: 'fade-in 260ms ease both',
+        transition: 'background-color var(--transition-fast), color 200ms ease, transform 80ms ease'
       }}
       onMouseEnter={(e) => {
         if (!active) e.currentTarget.style.background = 'var(--bg-hover)'
       }}
       onMouseLeave={(e) => {
-        if (!active) e.currentTarget.style.background = 'transparent'
+        e.currentTarget.style.background = 'transparent'
       }}
     >
-      <Icon name={icon} bare size={17} />
+      <ActiveFill active={active} radius="50%" />
+      <span style={{ position: 'relative', display: 'inline-flex' }}>
+        <Icon name={icon} bare size={17} />
+      </span>
       {dot && (
         <span
           style={{
@@ -713,7 +768,8 @@ function CountBadge({ count, onAccent }: { count: number; onAccent: boolean }): 
         fontVariantNumeric: 'tabular-nums',
         flexShrink: 0,
         background: onAccent ? 'var(--on-accent)' : 'var(--fg)',
-        color: onAccent ? 'var(--accent)' : 'var(--bg)'
+        color: onAccent ? 'var(--accent)' : 'var(--bg)',
+        transition: 'background-color 200ms ease, color 200ms ease'
       }}
     >
       {count > 99 ? '99+' : count}
@@ -807,7 +863,7 @@ function SectionHeader({
   return (
     <div style={sectionHeaderRow}>
       <button onClick={onToggle} title={collapsed ? `Expand ${label}` : `Collapse ${label}`} style={{ ...caretButtonStyle, height: 16 }}>
-        <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} bare size={12} />
+        <Caret open={!collapsed} />
       </button>
       <button
         onClick={onOpen}
@@ -1123,7 +1179,7 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
           }}
         >
           <button onClick={props.onToggleCollapse} style={{ ...caretButtonStyle, visibility: hasContent ? 'visible' : 'hidden' }}>
-            <Icon name={folder.collapsed ? 'chevron-right' : 'chevron-down'} bare size={12} />
+            <Caret open={!folder.collapsed} />
           </button>
           <button
             onClick={() => props.setView({ type: 'folder', folderId: folder.id })}
@@ -1344,7 +1400,7 @@ function DocumentFolderNode(props: DocumentFolderNodeProps): JSX.Element {
           }}
         >
           <button onClick={props.onToggleCollapse} style={{ ...caretButtonStyle, visibility: hasContent ? 'visible' : 'hidden' }}>
-            <Icon name={folder.collapsed ? 'chevron-right' : 'chevron-down'} bare size={12} />
+            <Caret open={!folder.collapsed} />
           </button>
           <button onClick={props.onToggleCollapse} style={navFolderTitleStyle}>
             <Icon name="folder" />
@@ -1502,6 +1558,17 @@ const glassPanel: CSSProperties = {
   borderRadius: 'var(--radius-panel)'
 }
 
+/** The fill behind the current page, drawn as its own layer that fades in and out — so moving between
+ *  pages crossfades the orange pill instead of snapping. The parent must be position: relative. */
+function ActiveFill({ active, radius = 'var(--radius-pill)' }: { active: boolean; radius?: string }): JSX.Element {
+  return (
+    <span
+      aria-hidden="true"
+      style={{ position: 'absolute', inset: 0, borderRadius: radius, ...activePill, opacity: active ? 1 : 0, transition: 'opacity 200ms ease', pointerEvents: 'none' }}
+    />
+  )
+}
+
 /** The current page: a solid accent pill lit from above — slightly lighter at the top, a bright
  *  inner top edge and a faint ring, like a raised glass button rather than a flat fill. */
 const activePill: CSSProperties = {
@@ -1511,17 +1578,31 @@ const activePill: CSSProperties = {
 
 const sidebarStyle: CSSProperties = {
   ...glassPanel,
-  // Proportional rather than a hard 240px: at higher zoom the window fits fewer CSS pixels, so a
-  // fixed width would eat the content area and squeeze names into ellipses.
-  width: 'clamp(188px, 20vw, 264px)',
+  // Width is set inline from useExpandedSidebarWidth (proportional to the window: at higher zoom the
+  // window fits fewer CSS pixels, so a fixed width would squeeze names into ellipses).
   flexShrink: 0,
   // A floating panel rather than a full-height strip: inset from the window edges, stretched to fill
   // the row minus its margins.
   alignSelf: 'stretch',
+  // Collapsing/expanding is the same <aside> element in both states (React reuses it), so animating
+  // width here is what makes the panel glide instead of popping.
+  transition: 'width 260ms cubic-bezier(0.22, 1, 0.36, 1), padding 260ms cubic-bezier(0.22, 1, 0.36, 1)',
   margin: 'var(--space-2) 0 var(--space-2) var(--space-2)',
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column'
+}
+
+/** Expanded content is laid out at the panel's full width even while the panel is still growing or
+ *  shrinking, and simply clipped by the aside's overflow — so expanding reveals the labels from the left
+ *  instead of squashing and re-wrapping them mid-animation. (-3px: the panel's 1.5px borders.) */
+const sidebarInnerStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  flex: 1,
+  minHeight: 0,
+  // width is set inline (useExpandedSidebarWidth minus the panel's 3px of border)
+  flexShrink: 0
 }
 
 const sidebarHeaderStyle: CSSProperties = {
@@ -1556,6 +1637,7 @@ const sidebarFooterStyle: CSSProperties = {
 /** Footer rows (Settings, AI Admin) match the nav pills: muted until they're the current page. */
 function footerButtonStyle(active: boolean): CSSProperties {
   return {
+    position: 'relative',
     width: '100%',
     display: 'flex',
     alignItems: 'center',
@@ -1564,9 +1646,11 @@ function footerButtonStyle(active: boolean): CSSProperties {
     fontSize: 13,
     padding: '6px 12px',
     borderRadius: 'var(--radius-pill)',
-    ...(active ? activePill : { background: 'none', boxShadow: 'none' }),
+    // The fill is an <ActiveFill> layer in the button, so it can fade rather than snap.
+    background: 'none',
     color: active ? 'var(--on-accent)' : 'var(--fg-muted)',
-    fontWeight: active ? 600 : 400
+    fontWeight: active ? 600 : 400,
+    transition: 'background-color var(--transition-fast), color 200ms ease, transform 80ms ease'
   }
 }
 
@@ -1593,6 +1677,7 @@ const collapsedSidebarStyle: CSSProperties = {
   width: 52,
   flexShrink: 0,
   alignSelf: 'stretch',
+  transition: 'width 260ms cubic-bezier(0.22, 1, 0.36, 1), padding 260ms cubic-bezier(0.22, 1, 0.36, 1)',
   margin: 'var(--space-2) 0 var(--space-2) var(--space-2)',
   padding: 'var(--space-2) 0',
   display: 'flex',
