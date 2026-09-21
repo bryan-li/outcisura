@@ -1569,10 +1569,10 @@ function ActiveFill({ active, radius = 'var(--radius-pill)' }: { active: boolean
   )
 }
 
-/** The current page: a solid accent pill lit from above — slightly lighter at the top, a bright
- *  inner top edge and a faint ring, like a raised glass button rather than a flat fill. */
+/** The current page: a flat accent pill with a lit finish — a bright inner top edge, a faint ring and
+ *  a soft glow — but a single solid colour, no gradient across the fill. */
 const activePill: CSSProperties = {
-  background: 'linear-gradient(180deg, color-mix(in srgb, var(--accent) 78%, #fff), var(--accent))',
+  background: 'var(--accent)',
   boxShadow: 'inset 0 1px 0 #ffffff73, inset 0 0 0 1px #ffffff2e, 0 1px 3px color-mix(in srgb, var(--accent) 45%, transparent)'
 }
 
