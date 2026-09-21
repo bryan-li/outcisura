@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAiAdminStore } from '../../state/aiAdminStore'
+import { useAuthStore } from '../../state/authStore'
+
+const ACCOUNTS_PER_PAGE = 10
 
 interface Summary {
   month_spend_usd: number
@@ -21,6 +24,7 @@ interface Account {
   note: string | null
   spent_month_usd: number
   last_used_at: string | null
+  is_admin: boolean
 }
 
 interface UsageRow {
@@ -249,6 +253,8 @@ function Breakdown({ rows }: { rows: { name: string; requests: number; cost_usd:
 function AccountsTable({ accounts, onSaved, onShowUsage }: { accounts: Account[]; onSaved: () => void; onShowUsage: (userId: string) => void }): JSX.Element {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'spend' | 'name' | 'recent'>('spend')
+  const [page, setPage] = useState(0)
+  const myId = useAuthStore((s) => s.session?.user.id)
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -262,25 +268,71 @@ function AccountsTable({ accounts, onSaved, onShowUsage }: { accounts: Account[]
     )
   }, [accounts, query, sort])
 
+  // Paging is client-side over the full list: search and sort both need to span every account, not
+  // just the current page, and the list is only ever one row per real (non-guest) sign-up.
+  const pageCount = Math.max(1, Math.ceil(rows.length / ACCOUNTS_PER_PAGE))
+  const safePage = Math.min(page, pageCount - 1)
+  const start = safePage * ACCOUNTS_PER_PAGE
+  const pageRows = rows.slice(start, start + ACCOUNTS_PER_PAGE)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search accounts…" style={{ ...inputStyle, flex: 1 }} />
-        <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} style={inputStyle}>
+        <input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setPage(0)
+          }}
+          placeholder="Search accounts…"
+          style={{ ...inputStyle, flex: 1 }}
+        />
+        <select
+          value={sort}
+          onChange={(e) => {
+            setSort(e.target.value as typeof sort)
+            setPage(0)
+          }}
+          style={inputStyle}
+        >
           <option value="spend">Most spent</option>
           <option value="recent">Recently active</option>
           <option value="name">Name</option>
         </select>
       </div>
-      {rows.map((a) => (
-        <AccountRow key={a.user_id} account={a} onSaved={onSaved} onShowUsage={() => onShowUsage(a.user_id)} />
+      {pageRows.map((a) => (
+        <AccountRow key={a.user_id} account={a} isSelf={a.user_id === myId} onSaved={onSaved} onShowUsage={() => onShowUsage(a.user_id)} />
       ))}
       {rows.length === 0 && <p style={mutedStyle}>No accounts match.</p>}
+      {rows.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', justifyContent: 'space-between', paddingTop: 4 }}>
+          <span style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-muted)', fontVariantNumeric: 'tabular-nums' }}>
+            {start + 1}–{start + pageRows.length} of {rows.length}
+          </span>
+          {pageCount > 1 && (
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button disabled={safePage === 0} onClick={() => setPage(safePage - 1)} style={pagerButtonStyle}>
+                ‹ Prev
+              </button>
+              {pageCount <= 8 &&
+                Array.from({ length: pageCount }, (_, i) => (
+                  <button key={i} onClick={() => setPage(i)} style={i === safePage ? pagerButtonActiveStyle : pagerButtonStyle}>
+                    {i + 1}
+                  </button>
+                ))}
+              <button disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)} style={pagerButtonStyle}>
+                Next ›
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-function AccountRow({ account, onSaved, onShowUsage }: { account: Account; onSaved: () => void; onShowUsage: () => void }): JSX.Element {
+function AccountRow({ account, isSelf, onSaved, onShowUsage }: { account: Account; isSelf: boolean; onSaved: () => void; onShowUsage: () => void }): JSX.Element {
+  const reloadAdminFlag = useAiAdminStore((s) => s.load)
   const [budget, setBudget] = useState(String(account.monthly_budget_usd))
   const [rpm, setRpm] = useState(String(account.requests_per_minute))
   const [disabled, setDisabled] = useState(account.disabled)
@@ -314,10 +366,33 @@ function AccountRow({ account, onSaved, onShowUsage }: { account: Account; onSav
     else onSaved()
   }
 
+  async function setAdmin(makeAdmin: boolean): Promise<void> {
+    const name = who(account)
+    const message = makeAdmin
+      ? `Make ${name} an admin? They'll be able to see every account's usage, change budgets and prices, and add or remove other admins.`
+      : isSelf
+        ? 'Remove your own admin access? You will lose this page immediately.'
+        : `Remove admin access from ${name}?`
+    if (!window.confirm(message)) return
+    setError(null)
+    const { error: err } = await supabase.rpc('ai_admin_set_admin', { target: account.user_id, make_admin: makeAdmin })
+    if (err) {
+      setError(err.message)
+      return
+    }
+    // Demoting yourself flips this page off; the store re-check handles that without a restart.
+    if (isSelf) await reloadAdminFlag()
+    onSaved()
+  }
+
   return (
     <div style={{ ...accountRowStyle, opacity: disabled ? 0.6 : 1 }}>
       <div style={{ flex: '1 1 200px', minWidth: 0 }}>
-        <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{who(account)}</div>
+        <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {who(account)}
+          {account.is_admin && <span style={adminBadgeStyle}>admin</span>}
+          {isSelf && <span style={{ fontWeight: 400, color: 'var(--fg-muted)' }}> (you)</span>}
+        </div>
         <div style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {account.username && account.email ? `${account.email} · ` : ''}last used {relativeTime(account.last_used_at)}
         </div>
@@ -339,6 +414,9 @@ function AccountRow({ account, onSaved, onShowUsage }: { account: Account; onSav
       <label style={fieldStyle} title="Block this account from AI entirely">
         <input type="checkbox" checked={disabled} onChange={(e) => setDisabled(e.target.checked)} /> off
       </label>
+      <button onClick={() => void setAdmin(!account.is_admin)} style={quietButtonStyle} title={account.is_admin ? 'Remove admin access' : 'Give this account admin access'}>
+        {account.is_admin ? 'Remove admin' : 'Make admin'}
+      </button>
       <button onClick={onShowUsage} style={quietButtonStyle} title="Show this account's recent requests">
         Requests
       </button>
@@ -444,3 +522,28 @@ const quietButtonStyle: CSSProperties = { border: 'none', background: 'none', co
 const tableStyle: CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: 'var(--font-sm)', fontVariantNumeric: 'tabular-nums' }
 const thStyle: CSSProperties = { textAlign: 'left', padding: '4px 8px', fontSize: 'var(--font-xs)', color: 'var(--fg-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }
 const tdStyle: CSSProperties = { padding: '4px 8px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }
+const adminBadgeStyle: CSSProperties = {
+  marginLeft: 6,
+  padding: '1px 7px',
+  borderRadius: 999,
+  fontSize: 'var(--font-xs)',
+  fontWeight: 600,
+  color: 'var(--accent)',
+  background: 'var(--accent-soft)'
+}
+const pagerButtonStyle: CSSProperties = {
+  border: '1px solid var(--border)',
+  background: 'none',
+  color: 'inherit',
+  borderRadius: 'var(--radius-sm)',
+  padding: '2px 9px',
+  cursor: 'pointer',
+  fontSize: 'var(--font-xs)'
+}
+const pagerButtonActiveStyle: CSSProperties = {
+  ...pagerButtonStyle,
+  border: '1px solid var(--accent)',
+  background: 'var(--accent-soft)',
+  color: 'var(--accent)',
+  fontWeight: 600
+}
