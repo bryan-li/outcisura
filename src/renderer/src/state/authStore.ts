@@ -4,6 +4,11 @@ import { supabase } from '../lib/supabase'
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,20}$/
 
+/** Where the confirmation email's link lands (docs/confirmed.html on the GitHub Pages site). Must also be
+ *  in Supabase's Auth > URL Configuration redirect allow-list, otherwise Supabase silently falls back to
+ *  the project's Site URL. */
+const EMAIL_CONFIRM_URL = 'https://outcisura.com/confirmed'
+
 interface AuthState {
   session: Session | null
   /** True until the initial getSession() check resolves — the auth gate renders nothing (rather
@@ -114,7 +119,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ error: message })
       throw new Error(message)
     }
-    const { error } = await supabase.auth.signUp({ email, password, options: { data: { username } } })
+    const { error } = await supabase.auth.signUp({ email, password, options: { data: { username }, emailRedirectTo: EMAIL_CONFIRM_URL } })
     if (error) {
       set({ error: error.message })
       throw error
