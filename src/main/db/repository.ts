@@ -18,16 +18,20 @@ import type {
   FolderRecord,
   FolderReorderItem,
   FolderUpdatePatch,
+  GeneratedPaperAttemptRecord,
+  GeneratedPaperAttemptSummary,
   GeneratedPaperRecord,
   GeneratedPaperQuestionRecord,
   GeneratedPaperSummary,
   ImportVideoInput,
   NewCardInput,
+  NewGeneratedPaperAttemptInput,
   NewGeneratedPaperInput,
   NewPaperTemplateInput,
   NewReviewSessionInput,
   OrphanedSourceRecord,
   PageRecord,
+  PaperAttemptAnswer,
   PaperQuestionFormat,
   PaperTemplateRecord,
   ParsedDocument,
@@ -1673,6 +1677,47 @@ export class Repository {
   deleteGeneratedPaper(id: string): void {
     this.db.prepare(`DELETE FROM generated_papers WHERE id = ?`).run(id)
   }
+
+  /** Persists a finished, marked attempt — see schema.ts's own comment on why only finished
+   *  attempts get a row (nothing to save/clean up for one that was abandoned mid-answer). */
+  createGeneratedPaperAttempt(input: NewGeneratedPaperAttemptInput): GeneratedPaperAttemptRecord {
+    const id = randomUUID()
+    const createdAt = new Date().toISOString()
+    this.db
+      .prepare(
+        `INSERT INTO generated_paper_attempts (id, paper_id, created_at, marks_awarded, marks_possible, answers)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run(id, input.paperId, createdAt, input.marksAwarded, input.marksPossible, JSON.stringify(input.answers))
+    return { id, paperId: input.paperId, createdAt, marksAwarded: input.marksAwarded, marksPossible: input.marksPossible, answers: input.answers }
+  }
+
+  listGeneratedPaperAttempts(paperId: string): GeneratedPaperAttemptSummary[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, created_at, marks_awarded, marks_possible FROM generated_paper_attempts
+         WHERE paper_id = ? ORDER BY created_at DESC`
+      )
+      .all(paperId) as { id: string; created_at: string; marks_awarded: number; marks_possible: number }[]
+    return rows.map((r) => ({ id: r.id, createdAt: r.created_at, marksAwarded: r.marks_awarded, marksPossible: r.marks_possible }))
+  }
+
+  getGeneratedPaperAttempt(id: string): GeneratedPaperAttemptRecord | null {
+    const row = this.db.prepare(`SELECT * FROM generated_paper_attempts WHERE id = ?`).get(id) as GeneratedPaperAttemptRow | undefined
+    if (!row) return null
+    return {
+      id: row.id,
+      paperId: row.paper_id,
+      createdAt: row.created_at,
+      marksAwarded: row.marks_awarded,
+      marksPossible: row.marks_possible,
+      answers: JSON.parse(row.answers) as PaperAttemptAnswer[]
+    }
+  }
+
+  deleteGeneratedPaperAttempt(id: string): void {
+    this.db.prepare(`DELETE FROM generated_paper_attempts WHERE id = ?`).run(id)
+  }
 }
 
 interface TranscriptSegmentRow {
@@ -1915,4 +1960,13 @@ interface GeneratedPaperQuestionRow {
   mcq_options: string | null
   mcq_correct_index: number | null
   model_answer: string
+}
+
+interface GeneratedPaperAttemptRow {
+  id: string
+  paper_id: string
+  created_at: string
+  marks_awarded: number
+  marks_possible: number
+  answers: string
 }

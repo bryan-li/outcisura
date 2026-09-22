@@ -1,9 +1,11 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useCardsStore } from '../../state/cardsStore'
 import { useFoldersStore } from '../../state/foldersStore'
+import { useExamPapersStore } from '../../state/examPapersStore'
 import { supabaseErrorMessage } from '../../lib/supabaseError'
 import { Icon } from '../Icon'
 import { primaryPillStyle, secondaryPillStyle } from '../dashboardKit'
+import { GenerationProgressBar } from './GenerationProgressBar'
 import type { PaperTemplateRecord } from '../../../../shared/types'
 
 interface GeneratePaperModalProps {
@@ -18,16 +20,24 @@ interface GeneratePaperModalProps {
  *  the AI as small `ref` integers (not their real ids) so it never has to reproduce a UUID
  *  accurately — see shared/types.ts's AiGeneratePaperQuestionsRequest and aiService.ts's
  *  generatePaperQuestions for why, and repository.ts's createGeneratedPaper for how the refs get
- *  mapped back and any stale/hallucinated ones are dropped rather than failing the save. */
+ *  mapped back and any stale/hallucinated ones are dropped rather than failing the save.
+ *
+ *  Generation is a single (sometimes slow) AI call, so this modal stays dismissible the whole time
+ *  — closing it (backdrop click, the × button, or "Close") doesn't cancel the in-flight request,
+ *  it just stops watching for the result. If the modal was dismissed before the call finishes, the
+ *  finished paper is still saved and the list is quietly refreshed via examPapersStore, but we
+ *  don't yank the view over to it — only a still-open modal does that (via onCreated). */
 export function GeneratePaperModal({ initialTemplate, templates, onClose, onCreated }: GeneratePaperModalProps): JSX.Element {
   const cards = useCardsStore((s) => s.cards)
   const folders = useFoldersStore((s) => s.folders)
+  const loadExamPapers = useExamPapersStore((s) => s.load)
 
   const [templateId, setTemplateId] = useState<string | null>(initialTemplate?.id ?? templates[0]?.id ?? null)
   const [folderIds, setFolderIds] = useState<string[]>([])
   const [paperName, setPaperName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const dismissedRef = useRef(false)
 
   const template = templates.find((t) => t.id === templateId) ?? null
   const sortedFolders = useMemo(() => [...folders].sort((a, b) => a.name.localeCompare(b.name)), [folders])
@@ -39,6 +49,11 @@ export function GeneratePaperModal({ initialTemplate, templates, onClose, onCrea
 
   function toggleFolder(id: string): void {
     setFolderIds((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]))
+  }
+
+  function handleDismiss(): void {
+    dismissedRef.current = true
+    onClose()
   }
 
   async function handleGenerate(): Promise<void> {
@@ -87,21 +102,27 @@ export function GeneratePaperModal({ initialTemplate, templates, onClose, onCrea
         questions
       })
 
-      onCreated(paper.id)
+      if (dismissedRef.current) {
+        // The modal is already gone — don't yank the view to the new paper, just make sure it
+        // shows up in the list next time the user looks.
+        void loadExamPapers()
+      } else {
+        onCreated(paper.id)
+      }
     } catch (err) {
-      setError(supabaseErrorMessage(err, 'Failed to generate the paper'))
+      if (!dismissedRef.current) setError(supabaseErrorMessage(err, 'Failed to generate the paper'))
       setBusy(false)
     }
   }
 
   return (
-    <div style={overlayStyle} onClick={onClose}>
+    <div style={overlayStyle} onClick={handleDismiss}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <h2 style={{ fontSize: 'var(--font-lg)', margin: 0 }}>
             <Icon name="sparkles" />Generate a paper
           </h2>
-          <button onClick={onClose} style={closeButtonStyle} title="Close">
+          <button onClick={handleDismiss} style={closeButtonStyle} title="Close">
             <Icon name="x" bare />
           </button>
         </div>
@@ -147,11 +168,20 @@ export function GeneratePaperModal({ initialTemplate, templates, onClose, onCrea
           {folderIds.length === 1 ? '' : 's'}.
         </p>
 
+        {busy && (
+          <div>
+            <GenerationProgressBar label="Writing questions from your cards…" />
+            <p style={{ ...hintStyle, marginTop: 6 }}>
+              This can take a moment — feel free to close this and keep working, the paper will be ready when it's done.
+            </p>
+          </div>
+        )}
+
         {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
 
         <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={secondaryPillStyle} disabled={busy}>
-            Cancel
+          <button onClick={handleDismiss} style={secondaryPillStyle}>
+            {busy ? 'Close' : 'Cancel'}
           </button>
           <button onClick={() => void handleGenerate()} disabled={busy || !template || eligibleCards.length === 0} style={primaryPillStyle}>
             {busy ? 'Generating…' : 'Generate'}

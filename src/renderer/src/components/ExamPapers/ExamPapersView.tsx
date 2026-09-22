@@ -5,6 +5,7 @@ import { Icon } from '../Icon'
 import { EmptyHint, PageHeader, pageStyle, panelStyle, panelTitleStyle, primaryPillStyle, rowLabelStyle, rowMetaStyle, rowStyle, secondaryPillStyle } from '../dashboardKit'
 import { UploadTemplateModal } from './UploadTemplateModal'
 import { GeneratePaperModal } from './GeneratePaperModal'
+import { TemplateStyleGuideModal } from './TemplateStyleGuideModal'
 import type { PaperTemplateRecord } from '../../../../shared/types'
 
 /** Landing page for the exam paper generator: past-paper templates (a structure inferred from
@@ -22,6 +23,7 @@ export function ExamPapersView(): JSX.Element {
 
   const [uploadOpen, setUploadOpen] = useState(false)
   const [generateFor, setGenerateFor] = useState<PaperTemplateRecord | 'pick' | null>(null)
+  const [previewTemplate, setPreviewTemplate] = useState<PaperTemplateRecord | null>(null)
 
   useEffect(() => {
     void load()
@@ -62,6 +64,9 @@ export function ExamPapersView(): JSX.Element {
                   {t.structure.sections.length} section{t.structure.sections.length === 1 ? '' : 's'} · from {t.sourceFilenames.join(', ')}
                 </span>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => setPreviewTemplate(t)} title="Preview style guide" style={iconOnlyButtonStyle}>
+                    <Icon name="eye" bare size={14} />
+                  </button>
                   <button onClick={() => setGenerateFor(t)} style={secondaryPillStyle}>
                     Generate
                   </button>
@@ -131,6 +136,13 @@ export function ExamPapersView(): JSX.Element {
             void load()
             setView({ type: 'exam-paper', paperId })
           }}
+        />
+      )}
+
+      {previewTemplate && (
+        <TemplateStyleGuideModal
+          template={previewTemplate}
+          onClose={() => setPreviewTemplate(null)}
         />
       )}
     </div>

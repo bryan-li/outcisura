@@ -3,6 +3,8 @@ import { extractPdfText } from '../../parsers/pdfText'
 import { supabaseErrorMessage } from '../../lib/supabaseError'
 import { Icon } from '../Icon'
 import { primaryPillStyle, secondaryPillStyle } from '../dashboardKit'
+import { GenerationProgressBar } from './GenerationProgressBar'
+import { SectionStyleList } from './SectionStyleList'
 import type { PaperTemplateStructure } from '../../../../shared/types'
 
 interface UploadTemplateModalProps {
@@ -13,9 +15,11 @@ interface UploadTemplateModalProps {
 const MAX_FILES = 5
 
 /** Upload one or more past papers (PDF) → extract their text client-side → one AI call infers the
- *  STRUCTURE (sections/formats/counts/marks — never the actual question content, which is never
- *  persisted anywhere past this call) → save as a named template. See aiService.ts's
- *  extractPaperTemplate for the prompt and shared/types.ts's PaperTemplateStructure for the shape. */
+ *  STRUCTURE and STYLE (sections/formats/counts/marks, plus how each section's questions are
+ *  actually phrased — never the actual question content, which is never persisted anywhere past
+ *  this call) → save as a named template. Closing the modal mid-analysis just discards whatever
+ *  comes back — nothing's saved until "Save template". See aiService.ts's extractPaperTemplate for
+ *  the prompt and shared/types.ts's PaperTemplateStructure for the shape. */
 export function UploadTemplateModal({ onClose, onCreated }: UploadTemplateModalProps): JSX.Element {
   const [files, setFiles] = useState<File[]>([])
   const [name, setName] = useState('')
@@ -102,6 +106,9 @@ export function UploadTemplateModal({ onClose, onCreated }: UploadTemplateModalP
               Template name
               <input value={name} onChange={(e) => setName(e.target.value)} disabled={busy} style={inputStyle} placeholder="e.g. AP Biology final" />
             </label>
+            {busy && (
+              <GenerationProgressBar label={phase === 'reading' ? 'Reading PDF text…' : 'Analyzing structure and style…'} />
+            )}
           </>
         )}
 
@@ -110,23 +117,15 @@ export function UploadTemplateModal({ onClose, onCreated }: UploadTemplateModalP
             <p style={hintStyle}>
               Inferred structure — {preview.totalMarks !== null ? `${preview.totalMarks} marks total. ` : ''}Edit the name above if you like, then save.
             </p>
-            {preview.sections.map((s, i) => (
-              <div key={i} style={sectionPreviewStyle}>
-                <strong style={{ fontSize: 'var(--font-sm)' }}>{s.name}</strong>
-                <span style={hintStyle}>
-                  {s.questionCount} × {s.format.replace('_', ' ')}
-                  {s.marksPerQuestion !== null ? ` · ${s.marksPerQuestion} mark(s) each` : ''}
-                </span>
-              </div>
-            ))}
+            <SectionStyleList sections={preview.sections} />
           </div>
         )}
 
         {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
 
         <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={secondaryPillStyle} disabled={busy}>
-            Cancel
+          <button onClick={onClose} style={secondaryPillStyle}>
+            {busy ? 'Close' : 'Cancel'}
           </button>
           {!preview ? (
             <button onClick={() => void handleExtract()} disabled={files.length === 0 || busy} style={primaryPillStyle}>
@@ -188,13 +187,4 @@ const inputStyle: CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   background: 'var(--bg)',
   color: 'inherit'
-}
-
-const sectionPreviewStyle: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 2,
-  padding: 'var(--space-2) var(--space-3)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-row)'
 }

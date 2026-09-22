@@ -10,6 +10,7 @@ import { AdminDashboard } from './components/Admin/AdminDashboard'
 import { SocialView } from './components/Social/SocialView'
 import { ExamPapersView } from './components/ExamPapers/ExamPapersView'
 import { GeneratedPaperView } from './components/ExamPapers/GeneratedPaperView'
+import { PaperAttemptSession } from './components/ExamPapers/PaperAttemptSession'
 import { useUiStore } from './state/uiStore'
 import { UpdateBanner } from './components/Updates/UpdateBanner'
 import { IntroTour } from './components/Onboarding/IntroTour'
@@ -159,6 +160,7 @@ function AppShell(): JSX.Element {
           {view.type === 'social' && <SocialView />}
           {view.type === 'exam-papers' && <ExamPapersView />}
           {view.type === 'exam-paper' && <GeneratedPaperView paperId={view.paperId} />}
+          {view.type === 'paper-attempt' && <PaperAttemptSession paperId={view.paperId} returnTo={view.returnTo} />}
           {view.type === 'host-lobby' && <HostLobbyView sessionId={view.sessionId} />}
           {view.type === 'host-control' && <HostControlView sessionId={view.sessionId} />}
           {view.type === 'live-session-join' && <JoinLiveSessionView />}

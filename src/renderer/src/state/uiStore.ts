@@ -43,6 +43,10 @@ export type MainView =
   | { type: 'exam-papers' }
   /** One generated paper's questions, each with a backlink to its source card(s). */
   | { type: 'exam-paper'; paperId: string }
+  /** Taking a generated paper, one question at a time — mirrors the flashcard review queue's own
+   *  session architecture (a dedicated full-screen view with its own `returnTo`, not inline on the
+   *  paper's browsing page). See PaperAttemptSession.tsx. */
+  | { type: 'paper-attempt'; paperId: string; returnTo: MainView }
   /** The host's lobby for a just-created live session — join code + live participant list, before
    *  starting. See HostLobbyView.tsx/hostSessionStore.ts. */
   | { type: 'host-lobby'; sessionId: string }

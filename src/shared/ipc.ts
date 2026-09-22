@@ -5,6 +5,8 @@ import type {
   AiGeneratePaperQuestionsResult,
   AiJudgeFreeTextRequest,
   AiJudgeFreeTextResult,
+  AiMarkPaperAnswersRequest,
+  AiMarkPaperAnswersResult,
   AiRegenerateRequest,
   AiRegenerateResult,
   AiSharePrepRequest,
@@ -12,10 +14,13 @@ import type {
   AiSummarizeResult,
   AnkiExportResult,
   AnkiImportResult,
+  GeneratedPaperAttemptRecord,
+  GeneratedPaperAttemptSummary,
   GeneratedPaperRecord,
   GeneratedPaperSummary,
   ImportSharedDeckInput,
   ImportSharedDeckResult,
+  NewGeneratedPaperAttemptInput,
   NewGeneratedPaperInput,
   NewPaperTemplateInput,
   PaperTemplateRecord,
@@ -110,8 +115,13 @@ export const IpcChannels = {
   generatedPapersList: 'generatedPapers:list',
   generatedPapersGet: 'generatedPapers:get',
   generatedPapersDelete: 'generatedPapers:delete',
+  generatedPaperAttemptsCreate: 'generatedPaperAttempts:create',
+  generatedPaperAttemptsListForPaper: 'generatedPaperAttempts:listForPaper',
+  generatedPaperAttemptsGet: 'generatedPaperAttempts:get',
+  generatedPaperAttemptsDelete: 'generatedPaperAttempts:delete',
   aiExtractPaperTemplate: 'ai:extractPaperTemplate',
   aiGeneratePaperQuestions: 'ai:generatePaperQuestions',
+  aiMarkPaperAnswers: 'ai:markPaperAnswers',
   updatesGetStatus: 'updates:getStatus',
   updatesCheck: 'updates:check',
   updatesDownload: 'updates:download',
@@ -248,6 +258,9 @@ export interface FlashcardApi {
     /** Exam paper generator step 2 — pure compute, doesn't persist; the caller saves the result via
      *  generatedPapers.create. */
     generatePaperQuestions(req: AiGeneratePaperQuestionsRequest): Promise<AiGeneratePaperQuestionsResult>
+    /** Marking a taken paper's free-text answers — pure compute; the caller saves the result via
+     *  generatedPaperAttempts.create. mcq answers never reach this, they're graded locally. */
+    markPaperAnswers(req: AiMarkPaperAnswersRequest): Promise<AiMarkPaperAnswersResult>
   }
   reviewLog: {
     /** Every review grade ever logged — small enough for a personal deck to fetch whole and
@@ -301,6 +314,14 @@ export interface FlashcardApi {
     create(input: NewGeneratedPaperInput): Promise<GeneratedPaperRecord>
     list(): Promise<GeneratedPaperSummary[]>
     get(id: string): Promise<GeneratedPaperRecord | null>
+    delete(id: string): Promise<void>
+  }
+  /** Finished, marked attempts at a generated paper — see schema.ts's own comment on why only a
+   *  fully-marked attempt gets persisted. */
+  generatedPaperAttempts: {
+    create(input: NewGeneratedPaperAttemptInput): Promise<GeneratedPaperAttemptRecord>
+    listForPaper(paperId: string): Promise<GeneratedPaperAttemptSummary[]>
+    get(id: string): Promise<GeneratedPaperAttemptRecord | null>
     delete(id: string): Promise<void>
   }
   /** Self-updater (see main/updater.ts). Status changes are pushed to onStatus as they happen. */

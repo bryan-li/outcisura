@@ -5,6 +5,7 @@ import type {
   AiExtractPaperTemplateRequest,
   AiGeneratePaperQuestionsRequest,
   AiJudgeFreeTextRequest,
+  AiMarkPaperAnswersRequest,
   AiRegenerateRequest,
   AiRegenerateResult,
   AiSharePrepRequest,
@@ -20,6 +21,7 @@ import type {
   ImportSharedDeckInput,
   ImportVideoInput,
   NewCardInput,
+  NewGeneratedPaperAttemptInput,
   NewGeneratedPaperInput,
   NewPaperTemplateInput,
   NewReviewSessionInput,
@@ -149,6 +151,7 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
 
   ipcMain.handle(IpcChannels.aiExtractPaperTemplate, (_event, req: AiExtractPaperTemplateRequest) => ai.extractPaperTemplate(req))
   ipcMain.handle(IpcChannels.aiGeneratePaperQuestions, (_event, req: AiGeneratePaperQuestionsRequest) => ai.generatePaperQuestions(req))
+  ipcMain.handle(IpcChannels.aiMarkPaperAnswers, (_event, req: AiMarkPaperAnswersRequest) => ai.markPaperAnswers(req))
 
   ipcMain.handle(IpcChannels.paperTemplatesCreate, (_event, input: NewPaperTemplateInput) => repo.createPaperTemplate(input))
   ipcMain.handle(IpcChannels.paperTemplatesList, () => repo.listPaperTemplates())
@@ -158,6 +161,11 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
   ipcMain.handle(IpcChannels.generatedPapersList, () => repo.listGeneratedPapers())
   ipcMain.handle(IpcChannels.generatedPapersGet, (_event, id: string) => repo.getGeneratedPaper(id))
   ipcMain.handle(IpcChannels.generatedPapersDelete, (_event, id: string) => repo.deleteGeneratedPaper(id))
+
+  ipcMain.handle(IpcChannels.generatedPaperAttemptsCreate, (_event, input: NewGeneratedPaperAttemptInput) => repo.createGeneratedPaperAttempt(input))
+  ipcMain.handle(IpcChannels.generatedPaperAttemptsListForPaper, (_event, paperId: string) => repo.listGeneratedPaperAttempts(paperId))
+  ipcMain.handle(IpcChannels.generatedPaperAttemptsGet, (_event, id: string) => repo.getGeneratedPaperAttempt(id))
+  ipcMain.handle(IpcChannels.generatedPaperAttemptsDelete, (_event, id: string) => repo.deleteGeneratedPaperAttempt(id))
 
   ipcMain.handle(IpcChannels.reviewLogList, () => repo.listReviewLog())
   ipcMain.handle(IpcChannels.reviewSessionsLog, (_event, input: NewReviewSessionInput) => repo.logReviewSession(input))

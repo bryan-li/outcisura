@@ -8,6 +8,9 @@ import type {
   AiGeneratedQuestion,
   AiJudgeFreeTextRequest,
   AiJudgeFreeTextResult,
+  AiMarkedAnswer,
+  AiMarkPaperAnswersRequest,
+  AiMarkPaperAnswersResult,
   AiRegenerateRequest,
   AiRegenerateResult,
   AiSharePrepRequest,
@@ -290,10 +293,11 @@ export class AiService {
   }
 
   /** Exam paper generator, step 1: infer a past paper's STRUCTURE (sections, formats, question
-   *  counts, marks) from its extracted text — never its actual question content, which is
-   *  discarded once this returns (see PaperTemplateStructure's own doc comment). Several papers at
-   *  once (a past-paper series) let the AI spot what's consistent across them rather than fitting
-   *  one paper's quirks too tightly. */
+   *  counts, marks) and STYLE (how each section's questions are actually phrased — command words,
+   *  sentence structure, scenario stems, level of detail) from its extracted text — never its
+   *  actual question content, which is discarded once this returns (see PaperTemplateStructure's
+   *  own doc comment). Several papers at once (a past-paper series) let the AI spot what's
+   *  consistent across them rather than fitting one paper's quirks too tightly. */
   async extractPaperTemplate(req: AiExtractPaperTemplateRequest): Promise<AiExtractPaperTemplateResult> {
     const message = await this.client.messages.create(
       {
@@ -315,12 +319,22 @@ export class AiService {
       .map((p) => `=== ${p.filename} ===\n${p.text.slice(0, MAX_PAPER_CHARS)}`)
       .join('\n\n')
     return [
-      'You are analyzing one or more past exam papers to infer their STRUCTURE, for generating fresh',
-      'papers with the same shape later. Do NOT reproduce, paraphrase, or reference any of the actual',
-      'question content, names, dates, or specific facts from these papers anywhere in your response —',
-      'only the structural pattern: how the paper is organized into sections, what format each section',
-      'uses, how many questions, and how marks are allocated. If multiple papers are given and they',
-      'differ, use the pattern most consistent across them.',
+      'You are analyzing one or more past exam papers to infer their STRUCTURE and STYLE, for',
+      'generating fresh papers with the same shape and feel later. Do NOT reproduce, paraphrase, or',
+      'reference any of the actual question content, names, dates, or specific facts from these',
+      'papers anywhere in your response.',
+      '',
+      'STRUCTURE means: how the paper is organized into sections, what format each section uses, how',
+      'many questions, and how marks are allocated.',
+      '',
+      'STYLE means: for each section, describe HOW its questions are typically asked — the command',
+      'words used ("Explain", "Compare", "Which of the following…", "Describe", "Calculate"), typical',
+      'question length and sentence structure, whether questions open with a scenario/stem before the',
+      'actual ask, and the level of detail or specificity expected in a full-marks answer. Describe',
+      'this as a general pattern in your own words — never quote or closely paraphrase an actual',
+      'question from the source.',
+      '',
+      'If multiple papers are given and they differ, use the pattern most consistent across them.',
       '',
       'Formats:',
       '- "mcq" — multiple choice, one correct option among several.',
@@ -329,7 +343,7 @@ export class AiService {
       '- "essay" — an extended written response.',
       '',
       'Respond with ONLY a single JSON object, no markdown code fences, no commentary before or after:',
-      '{"paperTitle": "...", "totalMarks": 100 | null, "sections": [{"name": "...", "instructions": "...", "questionCount": 10, "format": "mcq" | "short_answer" | "long_answer" | "essay", "marksPerQuestion": 1 | null}]}',
+      '{"paperTitle": "...", "totalMarks": 100 | null, "sections": [{"name": "...", "instructions": "...", "questionCount": 10, "format": "mcq" | "short_answer" | "long_answer" | "essay", "marksPerQuestion": 1 | null, "questionStyle": "..."}]}',
       '',
       'Past paper(s):',
       papersText
@@ -350,7 +364,7 @@ export class AiService {
     }
     const parsedSections: PaperSection[] = sections.map((s, i) => {
       if (typeof s !== 'object' || s === null) throw new Error(`AI paper-template response section ${i} was not an object: ${text}`)
-      const { name, instructions, questionCount, format, marksPerQuestion } = s as Record<string, unknown>
+      const { name, instructions, questionCount, format, marksPerQuestion, questionStyle } = s as Record<string, unknown>
       if (typeof name !== 'string' || !name.trim()) throw new Error(`AI paper-template response section ${i} had an empty name: ${text}`)
       if (typeof instructions !== 'string') throw new Error(`AI paper-template response section ${i} had invalid instructions: ${text}`)
       if (typeof questionCount !== 'number' || questionCount < 1) {
@@ -360,7 +374,17 @@ export class AiService {
       if (marksPerQuestion !== null && typeof marksPerQuestion !== 'number') {
         throw new Error(`AI paper-template response section ${i} had an invalid marksPerQuestion: ${text}`)
       }
-      return { name: name.trim(), instructions: instructions.trim(), questionCount: Math.round(questionCount), format, marksPerQuestion }
+      if (typeof questionStyle !== 'string' || !questionStyle.trim()) {
+        throw new Error(`AI paper-template response section ${i} had an empty questionStyle: ${text}`)
+      }
+      return {
+        name: name.trim(),
+        instructions: instructions.trim(),
+        questionCount: Math.round(questionCount),
+        format,
+        marksPerQuestion,
+        questionStyle: questionStyle.trim()
+      }
     })
     return { paperTitle: paperTitle.trim(), totalMarks, sections: parsedSections }
   }
@@ -372,11 +396,21 @@ export class AiService {
     const message = await this.client.messages.create(
       {
         model: MODEL,
-        max_tokens: 8192,
+        // A whole paper's worth of questions (style guide + every section + a modelAnswer each) can
+        // run well past 8192 output tokens for a paper with many sections/questions — that used to
+        // get silently cut off mid-JSON and fail with an opaque parse error. 16000 gives real
+        // headroom; the stop_reason check below still catches it cleanly if a paper is big enough
+        // to blow through even that, instead of a confusing "Could not parse ... as JSON" error.
+        max_tokens: 16000,
         messages: [{ role: 'user', content: this.buildGenerateQuestionsPrompt(req) }]
       },
       featureHeader('paper_generate')
     )
+    if (message.stop_reason === 'max_tokens') {
+      throw new Error(
+        'The generated paper was too long to finish in one response — try generating from fewer folders/cards, or a template with fewer questions.'
+      )
+    }
     const text = message.content
       .filter((block): block is Anthropic.TextBlock => block.type === 'text')
       .map((block) => block.text)
@@ -390,7 +424,7 @@ export class AiService {
         (s, i) =>
           `${i}. "${s.name}" — ${s.questionCount} question(s), format "${s.format}"${
             s.marksPerQuestion !== null ? `, ${s.marksPerQuestion} mark(s) each` : ''
-          }. Instructions: ${s.instructions || '(none given)'}`
+          }. Instructions: ${s.instructions || '(none given)'}. Question style to match: ${s.questionStyle}`
       )
       .join('\n')
     const cardsText = req.cards.map((c) => `[${c.ref}] Front: ${c.front}\n    Back: ${c.back}`).join('\n')
@@ -407,6 +441,8 @@ export class AiService {
       cardsText,
       '',
       'For each question:',
+      "- Phrase it to match its section's given question style above — same command words, sentence",
+      "  structure, and level of detail. Don't fall back to generic phrasing that ignores it.",
       '- "mcq": include exactly 4 "mcqOptions" (the correct one plus 3 plausible wrong ones, none a',
       '  paraphrase of it) and "mcqCorrectIndex" (0-based index of the correct option within mcqOptions).',
       '  Do not make the correct option identifiable just by how it reads (length, phrasing, tone) —',
@@ -475,6 +511,84 @@ export class AiService {
         cardRefs: refs
       }
     })
+  }
+
+  /** Marking a taken paper's free-text answers (short_answer/long_answer/essay) — mcq is graded
+   *  locally by index comparison and never reaches here. One call for every free-text answer in the
+   *  submission, same batching reasoning as generatePaperQuestions. Small `ref` integers again (not
+   *  the questions' real ids) — same reasoning as cardRefs elsewhere. Unlike parseGeneratedQuestions
+   *  (which can drop a bad cardRef and keep the question), a missing/invalid marking for a submitted
+   *  answer can't just be dropped — the caller needs a mark for every answer it sent — so any ref the
+   *  AI didn't return cleanly falls back to 0 marks with a generic note rather than throwing and
+   *  losing every other answer's real marking. */
+  async markPaperAnswers(req: AiMarkPaperAnswersRequest): Promise<AiMarkPaperAnswersResult> {
+    if (req.items.length === 0) return { marked: [] }
+
+    const message = await this.client.messages.create(
+      {
+        model: MODEL,
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: this.buildMarkPrompt(req) }]
+      },
+      featureHeader('paper_mark')
+    )
+    const text = message.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map((block) => block.text)
+      .join('')
+    return { marked: this.parseMarkedAnswers(text, req) }
+  }
+
+  private buildMarkPrompt(req: AiMarkPaperAnswersRequest): string {
+    const itemsText = req.items
+      .map(
+        (item) =>
+          `[${item.ref}] (${item.format}, worth ${item.marks} mark(s))\nQuestion: ${item.prompt}\nModel answer / marking guidance: ${item.modelAnswer}\nStudent's answer: ${item.studentAnswer || '(left blank)'}`
+      )
+      .join('\n\n')
+    return [
+      'You are marking a student\'s answers to exam questions. For each item below, compare the',
+      "student's answer against the model answer / marking guidance and award a whole number of",
+      "marks from 0 up to that item's max. Be reasonably generous about phrasing, but strict about",
+      'missing or incorrect substance — an answer covering half the required points should get',
+      'roughly half the marks, not full marks for effort. A blank answer gets 0.',
+      '',
+      'Items to mark:',
+      itemsText,
+      '',
+      'For each item, also write one short sentence of feedback (what was right/missing).',
+      '',
+      'Respond with ONLY a single JSON object, no markdown code fences, no commentary before or after,',
+      'with exactly one entry per item above, in any order:',
+      '{"marked": [{"ref": 1, "marksAwarded": 2, "feedback": "..."}]}'
+    ].join('\n')
+  }
+
+  private parseMarkedAnswers(text: string, req: AiMarkPaperAnswersRequest): AiMarkedAnswer[] {
+    const itemsByRef = new Map(req.items.map((item) => [item.ref, item]))
+    const byRef = new Map<number, AiMarkedAnswer>()
+    try {
+      const parsed = this.parseJsonBlock(text, 'AI paper-marking response')
+      const { marked } = parsed as Record<string, unknown>
+      if (Array.isArray(marked)) {
+        for (const m of marked) {
+          if (typeof m !== 'object' || m === null) continue
+          const { ref, marksAwarded, feedback } = m as Record<string, unknown>
+          const item = typeof ref === 'number' ? itemsByRef.get(ref) : undefined
+          if (!item || typeof marksAwarded !== 'number' || typeof feedback !== 'string' || !feedback.trim()) continue
+          byRef.set(ref as number, { ref: ref as number, marksAwarded: Math.max(0, Math.min(item.marks, Math.round(marksAwarded))), feedback: feedback.trim() })
+        }
+      }
+    } catch {
+      // Fall through — every item still gets a result via the fallback below, just with 0 marks
+      // and a note, rather than losing the whole submission's marking to one malformed response.
+    }
+    // Anything the AI didn't return a valid marking for (missing ref, malformed entry, or the
+    // whole response failed to parse) still needs a result — the caller submitted every one of
+    // these and expects a mark for each.
+    return req.items.map(
+      (item) => byRef.get(item.ref) ?? { ref: item.ref, marksAwarded: 0, feedback: 'Could not be marked automatically — review it yourself against the model answer.' }
+    )
   }
 
   private buildPrompt(req: AiRegenerateRequest): string {

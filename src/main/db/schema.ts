@@ -522,6 +522,26 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (question_id, card_id)
   );
   CREATE INDEX idx_generated_paper_question_cards_card ON generated_paper_question_cards(card_id);
+  `,
+  `
+  -- A finished, marked attempt at a generated paper. mcq answers are graded locally (index
+  -- comparison); free-text answers (short_answer/long_answer/essay) go to one AI call — see
+  -- aiService.ts's markPaperAnswers — that grades each against its question's model answer. An
+  -- attempt only gets a row here once it's fully marked; an in-progress attempt that's abandoned
+  -- (navigated away from before submitting) is never persisted, so there's nothing to clean up.
+  -- The answers column holds the whole per-question breakdown as JSON (PaperAttemptAnswer[],
+  -- shared/types.ts) rather than a child table — an attempt is small and always read/written as
+  -- one unit, so there's no query that benefits from normalizing it out, same reasoning as
+  -- paper_templates.structure.
+  CREATE TABLE generated_paper_attempts (
+    id TEXT PRIMARY KEY,
+    paper_id TEXT NOT NULL REFERENCES generated_papers(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    marks_awarded INTEGER NOT NULL,
+    marks_possible INTEGER NOT NULL,
+    answers TEXT NOT NULL
+  );
+  CREATE INDEX idx_generated_paper_attempts_paper ON generated_paper_attempts(paper_id);
   `
 ]
 

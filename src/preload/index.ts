@@ -54,7 +54,8 @@ const api: FlashcardApi = {
     judgeFreeTextAnswers: (req) => ipcRenderer.invoke(IpcChannels.aiJudgeFreeTextAnswers, req),
     summarizeDocument: (documentId) => ipcRenderer.invoke(IpcChannels.aiSummarizeDocument, documentId),
     extractPaperTemplate: (req) => ipcRenderer.invoke(IpcChannels.aiExtractPaperTemplate, req),
-    generatePaperQuestions: (req) => ipcRenderer.invoke(IpcChannels.aiGeneratePaperQuestions, req)
+    generatePaperQuestions: (req) => ipcRenderer.invoke(IpcChannels.aiGeneratePaperQuestions, req),
+    markPaperAnswers: (req) => ipcRenderer.invoke(IpcChannels.aiMarkPaperAnswers, req)
   },
   reviewLog: {
     list: () => ipcRenderer.invoke(IpcChannels.reviewLogList)
@@ -90,6 +91,12 @@ const api: FlashcardApi = {
     list: () => ipcRenderer.invoke(IpcChannels.generatedPapersList),
     get: (id) => ipcRenderer.invoke(IpcChannels.generatedPapersGet, id),
     delete: (id) => ipcRenderer.invoke(IpcChannels.generatedPapersDelete, id)
+  },
+  generatedPaperAttempts: {
+    create: (input) => ipcRenderer.invoke(IpcChannels.generatedPaperAttemptsCreate, input),
+    listForPaper: (paperId) => ipcRenderer.invoke(IpcChannels.generatedPaperAttemptsListForPaper, paperId),
+    get: (id) => ipcRenderer.invoke(IpcChannels.generatedPaperAttemptsGet, id),
+    delete: (id) => ipcRenderer.invoke(IpcChannels.generatedPaperAttemptsDelete, id)
   },
   updates: {
     getStatus: () => ipcRenderer.invoke(IpcChannels.updatesGetStatus),

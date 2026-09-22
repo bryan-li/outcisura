@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
 import { createLiveSession } from '../lib/liveSession/createSession'
+import { createLiveSessionFromPaper } from '../lib/liveSession/createPaperSession'
 import { computeSpeedRankedPoints, type TimedAnswer } from '../lib/liveSession/scoring'
 import { computeLeaderboard, type LeaderboardEntry } from '../lib/liveSession/leaderboard'
 import { QUESTION_SECONDS } from '../lib/liveSession/constants'
-import type { ShareFormat } from '../../../shared/types'
+import type { GeneratedPaperRecord, ShareFormat } from '../../../shared/types'
 
 export interface HostQuestion {
   id: string
@@ -73,6 +74,9 @@ interface HostSessionState {
   leaderboard: LeaderboardEntry[]
 
   createAndHost: (folderId: string, folderName: string) => Promise<void>
+  /** Same result as createAndHost, just sourced from a generated exam paper instead of a prepped
+   *  card folder — see createPaperSession.ts for why no "prepare" step is needed first. */
+  createAndHostFromPaper: (paper: GeneratedPaperRecord) => Promise<void>
   startSession: () => Promise<void>
   refreshParticipants: () => Promise<void>
   refreshAnsweredCount: () => Promise<void>
@@ -84,6 +88,25 @@ interface HostSessionState {
 
 function computeDeadline(): string {
   return new Date(Date.now() + QUESTION_SECONDS * 1000).toISOString()
+}
+
+/** Shared by createAndHost and createAndHostFromPaper — both just need the freshly-inserted
+ *  question rows back in HostQuestion shape once the session exists, regardless of what it was
+ *  created from. */
+async function loadQuestionsForSession(sessionId: string): Promise<HostQuestion[]> {
+  const { data, error } = await supabase
+    .from('live_session_questions')
+    .select('id, question_index, front_snapshot, format, mcq_options')
+    .eq('session_id', sessionId)
+    .order('question_index', { ascending: true })
+  if (error) throw error
+  return ((data ?? []) as QuestionRow[]).map((r) => ({
+    id: r.id,
+    questionIndex: r.question_index,
+    frontSnapshot: r.front_snapshot,
+    format: r.format,
+    mcqOptions: r.mcq_options
+  }))
 }
 
 export const useHostSessionStore = create<HostSessionState>((set, get) => ({
@@ -102,20 +125,14 @@ export const useHostSessionStore = create<HostSessionState>((set, get) => ({
 
   createAndHost: async (folderId, folderName) => {
     const { sessionId, joinCode } = await createLiveSession(folderId, folderName)
-    const { data, error } = await supabase
-      .from('live_session_questions')
-      .select('id, question_index, front_snapshot, format, mcq_options')
-      .eq('session_id', sessionId)
-      .order('question_index', { ascending: true })
-    if (error) throw error
-    const questions = ((data ?? []) as QuestionRow[]).map((r) => ({
-      id: r.id,
-      questionIndex: r.question_index,
-      frontSnapshot: r.front_snapshot,
-      format: r.format,
-      mcqOptions: r.mcq_options
-    }))
+    const questions = await loadQuestionsForSession(sessionId)
     set({ sessionId, joinCode, folderName, questions, currentQuestionIndex: -1, phase: 'lobby' })
+  },
+
+  createAndHostFromPaper: async (paper) => {
+    const { sessionId, joinCode } = await createLiveSessionFromPaper(paper)
+    const questions = await loadQuestionsForSession(sessionId)
+    set({ sessionId, joinCode, folderName: paper.name, questions, currentQuestionIndex: -1, phase: 'lobby' })
   },
 
   startSession: async () => {

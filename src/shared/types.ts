@@ -600,6 +600,10 @@ export interface PaperSection {
   format: PaperQuestionFormat
   /** Null when the source paper didn't mark individual question values. */
   marksPerQuestion: number | null
+  /** How this section's questions are actually PHRASED — command words, sentence structure, tone,
+   *  whether they open with a scenario stem, level of specificity — described in general terms so
+   *  a fresh paper reads like it belongs to the same series. Never the questions' actual content. */
+  questionStyle: string
 }
 
 export interface PaperTemplateStructure {
@@ -711,4 +715,78 @@ export interface AiGeneratedQuestion {
 
 export interface AiGeneratePaperQuestionsResult {
   questions: AiGeneratedQuestion[]
+}
+
+/* -------------------------------------------------------------------------------------------- */
+/* Taking + marking a generated paper. MCQ answers are auto-marked locally (index comparison, no  */
+/* AI call needed). Free-text answers (short_answer/long_answer/essay) go to one AI call per       */
+/* submission — see aiService.ts's markPaperAnswers — which grades each against its question's     */
+/* modelAnswer and mark cap. An attempt is only persisted once fully marked; an abandoned          */
+/* in-progress attempt is never saved (see GeneratedPaperView's own comment on why).                */
+/* -------------------------------------------------------------------------------------------- */
+
+export interface PaperAttemptAnswer {
+  questionId: string
+  /** Set for mcq questions, null otherwise. */
+  selectedMcqIndex: number | null
+  /** Set for short_answer/long_answer/essay questions (may be an empty string if left blank), null for mcq. */
+  answerText: string | null
+  marksAwarded: number
+  /** The question's own `marks`, or 1 if it didn't specify one — snapshotted here so a later edit
+   *  to the question (there isn't one today, but just in case) can't retroactively change a past
+   *  attempt's scoring. */
+  marksPossible: number
+  /** AI-written feedback for free-text answers; null for mcq (the question's own modelAnswer
+   *  already serves as the explanation there, no separate call needed). */
+  feedback: string | null
+}
+
+export interface GeneratedPaperAttemptRecord {
+  id: string
+  paperId: string
+  createdAt: string
+  marksAwarded: number
+  marksPossible: number
+  answers: PaperAttemptAnswer[]
+}
+
+export interface NewGeneratedPaperAttemptInput {
+  paperId: string
+  marksAwarded: number
+  marksPossible: number
+  answers: PaperAttemptAnswer[]
+}
+
+/** A summary row for listing past attempts without hydrating every answer. */
+export interface GeneratedPaperAttemptSummary {
+  id: string
+  createdAt: string
+  marksAwarded: number
+  marksPossible: number
+}
+
+export interface AiMarkAnswerItem {
+  /** A small per-call index (1-based), not the question's real id — same reasoning as cardRefs
+   *  elsewhere: the AI only ever echoes back a short number. */
+  ref: number
+  prompt: string
+  format: PaperQuestionFormat
+  /** The mark cap to grade against — already resolved to 1 if the question didn't specify one. */
+  marks: number
+  modelAnswer: string
+  studentAnswer: string
+}
+
+export interface AiMarkPaperAnswersRequest {
+  items: AiMarkAnswerItem[]
+}
+
+export interface AiMarkedAnswer {
+  ref: number
+  marksAwarded: number
+  feedback: string
+}
+
+export interface AiMarkPaperAnswersResult {
+  marked: AiMarkedAnswer[]
 }
