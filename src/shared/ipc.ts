@@ -8,6 +8,8 @@ import type {
   AiSummarizeResult,
   AnkiExportResult,
   AnkiImportResult,
+  ImportSharedDeckInput,
+  ImportSharedDeckResult,
   UpdateStatus,
   CardRecord,
   CardReorderItem,
@@ -91,6 +93,7 @@ export const IpcChannels = {
   cardImagesRemove: 'cardImages:remove',
   ankiExportAll: 'anki:exportAll',
   ankiImport: 'anki:import',
+  sharedDecksImport: 'sharedDecks:import',
   updatesGetStatus: 'updates:getStatus',
   updatesCheck: 'updates:check',
   updatesDownload: 'updates:download',
@@ -255,6 +258,12 @@ export interface FlashcardApi {
     /** Exports every card, or just one folder (and its subfolders) when folderId is given. */
     exportAll(folderId?: string): Promise<AnkiExportResult>
     import(): Promise<AnkiImportResult>
+  }
+  /** A friend's deck (see lib/social.ts), already fetched from Supabase by the renderer (RLS only
+   *  lets that fetch succeed once the owner has shared it with you) — this just files it into the
+   *  local library, the same way an Anki import lands a deck as a new folder of cards. */
+  sharedDecks: {
+    import(input: ImportSharedDeckInput): Promise<ImportSharedDeckResult>
   }
   /** Self-updater (see main/updater.ts). Status changes are pushed to onStatus as they happen. */
   updates: {

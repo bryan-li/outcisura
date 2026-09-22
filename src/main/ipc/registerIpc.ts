@@ -15,6 +15,7 @@ import type {
   FolderRecord,
   FolderReorderItem,
   FolderUpdatePatch,
+  ImportSharedDeckInput,
   ImportVideoInput,
   NewCardInput,
   NewReviewSessionInput,
@@ -212,6 +213,23 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
 
     const summary = importParsedNotes(repo, notes)
     return { canceled: false, ...summary }
+  })
+
+  ipcMain.handle(IpcChannels.sharedDecksImport, (_event, input: ImportSharedDeckInput) => {
+    // Reuses the exact same folder-find-or-create/dedupe/import machinery Anki import uses — a
+    // shared deck is just a deck from somewhere else, same as an .apkg's. No images (see
+    // ImportSharedDeckInput's own doc comment), no tags or schedule (friends' own review progress
+    // and personal tags aren't part of what gets shared).
+    const notes = input.cards.map((c) => ({
+      front: c.front,
+      back: c.back,
+      cardType: c.cardType,
+      images: [],
+      deckPath: [input.folderName],
+      tags: [],
+      schedule: null
+    }))
+    return importParsedNotes(repo, notes)
   })
 
   ipcMain.handle(IpcChannels.syncGetPendingOps, () => repo.getPendingSyncOps())

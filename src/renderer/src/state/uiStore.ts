@@ -37,6 +37,8 @@ export type MainView =
    *  sidebar, unlike missing-sources' count-gated visibility — see HostableDecksView.tsx. */
   | { type: 'hostable-decks' }
   | { type: 'admin' }
+  /** Friends, requests, and decks shared with you — see SocialView.tsx. */
+  | { type: 'social' }
   /** The host's lobby for a just-created live session — join code + live participant list, before
    *  starting. See HostLobbyView.tsx/hostSessionStore.ts. */
   | { type: 'host-lobby'; sessionId: string }

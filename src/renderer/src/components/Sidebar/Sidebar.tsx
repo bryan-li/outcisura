@@ -6,6 +6,7 @@ import { useFoldersStore } from '../../state/foldersStore'
 import { useUiStore, type MainView } from '../../state/uiStore'
 import { useConnectivityStore } from '../../state/connectivityStore'
 import { useAiAdminStore } from '../../state/aiAdminStore'
+import { useAuthStore } from '../../state/authStore'
 import { parsePdf } from '../../parsers/pdfParser'
 import { parsePptx } from '../../parsers/pptxParser'
 import { parseVideoFile } from '../../parsers/videoParser'
@@ -20,6 +21,8 @@ import { MarqueeSelect } from '../Grid/MarqueeSelect'
 import type { ImportProgress } from '../../types/importProgress'
 import { ImportProgressBar } from './ImportProgressBar'
 import { RowMenu } from './RowMenu'
+import { ShareDeckModal } from '../Social/ShareDeckModal'
+import { useSocialStore } from '../../state/socialStore'
 import { Logo } from '../Logo'
 import { DocTypeIcon, Icon, type IconName } from '../Icon'
 
@@ -81,6 +84,12 @@ export function Sidebar(): JSX.Element {
   const focusCard = useUiStore((s) => s.focusCard)
   const openSearch = useUiStore((s) => s.openSearch)
   const isAiAdmin = useAiAdminStore((s) => s.isAdmin)
+  const userId = useAuthStore((s) => s.session?.user.id)
+  const incomingRequestCount = useSocialStore((s) => s.incoming.length)
+  const loadSocial = useSocialStore((s) => s.load)
+  useEffect(() => {
+    if (userId) void loadSocial(userId)
+  }, [userId, loadSocial])
   const expandedWidth = useExpandedSidebarWidth()
 
   const documents = useDocumentsStore((s) => s.documents)
@@ -121,6 +130,7 @@ export function Sidebar(): JSX.Element {
   const [importError, setImportError] = useState<string | null>(null)
   const [creatingUnder, setCreatingUnder] = useState<string | null | undefined>(undefined)
   const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [shareModalFolder, setShareModalFolder] = useState<FolderRecord | null>(null)
   const [creatingDocFolderUnder, setCreatingDocFolderUnder] = useState<string | null | undefined>(undefined)
   const [renamingDocFolderId, setRenamingDocFolderId] = useState<string | null>(null)
   const [rootDropActive, setRootDropActive] = useState(false)
@@ -271,6 +281,13 @@ export function Sidebar(): JSX.Element {
           active={view.type === 'live-session-join' || view.type === 'live-session-play'}
           onClick={() => setView({ type: 'live-session-join' })}
         />
+        <RailButton
+          icon="users"
+          title={incomingRequestCount > 0 ? `Social (${incomingRequestCount} request${incomingRequestCount === 1 ? '' : 's'})` : 'Social'}
+          active={isView(view, { type: 'social' })}
+          dot={incomingRequestCount > 0}
+          onClick={() => setView({ type: 'social' })}
+        />
         <div style={{ flex: 1 }} />
         {isAiAdmin && <RailButton icon="shield" title="AI Admin" active={isView(view, { type: 'admin' })} onClick={() => setView({ type: 'admin' })} />}
         <RailButton icon="sliders" title="Settings" active={view.type === 'settings'} onClick={() => setView({ type: 'settings', returnTo: view })} />
@@ -279,6 +296,7 @@ export function Sidebar(): JSX.Element {
   }
 
   return (
+    <>
     <aside style={{ ...sidebarStyle, width: expandedWidth }}>
       <div style={{ ...sidebarInnerStyle, width: expandedWidth - 3 }}>
       <div style={sidebarHeaderStyle}>
@@ -328,6 +346,14 @@ export function Sidebar(): JSX.Element {
           label={<><Icon name="join" />Join a session</>}
           active={view.type === 'live-session-join' || view.type === 'live-session-play'}
           onClick={() => setView({ type: 'live-session-join' })}
+        />
+
+        <NavGroupLabel>Social</NavGroupLabel>
+        <NavItem
+          label={<><Icon name="users" />Friends</>}
+          badge={incomingRequestCount}
+          active={isView(view, { type: 'social' })}
+          onClick={() => setView({ type: 'social' })}
         />
       </div>
 
@@ -496,20 +522,21 @@ export function Sidebar(): JSX.Element {
                 renamingId={renamingId}
                 creatingUnder={creatingUnder}
                 setView={setView}
-                onToggleCollapse={() => updateFolder(folder.id, { collapsed: !folder.collapsed })}
-                onStartRename={() => setRenamingId(folder.id)}
-                onFinishRename={async (name) => {
-                  if (name.trim()) await updateFolder(folder.id, { name: name.trim() })
+                onToggleCollapse={(f) => updateFolder(f.id, { collapsed: !f.collapsed })}
+                onStartRename={(folderId) => setRenamingId(folderId)}
+                onFinishRename={async (folderId, name) => {
+                  if (name.trim()) await updateFolder(folderId, { name: name.trim() })
                   setRenamingId(null)
                 }}
                 onCancelRename={() => setRenamingId(null)}
-                onStartCreateChild={() => setCreatingUnder(folder.id)}
+                onStartCreateChild={(folderId) => setCreatingUnder(folderId)}
                 onCreate={handleCreate}
                 onCancelCreate={() => setCreatingUnder(undefined)}
-                onDelete={() => handleDeleteFolder(folder)}
+                onDelete={(f) => handleDeleteFolder(f)}
                 onDrop={handleFolderDrop}
                 onDropCard={handleCardDrop}
                 focusCard={focusCard}
+                onShare={(f) => setShareModalFolder(f)}
               />
             ))}
             {creatingUnder === null && (
@@ -551,6 +578,10 @@ export function Sidebar(): JSX.Element {
       </div>
       </div>
     </aside>
+    {shareModalFolder && (
+      <ShareDeckModal folderId={shareModalFolder.id} folderName={shareModalFolder.name} onClose={() => setShareModalFolder(null)} />
+    )}
+    </>
   )
 }
 
@@ -925,17 +956,24 @@ interface FolderNodeProps {
   renamingId: string | null
   creatingUnder: string | null | undefined
   setView: (view: MainView) => void
-  onToggleCollapse: () => void
-  onStartRename: () => void
-  onFinishRename: (name: string) => void
+  // Bound to a specific folder EXPLICITLY (not pre-bound at the call site) — this component
+  // recurses via `{...props} folder={child}` (see the recursive <FolderNode> below), which reuses
+  // the SAME prop values unchanged at every depth. A handler pre-bound to "this" folder at the
+  // root would silently keep acting on the ROOT for every descendant; taking the target folder as
+  // an explicit argument and always calling with THIS node's own `folder` keeps each level correct
+  // regardless of how deep it's nested.
+  onToggleCollapse: (folder: FolderRecord) => void
+  onStartRename: (folderId: string) => void
+  onFinishRename: (folderId: string, name: string) => void
   onCancelRename: () => void
-  onStartCreateChild: () => void
+  onStartCreateChild: (folderId: string) => void
   onCreate: (name: string, parentId: string | null) => void
   onCancelCreate: () => void
-  onDelete: () => void
+  onDelete: (folder: FolderRecord) => void
   onDrop: (draggedId: string, targetId: string, position: DropPosition) => void
   onDropCard: (cardIds: string[], folderId: string) => void
   focusCard: (cardId: string, folderId: string | null) => void
+  onShare: (folder: FolderRecord) => void
 }
 
 /** A flashcard shown as a leaf row under its folder in the sidebar tree. */
@@ -1101,7 +1139,7 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
     if (springLoadTimer.current || !folder.collapsed || !hasContent) return
     springLoadTimer.current = setTimeout(() => {
       springLoadTimer.current = null
-      props.onToggleCollapse()
+      props.onToggleCollapse(folder)
     }, 600)
   }
 
@@ -1154,17 +1192,17 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
   function handleKeyDown(e: KeyboardEvent<HTMLDivElement>): void {
     if (e.key === 'ArrowRight' && folder.collapsed && hasContent) {
       e.preventDefault()
-      props.onToggleCollapse()
+      props.onToggleCollapse(folder)
     } else if (e.key === 'ArrowLeft' && !folder.collapsed && hasContent) {
       e.preventDefault()
-      props.onToggleCollapse()
+      props.onToggleCollapse(folder)
     }
   }
 
   return (
     <div>
       {renamingId === folder.id ? (
-        <InlineTextInput depth={depth} initialValue={folder.name} onSubmit={props.onFinishRename} onCancel={props.onCancelRename} />
+        <InlineTextInput depth={depth} initialValue={folder.name} onSubmit={(name) => props.onFinishRename(folder.id, name)} onCancel={props.onCancelRename} />
       ) : (
         <div
           draggable
@@ -1201,7 +1239,7 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
             if (!active && !dropIndicator && !cardDropActive) e.currentTarget.style.background = 'transparent'
           }}
         >
-          <button onClick={props.onToggleCollapse} style={{ ...caretButtonStyle, visibility: hasContent ? 'visible' : 'hidden' }}>
+          <button onClick={() => props.onToggleCollapse(folder)} style={{ ...caretButtonStyle, visibility: hasContent ? 'visible' : 'hidden' }}>
             <Caret open={!folder.collapsed} />
           </button>
           <button
@@ -1223,10 +1261,11 @@ function FolderNode(props: FolderNodeProps): JSX.Element {
           </button>
           <RowMenu
             items={[
-              { label: 'New subfolder', onSelect: props.onStartCreateChild },
-              { label: 'Rename', onSelect: props.onStartRename },
+              { label: 'New subfolder', onSelect: () => props.onStartCreateChild(folder.id) },
+              { label: 'Rename', onSelect: () => props.onStartRename(folder.id) },
               { label: 'Export to Anki…', onSelect: () => void exportFolderToAnki(folder.id) },
-              { label: 'Delete folder', onSelect: props.onDelete, danger: true }
+              { label: 'Share with a friend…', onSelect: () => props.onShare(folder) },
+              { label: 'Delete folder', onSelect: () => props.onDelete(folder), danger: true }
             ]}
           />
         </div>

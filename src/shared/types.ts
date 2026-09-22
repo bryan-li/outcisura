@@ -400,6 +400,31 @@ export interface AnkiImportResult {
   foldersCreated?: number
 }
 
+/** One card of a friend's deck, as fetched from Supabase (see lib/social.ts) — the renderer reads
+ *  it straight from the cloud (RLS only allows this once the owner has shared the folder with you;
+ *  see the friends_and_deck_shares migration), then hands it to main to actually import. Text only:
+ *  a card's images are a local file path on the OWNER's device, which is meaningless on yours, since
+ *  images never sync — only card content does (same limitation "Public decks" already has). */
+export interface SharedDeckCard {
+  front: string
+  back: string
+  cardType: CardType
+}
+
+export interface ImportSharedDeckInput {
+  /** Becomes the local folder name (nested if it collides — see sharedDecks.ts, same
+   *  find-or-create-by-name behaviour Anki import already uses for decks). */
+  folderName: string
+  cards: SharedDeckCard[]
+}
+
+/** Same shape as AnkiImportResult minus `canceled` (there's no file dialog to cancel here — the
+ *  renderer already knows exactly which cards it's importing before calling this). */
+export interface ImportSharedDeckResult {
+  imported: number
+  skipped: number
+}
+
 /** Carries the card's own content rather than just its id — main no longer looks the card up
  *  itself (see aiService.ts), since cards live in Supabase now while this IPC call stays local
  *  (bring-your-own-key, nothing here needs to move). The caller (cardsStore) already has the

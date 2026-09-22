@@ -75,6 +75,9 @@ const api: FlashcardApi = {
     exportAll: (folderId?: string) => ipcRenderer.invoke(IpcChannels.ankiExportAll, folderId),
     import: () => ipcRenderer.invoke(IpcChannels.ankiImport)
   },
+  sharedDecks: {
+    import: (input) => ipcRenderer.invoke(IpcChannels.sharedDecksImport, input)
+  },
   updates: {
     getStatus: () => ipcRenderer.invoke(IpcChannels.updatesGetStatus),
     check: () => ipcRenderer.invoke(IpcChannels.updatesCheck),
