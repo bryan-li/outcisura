@@ -93,6 +93,7 @@ const api: FlashcardApi = {
       shell.openExternal(url)
     },
     setAiSession: (session) => ipcRenderer.invoke(IpcChannels.authSetAiSession, session),
+    setActiveUser: (userId) => ipcRenderer.invoke(IpcChannels.authSetActiveUser, userId),
     onDeepLink: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, url: string): void => callback(url)
       ipcRenderer.on(IpcChannels.authDeepLink, listener)

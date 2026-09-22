@@ -82,13 +82,24 @@ function syncAiSession(session: Session | null): void {
   )
 }
 
+/** Points main's local SQLite repository at this account's own database (see main/accountDb.ts) —
+ *  awaited BEFORE `session` is ever written to this store, so App.tsx can never render AppShell (and
+ *  its mount-time loadCards/loadFolders/etc.) against the previous account's still-open database. An
+ *  anonymous (guest) session is treated the same as signed-out, matching App.tsx's own routing —
+ *  guests never reach a view that reads local data, so there's nothing to scope for them. */
+function syncActiveUser(session: Session | null): Promise<void> {
+  const userId = session && !session.user.is_anonymous ? session.user.id : null
+  return window.api.auth.setActiveUser(userId)
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   loading: true,
   error: null,
 
   init: () => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
+      await syncActiveUser(data.session)
       set({ session: data.session, loading: false })
       syncAiSession(data.session)
       if (data.session) void ensureProfile(data.session, set)
@@ -96,9 +107,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Keeps session state current across sign-in/out from this call and token refreshes Supabase
     // performs on its own — not just a one-time load.
     supabase.auth.onAuthStateChange((_event, session) => {
-      set({ session })
-      syncAiSession(session)
-      if (session) void ensureProfile(session, set)
+      void (async () => {
+        await syncActiveUser(session)
+        set({ session })
+        syncAiSession(session)
+        if (session) void ensureProfile(session, set)
+      })()
     })
     window.api.auth.onDeepLink((url) => handleAuthDeepLink(url, set))
   },

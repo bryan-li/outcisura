@@ -50,6 +50,21 @@ function bboxEquals(a: BBox, b: BBox): boolean {
 export class Repository {
   constructor(private db: Database.Database) {}
 
+  /** Points this same Repository instance at a different (already-migrated) database connection —
+   *  see main/accountDb.ts's setActiveUser, which calls this whenever the signed-in account changes
+   *  so each account reads/writes only its own local data. Safe to swap under every other method
+   *  here: none of them cache a prepared statement or transaction as an instance field — each one
+   *  calls `this.db.prepare(...)`/`this.db.transaction(...)` fresh, so they pick up whatever
+   *  connection `this.db` currently holds. */
+  setDatabase(db: Database.Database): void {
+    try {
+      this.db.close()
+    } catch {
+      // Already closed — fine, nothing to clean up.
+    }
+    this.db = db
+  }
+
   importDocument(parsed: ParsedDocument): DocumentRecord {
     const documentId = randomUUID()
     const importedAt = new Date().toISOString()

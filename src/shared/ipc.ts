@@ -100,6 +100,7 @@ export const IpcChannels = {
   updatesStatus: 'updates:status',
   authDeepLink: 'auth:deep-link',
   authSetAiSession: 'auth:setAiSession',
+  authSetActiveUser: 'auth:setActiveUser',
   syncGetPendingOps: 'sync:getPendingOps',
   syncRemoveOps: 'sync:removeOps',
   syncGetMeta: 'sync:getMeta',
@@ -279,6 +280,13 @@ export interface FlashcardApi {
      *  the ai-proxy Edge Function instead of needing a local API key. Called on every auth change/refresh
      *  (null on sign-out). */
     setAiSession(session: { accessToken: string; supabaseUrl: string } | null): Promise<void>
+    /** Points the local SQLite database at this account's own copy — every other IPC call in this
+     *  file (cards, folders, documents, tags, sync...) reads/writes whatever account this last
+     *  resolved to. Called on every auth change (including on launch), with `userId` null while
+     *  signed out or signed in as an anonymous guest. Resolves only once the database has actually
+     *  been switched, which authStore.ts relies on to avoid ever rendering one account's UI against
+     *  another account's data — see main/accountDb.ts. */
+    setActiveUser(userId: string | null): Promise<void>
     /** Fires with the full `outcisura://...` URL whenever the OS hands one to this app. Returns
      *  an unsubscribe function. */
     onDeepLink(callback: (url: string) => void): () => void

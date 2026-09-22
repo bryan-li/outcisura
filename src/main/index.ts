@@ -2,12 +2,12 @@ import { app, BrowserWindow, shell } from 'electron'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
-import { openDatabase } from './db/schema'
 import { Repository } from './db/repository'
 import { AiService } from './aiService'
 import { OcrService } from './ocrService'
 import { TranscriptionService } from './transcriptionService'
 import { registerIpc } from './ipc/registerIpc'
+import { createInitialRepository } from './accountDb'
 import { startUpdater } from './updater'
 import { registerVideoProtocolPrivileges, registerVideoProtocolHandler } from './videoProtocol'
 import { IpcChannels } from '../shared/ipc'
@@ -134,9 +134,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  const dbPath = join(app.getPath('userData'), 'flashcards.db')
-  const db = openDatabase(dbPath)
-  const repo = new Repository(db)
+  const repo = createInitialRepository(Repository)
 
   // AI requests go through the ai-proxy Edge Function using the signed-in user's session (see
   // anthropicClient.ts), so none of these services holds an API key.

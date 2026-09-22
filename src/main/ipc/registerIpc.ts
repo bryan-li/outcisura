@@ -38,6 +38,7 @@ import { buildAnkiPackage, parseAnkiPackage } from '../anki'
 import { importParsedNotes } from '../ankiImport'
 import { checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate, openReleasePage, simulateUpdate } from '../updater'
 import { setProxySession } from '../anthropicClient'
+import { setActiveUser } from '../accountDb'
 import { convertPptxToPdf } from '../pptxConverter'
 
 export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, transcription: TranscriptionService): void {
@@ -155,6 +156,10 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
 
   ipcMain.handle(IpcChannels.authSetAiSession, (_event, session: { accessToken: string; supabaseUrl: string } | null) => {
     setProxySession(session)
+  })
+
+  ipcMain.handle(IpcChannels.authSetActiveUser, (_event, userId: string | null) => {
+    setActiveUser(repo, userId)
   })
 
   ipcMain.handle(IpcChannels.updatesGetStatus, () => getUpdateStatus())
