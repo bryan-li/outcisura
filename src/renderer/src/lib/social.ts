@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 export { supabaseErrorMessage as socialErrorMessage } from './supabaseError'
-import type { CardType, ImportSharedDeckResult, SharedDeckCard } from '../../../shared/types'
+import { downloadDeck } from './deckImport'
+import type { ImportSharedDeckResult } from '../../../shared/types'
 
 /** Friends + deck sharing — plain Supabase queries against the friendships/deck_shares tables from
  *  the friends_and_deck_shares migration, same "bypass local-first sync, go straight to the cloud"
@@ -182,12 +183,8 @@ export async function listMySharesFor(folderId: string): Promise<Set<string>> {
   return new Set((data ?? []).map((r) => r.shared_with_id as string))
 }
 
-/** Pulls a shared folder's cards down and hands them to main to actually file into the local
- *  library (see registerIpc.ts's sharedDecks:import handler) — text only, see SharedDeckCard's own
- *  doc comment on why images don't come along. */
+/** Thin wrapper — see downloadDeck in lib/deckImport.ts, the general "download any folder you can
+ *  currently read" version this and HostableDecksView's public decks both call. */
 export async function importSharedDeck(deck: SharedDeck): Promise<ImportSharedDeckResult> {
-  const { data, error } = await supabase.from('cards').select('front, back, card_type').eq('folder_id', deck.folderId)
-  if (error) throw error
-  const cards: SharedDeckCard[] = (data ?? []).map((r) => ({ front: r.front as string, back: r.back as string, cardType: r.card_type as CardType }))
-  return window.api.sharedDecks.import({ folderName: deck.folderName, cards })
+  return downloadDeck(deck.folderId, deck.folderName)
 }
