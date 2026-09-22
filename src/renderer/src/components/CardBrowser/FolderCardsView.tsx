@@ -9,6 +9,7 @@ import { allCardsInScope, dueCards } from '../../utils/srsQueue'
 import { computeFolderReadiness, type FolderReadiness } from '../../lib/liveSession/deckReadiness'
 import { useHostSessionStore } from '../../state/hostSessionStore'
 import { supabase } from '../../lib/supabase'
+import { supabaseErrorMessage } from '../../lib/supabaseError'
 import { CardItem } from './CardItem'
 import { MarqueeSelect } from '../Grid/MarqueeSelect'
 import { SharePreviewModal } from './SharePreviewModal'
@@ -18,6 +19,10 @@ import { PageHeader, eyebrowStyle, pageStyle, panelStyle, primaryPillStyle, seco
 interface FolderCardsViewProps {
   folderId: string
 }
+
+/** folders.publish_status — see 0024_publish_approval_workflow.sql. 'none' means never requested
+ *  (or, after a cancel, back to square one — same UI as never having asked). */
+type PublishStatus = 'none' | 'pending' | 'approved' | 'rejected'
 
 export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element {
   const cards = useCardsStore((s) => s.cards)
@@ -37,8 +42,10 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
   const isThisFolderPrepping = activeFolderId === folderId
 
   const [readiness, setReadiness] = useState<FolderReadiness | null>(null)
-  const [isPublic, setIsPublic] = useState(false)
-  const [publicToggleBusy, setPublicToggleBusy] = useState(false)
+  const [publishStatus, setPublishStatus] = useState<PublishStatus>('none')
+  const [publishRejectReason, setPublishRejectReason] = useState<string | null>(null)
+  const [publishBusy, setPublishBusy] = useState(false)
+  const [publishError, setPublishError] = useState<string | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [hostBusy, setHostBusy] = useState(false)
   const [hostError, setHostError] = useState<string | null>(null)
@@ -61,26 +68,65 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
     let cancelled = false
     supabase
       .from('folders')
-      .select('is_public')
+      .select('publish_status, publish_reject_reason')
       .eq('id', folderId)
       .single()
       .then(({ data }) => {
-        if (!cancelled && data) setIsPublic((data as { is_public: boolean }).is_public)
+        if (cancelled || !data) return
+        setPublishStatus((data as { publish_status: PublishStatus }).publish_status)
+        setPublishRejectReason((data as { publish_reject_reason: string | null }).publish_reject_reason)
       })
     return () => {
       cancelled = true
     }
   }, [folderId])
 
-  async function togglePublic(): Promise<void> {
-    const next = !isPublic
-    setPublicToggleBusy(true)
+  // Publishing needs an admin's approval (folders_publish_workflow trigger, 0024_publish_approval_
+  // workflow.sql, backs this server-side — these three calls are the only publish_status/is_public
+  // transitions it lets an owner make; anything else it refuses). "Make public" used to flip
+  // is_public directly; now it only ever requests review.
+  async function requestPublish(): Promise<void> {
+    setPublishBusy(true)
+    setPublishError(null)
     try {
-      const { error } = await supabase.from('folders').update({ is_public: next }).eq('id', folderId).select()
+      const { error } = await supabase
+        .from('folders')
+        .update({ publish_status: 'pending', publish_requested_at: new Date().toISOString() })
+        .eq('id', folderId)
       if (error) throw error
-      setIsPublic(next)
+      setPublishStatus('pending')
+    } catch (err) {
+      setPublishError(supabaseErrorMessage(err, 'Failed to request publishing'))
     } finally {
-      setPublicToggleBusy(false)
+      setPublishBusy(false)
+    }
+  }
+
+  async function cancelPublishRequest(): Promise<void> {
+    setPublishBusy(true)
+    setPublishError(null)
+    try {
+      const { error } = await supabase.from('folders').update({ publish_status: 'none' }).eq('id', folderId)
+      if (error) throw error
+      setPublishStatus('none')
+    } catch (err) {
+      setPublishError(supabaseErrorMessage(err, 'Failed to cancel'))
+    } finally {
+      setPublishBusy(false)
+    }
+  }
+
+  async function unpublish(): Promise<void> {
+    setPublishBusy(true)
+    setPublishError(null)
+    try {
+      const { error } = await supabase.from('folders').update({ publish_status: 'none', is_public: false }).eq('id', folderId)
+      if (error) throw error
+      setPublishStatus('none')
+    } catch (err) {
+      setPublishError(supabaseErrorMessage(err, 'Failed to unpublish'))
+    } finally {
+      setPublishBusy(false)
     }
   }
 
@@ -200,22 +246,36 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
               </>
             )}
           </button>
-          <button
-            style={secondaryPillStyle}
-            disabled={!readiness?.isReady || publicToggleBusy}
-            title={!readiness?.isReady ? 'Prepare this folder for hosting first' : undefined}
-            onClick={togglePublic}
-          >
-            {isPublic ? (
-              <>
-                <Icon name="globe" />Public — click to unpublish
-              </>
-            ) : (
-              <>
-                <Icon name="lock" />Make public
-              </>
-            )}
-          </button>
+          {publishStatus === 'approved' ? (
+            <button style={secondaryPillStyle} disabled={publishBusy} onClick={() => void unpublish()}>
+              <Icon name="globe" />Published — click to unpublish
+            </button>
+          ) : publishStatus === 'pending' ? (
+            <>
+              <button style={{ ...secondaryPillStyle, cursor: 'default' }} disabled title="An admin hasn't reviewed this yet">
+                <Icon name="clock" />Publish requested — pending review
+              </button>
+              <button style={quietInlineButtonStyle} disabled={publishBusy} onClick={() => void cancelPublishRequest()}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              style={secondaryPillStyle}
+              disabled={!readiness?.isReady || publishBusy}
+              title={
+                !readiness?.isReady
+                  ? 'Prepare this folder for hosting first'
+                  : publishStatus === 'rejected'
+                    ? `Declined: ${publishRejectReason ?? 'no reason given'} — click to request again`
+                    : 'Anyone will be able to browse and host this deck once an admin approves it'
+              }
+              onClick={() => void requestPublish()}
+            >
+              <Icon name="lock" />
+              {publishStatus === 'rejected' ? 'Request to publish again' : 'Request to publish'}
+            </button>
+          )}
           <button
             style={secondaryPillStyle}
             disabled={!readiness || readiness.readyCards === 0}
@@ -235,6 +295,7 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
           </button>
         </div>
         {hostError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: '4px 0 0' }}>{hostError}</p>}
+        {publishError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: '4px 0 0' }}>{publishError}</p>}
       </div>
 
       {previewOpen && <SharePreviewModal folderId={folderId} folderName={folder.name} onClose={() => setPreviewOpen(false)} />}
@@ -307,6 +368,15 @@ function NewCardComposer({ folderId }: { folderId: string }): JSX.Element {
 }
 
 const disabledPill: CSSProperties = { opacity: 0.45, cursor: 'default' }
+
+const quietInlineButtonStyle: CSSProperties = {
+  border: 'none',
+  background: 'none',
+  color: 'var(--fg-muted)',
+  cursor: 'pointer',
+  fontSize: 'var(--font-sm)',
+  padding: '0 4px'
+}
 
 const composerGutterStyle: CSSProperties = {
   width: 16,

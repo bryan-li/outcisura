@@ -71,6 +71,16 @@ interface FeatureWeight {
   multiplier: number
 }
 
+/** One row from ai_admin_list_publish_requests() — see 0024_publish_approval_workflow.sql. */
+interface PublishRequest {
+  folder_id: string
+  folder_name: string
+  owner_id: string
+  owner_username: string | null
+  card_count: number
+  requested_at: string
+}
+
 const money = (n: number): string => (n > 0 && n < 0.01 ? '<$0.01' : `$${Number(n).toFixed(2)}`)
 const money4 = (n: number): string => `$${Number(n).toFixed(4)}`
 const cr = (n: number): string => Math.round(Number(n)).toLocaleString()
@@ -98,6 +108,8 @@ export function AdminDashboard(): JSX.Element {
   const [prices, setPrices] = useState<Price[]>([])
   const [plans, setPlans] = useState<Plan[]>([])
   const [weights, setWeights] = useState<FeatureWeight[]>([])
+  const [publishRequests, setPublishRequests] = useState<PublishRequest[]>([])
+  const [publishBusyId, setPublishBusyId] = useState<string | null>(null)
   const [usageFilter, setUsageFilter] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -111,14 +123,15 @@ export function AdminDashboard(): JSX.Element {
   const loadAll = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const [s, a, p, pl, w] = await Promise.all([
+    const [s, a, p, pl, w, pub] = await Promise.all([
       supabase.rpc('ai_admin_summary'),
       supabase.rpc('ai_admin_overview'),
       supabase.from('ai_model_prices').select('*').order('model'),
       supabase.from('ai_plans').select('*').order('sort_order'),
-      supabase.from('ai_feature_weights').select('feature, multiplier').order('feature')
+      supabase.from('ai_feature_weights').select('feature, multiplier').order('feature'),
+      supabase.rpc('ai_admin_list_publish_requests')
     ])
-    const firstError = s.error ?? a.error ?? p.error ?? pl.error ?? w.error
+    const firstError = s.error ?? a.error ?? p.error ?? pl.error ?? w.error ?? pub.error
     if (firstError) setError(firstError.message)
     else {
       setSummary(s.data as Summary)
@@ -126,9 +139,29 @@ export function AdminDashboard(): JSX.Element {
       setPrices(p.data as Price[])
       setPlans(pl.data as Plan[])
       setWeights(w.data as FeatureWeight[])
+      setPublishRequests(pub.data as PublishRequest[])
     }
     setLoading(false)
   }, [])
+
+  async function reviewPublishRequest(folderId: string, approve: boolean): Promise<void> {
+    setPublishBusyId(folderId)
+    try {
+      const reason = approve ? null : window.prompt('Reason for declining (shown to the owner):') ?? undefined
+      if (!approve && reason === undefined) return // they cancelled the prompt
+      const { error: err } = await supabase.rpc('ai_admin_review_publish_request', {
+        p_folder_id: folderId,
+        p_approve: approve,
+        p_reason: reason || null
+      })
+      if (err) throw err
+      setPublishRequests((prev) => prev.filter((r) => r.folder_id !== folderId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to review the request')
+    } finally {
+      setPublishBusyId(null)
+    }
+  }
 
   useEffect(() => {
     if (isAdmin) void loadAll()
@@ -152,6 +185,34 @@ export function AdminDashboard(): JSX.Element {
         </button>
       </header>
       {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
+
+      {publishRequests.length > 0 && (
+        <Card title={`Publish requests (${publishRequests.length})`}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            {publishRequests.map((r) => (
+              <div
+                key={r.folder_id}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', padding: '6px 0', borderBottom: '1px solid var(--border)' }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.folder_name}</div>
+                  <div style={{ fontSize: 'var(--font-xs)', color: 'var(--fg-muted)' }}>
+                    {r.owner_username ?? r.owner_id.slice(0, 8)} · {r.card_count} card{r.card_count === 1 ? '' : 's'} · requested {relativeTime(r.requested_at)}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
+                  <button disabled={publishBusyId === r.folder_id} onClick={() => void reviewPublishRequest(r.folder_id, true)} style={approveButtonStyle}>
+                    Approve
+                  </button>
+                  <button disabled={publishBusyId === r.folder_id} onClick={() => void reviewPublishRequest(r.folder_id, false)} style={quietButtonStyle}>
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {summary && (
         <div className="home-rise" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', animationDelay: '60ms' }}>
@@ -759,6 +820,17 @@ const fieldStyle: CSSProperties = { display: 'inline-flex', alignItems: 'center'
 const inputStyle: CSSProperties = { fontSize: 'var(--font-sm)', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg)', color: 'inherit' }
 const saveButtonStyle: CSSProperties = { border: '1px solid var(--accent)', background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600, borderRadius: 'var(--radius-sm)', padding: '4px 12px', cursor: 'pointer', fontSize: 'var(--font-xs)' }
 const quietButtonStyle: CSSProperties = { border: 'none', background: 'none', color: 'var(--fg-muted)', cursor: 'pointer', fontSize: 'var(--font-xs)' }
+
+const approveButtonStyle: CSSProperties = {
+  border: 'none',
+  background: 'var(--accent)',
+  color: 'var(--on-accent)',
+  fontWeight: 600,
+  fontSize: 'var(--font-xs)',
+  borderRadius: 'var(--radius-pill)',
+  padding: '5px 12px',
+  cursor: 'pointer'
+}
 const tableStyle: CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: 'var(--font-sm)', fontVariantNumeric: 'tabular-nums' }
 const thStyle: CSSProperties = { textAlign: 'left', padding: '4px 8px', fontSize: 'var(--font-xs)', color: 'var(--fg-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }
 const tdStyle: CSSProperties = { padding: '4px 8px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }
