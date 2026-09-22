@@ -7,6 +7,7 @@ import { useCardsStore } from '../../state/cardsStore'
 import { useFoldersStore } from '../../state/foldersStore'
 import { useTagsStore } from '../../state/tagsStore'
 import { AiAccessSection } from './AiAccessSection'
+import { UsernameSection } from './UsernameSection'
 import { runSyncCycle } from '../../lib/syncEngine'
 import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useZoomFactor } from '../../hooks/useZoomFactor'
 import { Icon } from '../Icon'
@@ -148,6 +149,8 @@ export function SettingsView(): JSX.Element {
           Sign out
         </button>
       </section>
+
+      <UsernameSection />
 
       <AiAccessSection />
         </>

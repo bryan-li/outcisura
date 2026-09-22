@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+export { supabaseErrorMessage as socialErrorMessage } from './supabaseError'
 import type { CardType, ImportSharedDeckResult, SharedDeckCard } from '../../../shared/types'
 
 /** Friends + deck sharing — plain Supabase queries against the friendships/deck_shares tables from
@@ -40,17 +41,6 @@ interface FriendshipRow {
   addressee_id: string
   status: 'pending' | 'accepted'
   created_at: string
-}
-
-/** Supabase's PostgrestError (what every `if (error) throw error` above actually throws) is a
- *  plain object, not an Error subclass — `err instanceof Error` misses it, which is why callers
- *  use this instead of that check directly. */
-export function socialErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof Error) return err.message
-  if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string') {
-    return (err as { message: string }).message
-  }
-  return fallback
 }
 
 async function profilesByIds(userIds: string[]): Promise<Map<string, string>> {

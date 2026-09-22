@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
-const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,20}$/
+export const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,20}$/
 
 /** Where the confirmation email's link lands (docs/confirmed.html on the GitHub Pages site). Must also be
  *  in Supabase's Auth > URL Configuration redirect allow-list, otherwise Supabase silently falls back to
