@@ -237,7 +237,7 @@ export function MissingSourcesView(): JSX.Element {
             <Icon name="arrow-left" />Back
           </button>
         } />
-      <div>
+      <div className="home-rise" style={{ animationDelay: '60ms' }}>
         <p style={hintStyle}>
           Cards pulled from another device can reference a document, page, or image that only exists
           there — documents and images stay local to each device, only card content syncs. Recapture
@@ -251,6 +251,7 @@ export function MissingSourcesView(): JSX.Element {
       {orphans === null && <p style={hintStyle}>Loading…</p>}
       {orphans !== null && orphans.length === 0 && <p style={hintStyle}>Nothing missing right now.</p>}
 
+      <div className="home-rise" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', animationDelay: '120ms' }}>
       {[...byCard.entries()].map(([cardId, cardOrphans]) => {
         const card = cards.find((c) => c.id === cardId)
         return (
@@ -280,6 +281,7 @@ export function MissingSourcesView(): JSX.Element {
           </section>
         )
       })}
+      </div>
     </div>
   )
 }

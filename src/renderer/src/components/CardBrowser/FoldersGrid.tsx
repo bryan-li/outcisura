@@ -24,6 +24,7 @@ export function FoldersGrid(): JSX.Element {
         }
       />
 
+      <div className="home-rise" style={{ animationDelay: '80ms' }}>
       <BentoGrid>
         {folders.map((folder, i) => {
           const ownCards = cards.filter((c) => c.folderId === folder.id)
@@ -83,6 +84,7 @@ export function FoldersGrid(): JSX.Element {
           </BentoTile>
         )}
       </BentoGrid>
+      </div>
     </div>
   )
 }

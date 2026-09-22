@@ -144,7 +144,7 @@ export function AdminDashboard(): JSX.Element {
 
   return (
     <div style={pageStyle}>
-      <header style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)' }}>
+      <header className="home-rise" style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)', animationDelay: '0ms' }}>
         <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0, letterSpacing: '-0.02em' }}>AI admin</h1>
         <span style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)' }}>Shared Anthropic key · credits reset each billing period (calendar month on Free, UTC)</span>
         <button onClick={() => void loadAll()} disabled={loading} style={{ ...quietButtonStyle, marginLeft: 'auto' }}>
@@ -154,7 +154,7 @@ export function AdminDashboard(): JSX.Element {
       {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
 
       {summary && (
-        <>
+        <div className="home-rise" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', animationDelay: '60ms' }}>
           <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
             <Tile label="Credits used this month" value={cr(summary.month_credits)} />
             <Tile label="Anthropic spend" value={money(summary.month_cost_usd)} />
@@ -191,9 +191,10 @@ export function AdminDashboard(): JSX.Element {
               )}
             </Card>
           </div>
-        </>
+        </div>
       )}
 
+      <div className="home-rise" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', animationDelay: '120ms' }}>
       <Card title={`Accounts (${accounts.length})`}>
         <AccountsTable
           accounts={accounts}
@@ -232,6 +233,7 @@ export function AdminDashboard(): JSX.Element {
       <Card title="Feature multipliers">
         <FeatureWeightsTable weights={weights} features={summary?.by_feature.map((f) => f.name) ?? []} onSaved={() => void loadAll()} />
       </Card>
+      </div>
     </div>
   )
 }

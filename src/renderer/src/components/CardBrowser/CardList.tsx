@@ -108,14 +108,14 @@ export function CardList(): JSX.Element {
 
   return (
     <MarqueeSelect style={{ ...pageStyle, gap: 'var(--space-4)' }}>
-      <div>
+      <div className="home-rise" style={{ animationDelay: '0ms' }}>
         <h1 style={titleStyle}>Cards</h1>
         <p style={{ color: 'var(--fg-muted)', margin: 'var(--space-1) 0 0' }}>
           {filtering ? `${filteredCards.length} of ${cards.length} cards` : `${cards.length} card${cards.length === 1 ? '' : 's'}`}
           {dueCount > 0 && ` · ${dueCount} due`}
         </p>
       </div>
-      <div style={toolbarStyle}>
+      <div className="home-rise" style={{ ...toolbarStyle, animationDelay: '60ms' }}>
         <label style={searchStyle}>
           <Icon name="search" bare size={14} />
           <input
@@ -133,6 +133,7 @@ export function CardList(): JSX.Element {
         </label>
         {tagChips}
       </div>
+      <div className="home-rise" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', animationDelay: '120ms' }}>
       {filteredCards.length === 0 && (
         <div style={panelStyle}>
           <span style={{ color: 'var(--fg-muted)' }}>No cards match your filter.</span>
@@ -172,6 +173,7 @@ export function CardList(): JSX.Element {
             </GroupSection>
           )
         })()}
+      </div>
     </MarqueeSelect>
   )
 }

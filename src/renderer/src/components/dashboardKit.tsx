@@ -103,10 +103,16 @@ export function EmptyHint({ text }: { text: string }): JSX.Element {
 /** The column every sidebar page lives in, so titles and panels line up from page to page. */
 export const pageStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', width: '100%', maxWidth: 940 }
 
-/** Page title with an optional one-line subtitle and right-aligned actions. */
+/** Page title with an optional one-line subtitle and right-aligned actions. Rises in on mount (same
+ *  staggered entrance Home/Review use — see .home-rise in styles.css) so every page that starts with
+ *  one gets the same settled-in feel for free; a page with more content below stages the rest in
+ *  after it with a later animationDelay (see e.g. FoldersGrid, GraphPage). */
 export function PageHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }): JSX.Element {
   return (
-    <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+    <header
+      className="home-rise"
+      style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 'var(--space-3)', flexWrap: 'wrap' }}
+    >
       <div style={{ minWidth: 0 }}>
         <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0, letterSpacing: '-0.02em' }}>{title}</h1>
         {subtitle && <p style={{ color: 'var(--fg-muted)', margin: 'var(--space-1) 0 0', fontSize: 'var(--font-md)' }}>{subtitle}</p>}

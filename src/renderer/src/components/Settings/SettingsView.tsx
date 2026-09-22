@@ -141,7 +141,7 @@ export function SettingsView(): JSX.Element {
       </div>
 
       {tab === 'account' && (
-        <>
+        <div className="home-rise" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Account</h2>
         <p style={hintStyle}>Signed in as {session?.user.email}</p>
@@ -153,11 +153,11 @@ export function SettingsView(): JSX.Element {
       <UsernameSection />
 
       <AiAccessSection />
-        </>
+        </div>
       )}
 
       {tab === 'data' && (
-        <>
+        <div className="home-rise" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Cloud sync</h2>
         <p style={hintStyle}>
@@ -206,11 +206,11 @@ export function SettingsView(): JSX.Element {
         </div>
         {ankiMessage && <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>{ankiMessage}</p>}
       </section>
-        </>
+        </div>
       )}
 
       {tab === 'general' && (
-        <>
+        <div className="home-rise" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Appearance</h2>
         <div style={segmentedRowStyle}>
@@ -314,7 +314,7 @@ export function SettingsView(): JSX.Element {
         </div>
         {sampleMessage && <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>{sampleMessage}</p>}
       </section>
-        </>
+        </div>
       )}
     </div>
   )

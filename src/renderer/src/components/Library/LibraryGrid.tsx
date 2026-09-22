@@ -31,6 +31,7 @@ export function LibraryGrid(): JSX.Element {
       />
 
       {documents.length > 0 && (
+        <div className="home-rise" style={{ animationDelay: '80ms' }}>
         <BentoGrid>
           {documents.map((doc, i) => (
             <DocumentTile
@@ -43,6 +44,7 @@ export function LibraryGrid(): JSX.Element {
             />
           ))}
         </BentoGrid>
+        </div>
       )}
     </div>
   )

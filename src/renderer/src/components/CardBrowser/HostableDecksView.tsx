@@ -61,7 +61,7 @@ export function HostableDecksView(): JSX.Element {
 
       {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
 
-      <div>
+      <div className="home-rise" style={{ animationDelay: '80ms' }}>
         <h2 style={{ ...panelTitleStyle, margin: '0 0 var(--space-2)' }}>Your decks</h2>
         {yourReadyFolders.length === 0 ? (
           <p style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-sm)' }}>
@@ -87,7 +87,7 @@ export function HostableDecksView(): JSX.Element {
         )}
       </div>
 
-      <div>
+      <div className="home-rise" style={{ animationDelay: '140ms' }}>
         <h2 style={{ ...panelTitleStyle, margin: '0 0 var(--space-2)' }}>Public decks</h2>
         {publicDecks === null ? (
           <p style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-sm)' }}>Loading…</p>

@@ -99,7 +99,7 @@ export function SocialView(): JSX.Element {
 
       {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
 
-      <div style={panelStyle}>
+      <div className="home-rise" style={{ ...panelStyle, animationDelay: '60ms' }}>
         <span style={eyebrowStyle}>Add a friend</span>
         <div style={searchRowStyle}>
           <Icon name="search" bare size={14} />
@@ -129,7 +129,7 @@ export function SocialView(): JSX.Element {
         )}
       </div>
 
-      <div style={columnsStyle}>
+      <div className="home-rise" style={{ ...columnsStyle, animationDelay: '120ms' }}>
         <div style={panelStyle}>
           <h2 style={panelTitleStyle}>Requests</h2>
           {store.incoming.length === 0 && store.outgoing.length === 0 && <EmptyHint text="No pending requests." />}
@@ -184,7 +184,7 @@ export function SocialView(): JSX.Element {
         </div>
       </div>
 
-      <div style={panelStyle}>
+      <div className="home-rise" style={{ ...panelStyle, animationDelay: '180ms' }}>
         <h2 style={panelTitleStyle}>Shared with you</h2>
         {store.sharedWithMe.length === 0 ? (
           <EmptyHint text="Nothing yet — ask a friend to share a deck from its ⋯ menu." />

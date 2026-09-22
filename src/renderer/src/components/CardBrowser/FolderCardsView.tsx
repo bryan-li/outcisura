@@ -168,7 +168,10 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
             </>
           }
         />
-        <div style={{ ...panelStyle, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3)' }}>
+        <div
+          className="home-rise"
+          style={{ ...panelStyle, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3)', animationDelay: '80ms' }}
+        >
           <span style={{ ...eyebrowStyle, marginRight: 'var(--space-2)' }}>Live sessions</span>
           <button
             style={secondaryPillStyle}
@@ -236,20 +239,22 @@ export function FolderCardsView({ folderId }: FolderCardsViewProps): JSX.Element
 
       {previewOpen && <SharePreviewModal folderId={folderId} folderName={folder.name} onClose={() => setPreviewOpen(false)} />}
 
-      {ownCards.length === 0 ? (
-        <p style={{ color: 'var(--fg-muted)' }}>No cards yet — type below to add one.</p>
-      ) : (
-        // The tiny gap + padding aren't just breathing room: they're real DOM space that belongs
-        // to this wrapper rather than to any CardItem, so a marquee-select drag has somewhere to
-        // start from between/around cards — flush-adjacent blocks would leave nowhere to click.
-        <MarqueeSelect style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '3px 0' }}>
-          {ownCards.map((card) => (
-            <CardItem key={card.id} card={card} siblingIds={ownCardIds} />
-          ))}
-        </MarqueeSelect>
-      )}
+      <div className="home-rise" style={{ animationDelay: '140ms' }}>
+        {ownCards.length === 0 ? (
+          <p style={{ color: 'var(--fg-muted)' }}>No cards yet — type below to add one.</p>
+        ) : (
+          // The tiny gap + padding aren't just breathing room: they're real DOM space that belongs
+          // to this wrapper rather than to any CardItem, so a marquee-select drag has somewhere to
+          // start from between/around cards — flush-adjacent blocks would leave nowhere to click.
+          <MarqueeSelect style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '3px 0' }}>
+            {ownCards.map((card) => (
+              <CardItem key={card.id} card={card} siblingIds={ownCardIds} />
+            ))}
+          </MarqueeSelect>
+        )}
 
-      <NewCardComposer folderId={folderId} />
+        <NewCardComposer folderId={folderId} />
+      </div>
     </div>
   )
 }

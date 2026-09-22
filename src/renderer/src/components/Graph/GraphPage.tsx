@@ -12,7 +12,9 @@ export function GraphPage(): JSX.Element {
   return (
     <div style={{ ...pageStyle, gap: 'var(--space-4)' }}>
       <PageHeader title="Graph" subtitle="How your cards, folders and sources connect — hover to draw nodes in, click to jump." />
-      <CardGraph cards={cards} folders={folders} documents={documents} />
+      <div className="home-rise" style={{ animationDelay: '80ms' }}>
+        <CardGraph cards={cards} folders={folders} documents={documents} />
+      </div>
     </div>
   )
 }
