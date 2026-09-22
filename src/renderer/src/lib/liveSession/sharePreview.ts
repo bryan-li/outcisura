@@ -12,6 +12,9 @@ export interface CardSharePreview {
   isPrepped: boolean
   recommendedFormat: ShareFormat | null
   mcqDistractors: string[] | null
+  /** See AiSharePrepResult.mcqCorrectRewrite. Null for a card prepped before this existed, or one
+   *  not prepped at all — createSession.ts falls back to `back` itself in that case. */
+  mcqCorrectRewrite: string | null
   freeTextRubric: string | null
 }
 
@@ -21,6 +24,7 @@ interface CardPreviewRow {
   back: string
   share_format: ShareFormat | null
   share_mcq_distractors: string[] | null
+  share_mcq_correct_rewrite: string | null
   share_free_text_rubric: string | null
   share_prep_source_front: string | null
   share_prep_source_back: string | null
@@ -30,7 +34,7 @@ export async function getCardSharePreviews(folderId: string): Promise<CardShareP
   const { data, error } = await supabase
     .from('cards')
     .select(
-      'id, front, back, share_format, share_mcq_distractors, share_free_text_rubric, share_prep_source_front, share_prep_source_back'
+      'id, front, back, share_format, share_mcq_distractors, share_mcq_correct_rewrite, share_free_text_rubric, share_prep_source_front, share_prep_source_back'
     )
     .eq('folder_id', folderId)
   if (error) throw error
@@ -44,6 +48,7 @@ export async function getCardSharePreviews(folderId: string): Promise<CardShareP
       isPrepped,
       recommendedFormat: isPrepped ? row.share_format : null,
       mcqDistractors: isPrepped ? row.share_mcq_distractors : null,
+      mcqCorrectRewrite: isPrepped ? row.share_mcq_correct_rewrite : null,
       freeTextRubric: isPrepped ? row.share_free_text_rubric : null
     }
   })

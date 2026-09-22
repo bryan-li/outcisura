@@ -10,6 +10,9 @@ export interface CardShareState {
   cardId: string
   shareFormat: ShareFormat | null
   mcqDistractors: string[] | null
+  /** See AiSharePrepResult.mcqCorrectRewrite — the restyled stand-in shown as the correct MCQ
+   *  option. Null for a card prepped before this existed; callers fall back to the real back text. */
+  mcqCorrectRewrite: string | null
   freeTextRubric: string | null
   sourceFront: string | null
   sourceBack: string | null
@@ -19,6 +22,7 @@ interface ShareStateRow {
   id: string
   share_format: ShareFormat | null
   share_mcq_distractors: string[] | null
+  share_mcq_correct_rewrite: string | null
   share_free_text_rubric: string | null
   share_prep_source_front: string | null
   share_prep_source_back: string | null
@@ -29,6 +33,7 @@ function hydrate(row: ShareStateRow): CardShareState {
     cardId: row.id,
     shareFormat: row.share_format,
     mcqDistractors: row.share_mcq_distractors,
+    mcqCorrectRewrite: row.share_mcq_correct_rewrite,
     freeTextRubric: row.share_free_text_rubric,
     sourceFront: row.share_prep_source_front,
     sourceBack: row.share_prep_source_back
@@ -38,7 +43,9 @@ function hydrate(row: ShareStateRow): CardShareState {
 async function fetchShareState(cardId: string): Promise<CardShareState> {
   const { data, error } = await supabase
     .from('cards')
-    .select('id, share_format, share_mcq_distractors, share_free_text_rubric, share_prep_source_front, share_prep_source_back')
+    .select(
+      'id, share_format, share_mcq_distractors, share_mcq_correct_rewrite, share_free_text_rubric, share_prep_source_front, share_prep_source_back'
+    )
     .eq('id', cardId)
     .single()
   if (error) throw error
@@ -62,6 +69,7 @@ export async function ensureSharePrepped(cardId: string, front: string, back: st
     .update({
       share_format: result.recommendedFormat,
       share_mcq_distractors: result.mcqDistractors,
+      share_mcq_correct_rewrite: result.mcqCorrectRewrite,
       share_free_text_rubric: result.freeTextRubric,
       share_prep_source_front: front,
       share_prep_source_back: back
@@ -73,6 +81,7 @@ export async function ensureSharePrepped(cardId: string, front: string, back: st
     cardId,
     shareFormat: result.recommendedFormat,
     mcqDistractors: result.mcqDistractors,
+    mcqCorrectRewrite: result.mcqCorrectRewrite,
     freeTextRubric: result.freeTextRubric,
     sourceFront: front,
     sourceBack: back

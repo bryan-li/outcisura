@@ -9,14 +9,17 @@ interface SharePreviewModalProps {
   onClose: () => void
 }
 
-/** What "Prepare for hosting" generated per card — recommended format, all 3 MCQ distractors
- *  (generated regardless of format, so a host can override per-card later), and the free-text
- *  judging rubric. Distractors/rubric are editable directly here: a host correcting a wrong or
- *  awkward AI suggestion is a deliberate override, not evidence the prep is stale, so editing here
- *  deliberately does NOT touch share_prep_source_front/back — the card stays "ready" exactly as
- *  ensureSharePrepped left it, it just carries the host's own wording now instead of (or on top of)
- *  the AI's. Auto-saves per field on blur, same low-friction pattern as CardItem's own inline
- *  front/back editing (commitEdit) — no separate edit-mode toggle or explicit Save button. */
+/** What "Prepare for hosting" generated per card — recommended format, all 3 MCQ distractors plus a
+ *  restyled stand-in for the correct option (generated regardless of format, so a host can override
+ *  per-card later), and the free-text judging rubric. The real answer itself (shown read-only,
+ *  above the restyled one) is never what's displayed as an MCQ option — see createSession.ts's own
+ *  comment on why: it's often identifiable purely by reading differently from freshly generated
+ *  distractors. Distractors/the restyled option/rubric are editable directly here: a host correcting
+ *  a wrong or awkward AI suggestion is a deliberate override, not evidence the prep is stale, so
+ *  editing here deliberately does NOT touch share_prep_source_front/back — the card stays "ready"
+ *  exactly as ensureSharePrepped left it, it just carries the host's own wording now instead of (or
+ *  on top of) the AI's. Auto-saves per field on blur, same low-friction pattern as CardItem's own
+ *  inline front/back editing (commitEdit) — no separate edit-mode toggle or explicit Save button. */
 export function SharePreviewModal({ folderId, folderName, onClose }: SharePreviewModalProps): JSX.Element {
   const [previews, setPreviews] = useState<CardSharePreview[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -40,6 +43,11 @@ export function SharePreviewModal({ folderId, folderName, onClose }: SharePrevie
     if (saveError) setError(saveError.message)
   }
 
+  async function saveCorrectRewrite(cardId: string, value: string): Promise<void> {
+    const { error: saveError } = await supabase.from('cards').update({ share_mcq_correct_rewrite: value }).eq('id', cardId)
+    if (saveError) setError(saveError.message)
+  }
+
   async function saveRubric(cardId: string, rubric: string): Promise<void> {
     const { error: saveError } = await supabase.from('cards').update({ share_free_text_rubric: rubric }).eq('id', cardId)
     if (saveError) setError(saveError.message)
@@ -53,6 +61,10 @@ export function SharePreviewModal({ folderId, folderName, onClose }: SharePrevie
           : c
       ) ?? null
     )
+  }
+
+  function updateCorrectRewriteLocally(cardId: string, value: string): void {
+    setPreviews((prev) => prev?.map((c) => (c.cardId === cardId ? { ...c, mcqCorrectRewrite: value } : c)) ?? null)
   }
 
   function updateRubricLocally(cardId: string, value: string): void {
@@ -95,6 +107,19 @@ export function SharePreviewModal({ folderId, folderName, onClose }: SharePrevie
                   <p style={sectionLabelStyle}>Correct answer</p>
                   <p style={{ fontSize: 'var(--font-sm)', margin: 0 }}>{card.back}</p>
                 </div>
+
+                {card.mcqDistractors && (
+                  <div>
+                    <p style={sectionLabelStyle}>Shown as the correct option</p>
+                    <input
+                      value={card.mcqCorrectRewrite ?? card.back}
+                      onChange={(e) => updateCorrectRewriteLocally(card.cardId, e.target.value)}
+                      onBlur={() => void saveCorrectRewrite(card.cardId, card.mcqCorrectRewrite ?? card.back)}
+                      title="Reworded so it doesn't stand out from the wrong options below — the real answer above is what actually gets graded and revealed"
+                      style={editFieldStyle}
+                    />
+                  </div>
+                )}
 
                 {card.mcqDistractors && (
                   <div>

@@ -460,6 +460,11 @@ export interface AiSharePrepResult {
   /** Always exactly 3, generated regardless of recommendedFormat so a host's per-card override
    *  never needs a fresh AI call. */
   mcqDistractors: string[]
+  /** A restyled stand-in for the correct MCQ option — same meaning as `back`, but written in the
+   *  same voice/length as the distractors, so the real answer's own wording/formatting doesn't give
+   *  it away just by looking different from the wrong options. `back` itself is never shown as an
+   *  MCQ option; it's still what everything else (grading key, reveal, review) uses. */
+  mcqCorrectRewrite: string
   freeTextRubric: string
 }
 

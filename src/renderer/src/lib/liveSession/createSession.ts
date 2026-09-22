@@ -70,9 +70,17 @@ export async function createLiveSession(folderId: string, folderName: string): P
       let mcqOptions: string[] | null = null
       let correctMcqIndex: number | null = null
       if (isMcq) {
-        const options = shuffle([card.back, ...(card.mcqDistractors ?? [])])
+        // The on-screen correct option is the restyled rewrite (see AiSharePrepResult.mcqCorrectRewrite),
+        // not card.back verbatim — the real answer alone often reads differently from freshly
+        // generated distractors (length, phrasing, capitalization...) and that alone can give it
+        // away. Grading only ever cares about the INDEX (see hostSessionStore.ts's revealResults,
+        // which compares selected_mcq_index to correct_mcq_index — never the option text), so
+        // substituting the displayed text here doesn't touch scoring at all; the true answer stays
+        // exactly what's snapshotted into the answer key below.
+        const correctOption = card.mcqCorrectRewrite ?? card.back
+        const options = shuffle([correctOption, ...(card.mcqDistractors ?? [])])
         mcqOptions = options
-        correctMcqIndex = options.indexOf(card.back)
+        correctMcqIndex = options.indexOf(correctOption)
       }
       return {
         cardId: card.cardId,

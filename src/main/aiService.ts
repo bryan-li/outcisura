@@ -95,10 +95,11 @@ export class AiService {
       '',
       'Regardless of which format you recommend, produce content for BOTH, since a host may override your choice:',
       '- Exactly 3 multiple-choice distractors: plausible-sounding but definitely wrong answers, in the same style/length as the real answer, none of them a paraphrase of it.',
+      '- A rewritten version of the CORRECT answer, for display as the right multiple-choice option instead of the raw Back text: same meaning, but reworded so it reads in the same voice, length and formatting as the distractors — someone should not be able to spot the right answer just because it looks or sounds different from the wrong ones (odd capitalization, a stray trailing period, being noticeably longer/shorter, copied-from-a-slide phrasing, etc.). Do not soften, hedge, or change the actual meaning.',
       '- A short free-text judging rubric: 1-2 sentences describing what a correct answer must contain, for another AI pass to grade a typed response against later.',
       '',
       'Respond with ONLY a single JSON object, no markdown code fences, no commentary before or after:',
-      '{"format": "mcq" | "free_text", "distractors": ["...", "...", "..."], "rubric": "..."}'
+      '{"format": "mcq" | "free_text", "distractors": ["...", "...", "..."], "correctRewrite": "...", "rubric": "..."}'
     ].join('\n')
   }
 
@@ -113,17 +114,25 @@ export class AiService {
     if (typeof parsed !== 'object' || parsed === null) {
       throw new Error(`AI share-prep response was not a JSON object: ${text}`)
     }
-    const { format, distractors, rubric } = parsed as Record<string, unknown>
+    const { format, distractors, correctRewrite, rubric } = parsed as Record<string, unknown>
     if (format !== 'mcq' && format !== 'free_text') {
       throw new Error(`AI share-prep response had an invalid format: ${text}`)
     }
     if (!Array.isArray(distractors) || distractors.length !== 3 || distractors.some((d) => typeof d !== 'string' || !d.trim())) {
       throw new Error(`AI share-prep response did not have exactly 3 non-empty distractors: ${text}`)
     }
+    if (typeof correctRewrite !== 'string' || !correctRewrite.trim()) {
+      throw new Error(`AI share-prep response had an empty correctRewrite: ${text}`)
+    }
     if (typeof rubric !== 'string' || !rubric.trim()) {
       throw new Error(`AI share-prep response had an empty rubric: ${text}`)
     }
-    return { recommendedFormat: format as ShareFormat, mcqDistractors: distractors as string[], freeTextRubric: rubric.trim() }
+    return {
+      recommendedFormat: format as ShareFormat,
+      mcqDistractors: distractors as string[],
+      mcqCorrectRewrite: correctRewrite.trim(),
+      freeTextRubric: rubric.trim()
+    }
   }
 
   /** Batched free-text grading for one live-session question — every submitted answer judged
