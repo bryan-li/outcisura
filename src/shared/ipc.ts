@@ -1,4 +1,8 @@
 import type {
+  AiExtractPaperTemplateRequest,
+  AiExtractPaperTemplateResult,
+  AiGeneratePaperQuestionsRequest,
+  AiGeneratePaperQuestionsResult,
   AiJudgeFreeTextRequest,
   AiJudgeFreeTextResult,
   AiRegenerateRequest,
@@ -8,8 +12,13 @@ import type {
   AiSummarizeResult,
   AnkiExportResult,
   AnkiImportResult,
+  GeneratedPaperRecord,
+  GeneratedPaperSummary,
   ImportSharedDeckInput,
   ImportSharedDeckResult,
+  NewGeneratedPaperInput,
+  NewPaperTemplateInput,
+  PaperTemplateRecord,
   UpdateStatus,
   CardRecord,
   CardReorderItem,
@@ -94,6 +103,15 @@ export const IpcChannels = {
   ankiExportAll: 'anki:exportAll',
   ankiImport: 'anki:import',
   sharedDecksImport: 'sharedDecks:import',
+  paperTemplatesCreate: 'paperTemplates:create',
+  paperTemplatesList: 'paperTemplates:list',
+  paperTemplatesDelete: 'paperTemplates:delete',
+  generatedPapersCreate: 'generatedPapers:create',
+  generatedPapersList: 'generatedPapers:list',
+  generatedPapersGet: 'generatedPapers:get',
+  generatedPapersDelete: 'generatedPapers:delete',
+  aiExtractPaperTemplate: 'ai:extractPaperTemplate',
+  aiGeneratePaperQuestions: 'ai:generatePaperQuestions',
   updatesGetStatus: 'updates:getStatus',
   updatesCheck: 'updates:check',
   updatesDownload: 'updates:download',
@@ -224,6 +242,12 @@ export interface FlashcardApi {
      *  above, main persists this one itself (documents.summary) once it resolves, since the
      *  renderer has no other reason to see the raw text this was generated from. */
     summarizeDocument(documentId: string): Promise<AiSummarizeResult>
+    /** Exam paper generator step 1 — pure compute, doesn't persist; the caller saves the result via
+     *  paperTemplates.create. */
+    extractPaperTemplate(req: AiExtractPaperTemplateRequest): Promise<AiExtractPaperTemplateResult>
+    /** Exam paper generator step 2 — pure compute, doesn't persist; the caller saves the result via
+     *  generatedPapers.create. */
+    generatePaperQuestions(req: AiGeneratePaperQuestionsRequest): Promise<AiGeneratePaperQuestionsResult>
   }
   reviewLog: {
     /** Every review grade ever logged — small enough for a personal deck to fetch whole and
@@ -264,6 +288,20 @@ export interface FlashcardApi {
    *  local library, the same way an Anki import lands a deck as a new folder of cards. */
   sharedDecks: {
     import(input: ImportSharedDeckInput): Promise<ImportSharedDeckResult>
+  }
+  /** Exam paper generator (local-only, see schema.ts's own migration comment) — a template is the
+   *  STRUCTURE inferred from uploaded past paper(s); a generated paper is fresh questions written
+   *  to fit it, each keeping a backlink to the flashcard(s) it drew from. */
+  paperTemplates: {
+    create(input: NewPaperTemplateInput): Promise<PaperTemplateRecord>
+    list(): Promise<PaperTemplateRecord[]>
+    delete(id: string): Promise<void>
+  }
+  generatedPapers: {
+    create(input: NewGeneratedPaperInput): Promise<GeneratedPaperRecord>
+    list(): Promise<GeneratedPaperSummary[]>
+    get(id: string): Promise<GeneratedPaperRecord | null>
+    delete(id: string): Promise<void>
   }
   /** Self-updater (see main/updater.ts). Status changes are pushed to onStatus as they happen. */
   updates: {

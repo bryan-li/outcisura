@@ -582,3 +582,133 @@ export interface UpdateStatus {
   /** The release page, for the manual fallback. */
   releaseUrl?: string
 }
+
+/* -------------------------------------------------------------------------------------------- */
+/* Exam paper generator — local-only (see schema.ts's own migration comment on why). A template's  */
+/* `structure` is what the AI infers a past paper's SECTIONS/FORMATS/COUNTS look like; a generated  */
+/* paper is fresh questions written to fit that structure, grounded in chosen folders' cards, each  */
+/* keeping a backlink to the card(s) it drew from.                                                  */
+/* -------------------------------------------------------------------------------------------- */
+
+export type PaperQuestionFormat = 'short_answer' | 'long_answer' | 'mcq' | 'essay'
+
+export interface PaperSection {
+  name: string
+  /** What this section's own instructions say, verbatim-ish (e.g. "Answer all questions. Show your working."). */
+  instructions: string
+  questionCount: number
+  format: PaperQuestionFormat
+  /** Null when the source paper didn't mark individual question values. */
+  marksPerQuestion: number | null
+}
+
+export interface PaperTemplateStructure {
+  /** The AI's best guess at what this paper series is — a label, not reproduced question content. */
+  paperTitle: string
+  totalMarks: number | null
+  sections: PaperSection[]
+}
+
+export interface PaperTemplateRecord {
+  id: string
+  name: string
+  sourceFilenames: string[]
+  structure: PaperTemplateStructure
+  createdAt: string
+}
+
+export interface NewPaperTemplateInput {
+  name: string
+  sourceFilenames: string[]
+  structure: PaperTemplateStructure
+}
+
+export interface GeneratedPaperQuestionRecord {
+  id: string
+  sectionIndex: number
+  sectionName: string
+  questionIndex: number
+  format: PaperQuestionFormat
+  prompt: string
+  marks: number | null
+  mcqOptions: string[] | null
+  mcqCorrectIndex: number | null
+  modelAnswer: string
+  /** The flashcard(s) this question was generated from — the backlink. May be empty if a source
+   *  card was later deleted (its backlink row cascades away with it; the question itself survives). */
+  cardIds: string[]
+}
+
+export interface GeneratedPaperRecord {
+  id: string
+  templateId: string | null
+  templateNameSnapshot: string
+  name: string
+  folderNamesSnapshot: string[]
+  createdAt: string
+  questions: GeneratedPaperQuestionRecord[]
+}
+
+export interface NewGeneratedPaperInput {
+  templateId: string | null
+  templateNameSnapshot: string
+  name: string
+  folderNamesSnapshot: string[]
+  questions: {
+    sectionIndex: number
+    sectionName: string
+    questionIndex: number
+    format: PaperQuestionFormat
+    prompt: string
+    marks: number | null
+    mcqOptions: string[] | null
+    mcqCorrectIndex: number | null
+    modelAnswer: string
+    cardIds: string[]
+  }[]
+}
+
+/** A summary row for listing generated papers without hydrating every question — see
+ *  repository.ts's listGeneratedPapers. */
+export interface GeneratedPaperSummary {
+  id: string
+  name: string
+  templateNameSnapshot: string
+  folderNamesSnapshot: string[]
+  createdAt: string
+  questionCount: number
+}
+
+export interface AiExtractPaperTemplateRequest {
+  /** One entry per uploaded file, each already extracted to plain text client-side (see
+   *  parsers/pdfText.ts) — the AI never sees the original PDF, only its text. */
+  papers: { filename: string; text: string }[]
+}
+
+export interface AiExtractPaperTemplateResult {
+  structure: PaperTemplateStructure
+}
+
+export interface AiGeneratePaperQuestionsRequest {
+  structure: PaperTemplateStructure
+  /** Flashcards available as source material — `ref` is a small per-call index (1-based), not the
+   *  real card id, so the AI only ever has to echo back a short number, never reproduce a UUID
+   *  (see aiService.ts's own comment on why). */
+  cards: { ref: number; front: string; back: string }[]
+}
+
+export interface AiGeneratedQuestion {
+  sectionIndex: number
+  format: PaperQuestionFormat
+  prompt: string
+  marks: number | null
+  mcqOptions: string[] | null
+  mcqCorrectIndex: number | null
+  modelAnswer: string
+  /** Which `cards[].ref` value(s) (see the request) this question actually drew from. */
+  cardRefs: number[]
+}
+
+export interface AiGeneratePaperQuestionsResult {
+  questions: AiGeneratedQuestion[]
+}

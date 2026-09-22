@@ -52,7 +52,9 @@ const api: FlashcardApi = {
     regenerate: (req) => ipcRenderer.invoke(IpcChannels.aiRegenerate, req),
     prepareForSharing: (req) => ipcRenderer.invoke(IpcChannels.aiPrepareForSharing, req),
     judgeFreeTextAnswers: (req) => ipcRenderer.invoke(IpcChannels.aiJudgeFreeTextAnswers, req),
-    summarizeDocument: (documentId) => ipcRenderer.invoke(IpcChannels.aiSummarizeDocument, documentId)
+    summarizeDocument: (documentId) => ipcRenderer.invoke(IpcChannels.aiSummarizeDocument, documentId),
+    extractPaperTemplate: (req) => ipcRenderer.invoke(IpcChannels.aiExtractPaperTemplate, req),
+    generatePaperQuestions: (req) => ipcRenderer.invoke(IpcChannels.aiGeneratePaperQuestions, req)
   },
   reviewLog: {
     list: () => ipcRenderer.invoke(IpcChannels.reviewLogList)
@@ -77,6 +79,17 @@ const api: FlashcardApi = {
   },
   sharedDecks: {
     import: (input) => ipcRenderer.invoke(IpcChannels.sharedDecksImport, input)
+  },
+  paperTemplates: {
+    create: (input) => ipcRenderer.invoke(IpcChannels.paperTemplatesCreate, input),
+    list: () => ipcRenderer.invoke(IpcChannels.paperTemplatesList),
+    delete: (id) => ipcRenderer.invoke(IpcChannels.paperTemplatesDelete, id)
+  },
+  generatedPapers: {
+    create: (input) => ipcRenderer.invoke(IpcChannels.generatedPapersCreate, input),
+    list: () => ipcRenderer.invoke(IpcChannels.generatedPapersList),
+    get: (id) => ipcRenderer.invoke(IpcChannels.generatedPapersGet, id),
+    delete: (id) => ipcRenderer.invoke(IpcChannels.generatedPapersDelete, id)
   },
   updates: {
     getStatus: () => ipcRenderer.invoke(IpcChannels.updatesGetStatus),

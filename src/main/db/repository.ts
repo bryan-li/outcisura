@@ -18,11 +18,18 @@ import type {
   FolderRecord,
   FolderReorderItem,
   FolderUpdatePatch,
+  GeneratedPaperRecord,
+  GeneratedPaperQuestionRecord,
+  GeneratedPaperSummary,
   ImportVideoInput,
   NewCardInput,
+  NewGeneratedPaperInput,
+  NewPaperTemplateInput,
   NewReviewSessionInput,
   OrphanedSourceRecord,
   PageRecord,
+  PaperQuestionFormat,
+  PaperTemplateRecord,
   ParsedDocument,
   RecaptureOrphanedSourceInput,
   ReplaceOrphanedSourceInput,
@@ -1508,6 +1515,164 @@ export class Repository {
     run()
     return this.getCard(orphan.card_id)!
   }
+
+  // ---------------------------------------------------------------------------------------------
+  // Exam paper generator (local-only — see schema.ts's own migration comment).
+  // ---------------------------------------------------------------------------------------------
+
+  createPaperTemplate(input: NewPaperTemplateInput): PaperTemplateRecord {
+    const id = randomUUID()
+    const createdAt = new Date().toISOString()
+    this.db
+      .prepare(`INSERT INTO paper_templates (id, name, source_filenames, structure, created_at) VALUES (?, ?, ?, ?, ?)`)
+      .run(id, input.name, JSON.stringify(input.sourceFilenames), JSON.stringify(input.structure), createdAt)
+    return { id, name: input.name, sourceFilenames: input.sourceFilenames, structure: input.structure, createdAt }
+  }
+
+  listPaperTemplates(): PaperTemplateRecord[] {
+    const rows = this.db.prepare(`SELECT * FROM paper_templates ORDER BY created_at DESC`).all() as PaperTemplateRow[]
+    return rows.map(hydratePaperTemplate)
+  }
+
+  /** Cascades to generated_papers via ON DELETE SET NULL — a paper generated from this template
+   *  survives, it just loses the live link back (its template_name_snapshot already carries what
+   *  it needs to keep displaying sensibly). */
+  deletePaperTemplate(id: string): void {
+    this.db.prepare(`DELETE FROM paper_templates WHERE id = ?`).run(id)
+  }
+
+  /** Inserts the paper, every question, and every question's card backlinks as one transaction —
+   *  a generation result is all-or-nothing, never a paper left holding a half-written question set. */
+  createGeneratedPaper(input: NewGeneratedPaperInput): GeneratedPaperRecord {
+    const paperId = randomUUID()
+    const createdAt = new Date().toISOString()
+    const insertPaper = this.db.prepare(
+      `INSERT INTO generated_papers (id, template_id, template_name_snapshot, name, folder_names_snapshot, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    const insertQuestion = this.db.prepare(
+      `INSERT INTO generated_paper_questions
+         (id, paper_id, section_index, section_name, question_index, format, prompt, marks, mcq_options, mcq_correct_index, model_answer)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    const insertBacklink = this.db.prepare(
+      `INSERT OR IGNORE INTO generated_paper_question_cards (question_id, card_id) VALUES (?, ?)`
+    )
+
+    const questions: GeneratedPaperQuestionRecord[] = []
+    const run = this.db.transaction(() => {
+      insertPaper.run(paperId, input.templateId, input.templateNameSnapshot, input.name, JSON.stringify(input.folderNamesSnapshot), createdAt)
+      for (const q of input.questions) {
+        const questionId = randomUUID()
+        insertQuestion.run(
+          questionId,
+          paperId,
+          q.sectionIndex,
+          q.sectionName,
+          q.questionIndex,
+          q.format,
+          q.prompt,
+          q.marks,
+          q.mcqOptions ? JSON.stringify(q.mcqOptions) : null,
+          q.mcqCorrectIndex,
+          q.modelAnswer
+        )
+        // A card that got deleted between generation and save (or a ref the AI mistakenly repeated)
+        // is silently skipped rather than failing the whole save — a missing backlink is a much
+        // smaller problem than losing an otherwise-good generated paper.
+        const existingCardIds = q.cardIds.filter((cardId) => this.db.prepare(`SELECT 1 FROM cards WHERE id = ?`).get(cardId))
+        for (const cardId of existingCardIds) insertBacklink.run(questionId, cardId)
+        questions.push({
+          id: questionId,
+          sectionIndex: q.sectionIndex,
+          sectionName: q.sectionName,
+          questionIndex: q.questionIndex,
+          format: q.format,
+          prompt: q.prompt,
+          marks: q.marks,
+          mcqOptions: q.mcqOptions,
+          mcqCorrectIndex: q.mcqCorrectIndex,
+          modelAnswer: q.modelAnswer,
+          cardIds: existingCardIds
+        })
+      }
+    })
+    run()
+
+    return {
+      id: paperId,
+      templateId: input.templateId,
+      templateNameSnapshot: input.templateNameSnapshot,
+      name: input.name,
+      folderNamesSnapshot: input.folderNamesSnapshot,
+      createdAt,
+      questions
+    }
+  }
+
+  listGeneratedPapers(): GeneratedPaperSummary[] {
+    const rows = this.db
+      .prepare(
+        `SELECT p.id, p.name, p.template_name_snapshot, p.folder_names_snapshot, p.created_at,
+                (SELECT COUNT(*) FROM generated_paper_questions q WHERE q.paper_id = p.id) as question_count
+         FROM generated_papers p ORDER BY p.created_at DESC`
+      )
+      .all() as GeneratedPaperSummaryRow[]
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      templateNameSnapshot: r.template_name_snapshot,
+      folderNamesSnapshot: JSON.parse(r.folder_names_snapshot),
+      createdAt: r.created_at,
+      questionCount: r.question_count
+    }))
+  }
+
+  getGeneratedPaper(id: string): GeneratedPaperRecord | null {
+    const paper = this.db.prepare(`SELECT * FROM generated_papers WHERE id = ?`).get(id) as GeneratedPaperRow | undefined
+    if (!paper) return null
+    const questionRows = this.db
+      .prepare(`SELECT * FROM generated_paper_questions WHERE paper_id = ? ORDER BY section_index ASC, question_index ASC`)
+      .all(id) as GeneratedPaperQuestionRow[]
+    const backlinkRows = questionRows.length
+      ? (this.db
+          .prepare(
+            `SELECT question_id, card_id FROM generated_paper_question_cards WHERE question_id IN (${questionRows.map(() => '?').join(',')})`
+          )
+          .all(...questionRows.map((q) => q.id)) as { question_id: string; card_id: string }[])
+      : []
+    const cardIdsByQuestion = new Map<string, string[]>()
+    for (const row of backlinkRows) {
+      const list = cardIdsByQuestion.get(row.question_id) ?? []
+      list.push(row.card_id)
+      cardIdsByQuestion.set(row.question_id, list)
+    }
+    return {
+      id: paper.id,
+      templateId: paper.template_id,
+      templateNameSnapshot: paper.template_name_snapshot,
+      name: paper.name,
+      folderNamesSnapshot: JSON.parse(paper.folder_names_snapshot),
+      createdAt: paper.created_at,
+      questions: questionRows.map((q) => ({
+        id: q.id,
+        sectionIndex: q.section_index,
+        sectionName: q.section_name,
+        questionIndex: q.question_index,
+        format: q.format as PaperQuestionFormat,
+        prompt: q.prompt,
+        marks: q.marks,
+        mcqOptions: q.mcq_options ? JSON.parse(q.mcq_options) : null,
+        mcqCorrectIndex: q.mcq_correct_index,
+        modelAnswer: q.model_answer,
+        cardIds: cardIdsByQuestion.get(q.id) ?? []
+      }))
+    }
+  }
+
+  deleteGeneratedPaper(id: string): void {
+    this.db.prepare(`DELETE FROM generated_papers WHERE id = ?`).run(id)
+  }
 }
 
 interface TranscriptSegmentRow {
@@ -1700,4 +1865,54 @@ function orphanToCardSourceRecord(orphan: OrphanedSourceRow, imagePath: string):
     sourcePageIndex: orphan.source_page_index,
     sourceTimestampSeconds: orphan.source_timestamp_seconds
   }
+}
+
+interface PaperTemplateRow {
+  id: string
+  name: string
+  source_filenames: string
+  structure: string
+  created_at: string
+}
+
+function hydratePaperTemplate(row: PaperTemplateRow): PaperTemplateRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    sourceFilenames: JSON.parse(row.source_filenames),
+    structure: JSON.parse(row.structure),
+    createdAt: row.created_at
+  }
+}
+
+interface GeneratedPaperSummaryRow {
+  id: string
+  name: string
+  template_name_snapshot: string
+  folder_names_snapshot: string
+  created_at: string
+  question_count: number
+}
+
+interface GeneratedPaperRow {
+  id: string
+  template_id: string | null
+  template_name_snapshot: string
+  name: string
+  folder_names_snapshot: string
+  created_at: string
+}
+
+interface GeneratedPaperQuestionRow {
+  id: string
+  paper_id: string
+  section_index: number
+  section_name: string
+  question_index: number
+  format: string
+  prompt: string
+  marks: number | null
+  mcq_options: string | null
+  mcq_correct_index: number | null
+  model_answer: string
 }

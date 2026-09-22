@@ -39,6 +39,10 @@ export type MainView =
   | { type: 'admin' }
   /** Friends, requests, and decks shared with you — see SocialView.tsx. */
   | { type: 'social' }
+  /** Exam paper generator: past-paper templates and generated papers — see ExamPapersView.tsx. */
+  | { type: 'exam-papers' }
+  /** One generated paper's questions, each with a backlink to its source card(s). */
+  | { type: 'exam-paper'; paperId: string }
   /** The host's lobby for a just-created live session — join code + live participant list, before
    *  starting. See HostLobbyView.tsx/hostSessionStore.ts. */
   | { type: 'host-lobby'; sessionId: string }

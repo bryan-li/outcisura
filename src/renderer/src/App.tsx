@@ -8,6 +8,8 @@ import { useTagsStore } from './state/tagsStore'
 import { useAiAdminStore } from './state/aiAdminStore'
 import { AdminDashboard } from './components/Admin/AdminDashboard'
 import { SocialView } from './components/Social/SocialView'
+import { ExamPapersView } from './components/ExamPapers/ExamPapersView'
+import { GeneratedPaperView } from './components/ExamPapers/GeneratedPaperView'
 import { useUiStore } from './state/uiStore'
 import { UpdateBanner } from './components/Updates/UpdateBanner'
 import { IntroTour } from './components/Onboarding/IntroTour'
@@ -155,6 +157,8 @@ function AppShell(): JSX.Element {
           {view.type === 'hostable-decks' && <HostableDecksView />}
           {view.type === 'admin' && <AdminDashboard />}
           {view.type === 'social' && <SocialView />}
+          {view.type === 'exam-papers' && <ExamPapersView />}
+          {view.type === 'exam-paper' && <GeneratedPaperView paperId={view.paperId} />}
           {view.type === 'host-lobby' && <HostLobbyView sessionId={view.sessionId} />}
           {view.type === 'host-control' && <HostControlView sessionId={view.sessionId} />}
           {view.type === 'live-session-join' && <JoinLiveSessionView />}

@@ -288,6 +288,12 @@ export function Sidebar(): JSX.Element {
           dot={incomingRequestCount > 0}
           onClick={() => setView({ type: 'social' })}
         />
+        <RailButton
+          icon="file-text"
+          title="Exam Papers"
+          active={view.type === 'exam-papers' || view.type === 'exam-paper'}
+          onClick={() => setView({ type: 'exam-papers' })}
+        />
         <div style={{ flex: 1 }} />
         {isAiAdmin && <RailButton icon="shield" title="AI Admin" active={isView(view, { type: 'admin' })} onClick={() => setView({ type: 'admin' })} />}
         <RailButton icon="sliders" title="Settings" active={view.type === 'settings'} onClick={() => setView({ type: 'settings', returnTo: view })} />
@@ -354,6 +360,13 @@ export function Sidebar(): JSX.Element {
           badge={incomingRequestCount}
           active={isView(view, { type: 'social' })}
           onClick={() => setView({ type: 'social' })}
+        />
+
+        <NavGroupLabel>Exam Papers</NavGroupLabel>
+        <NavItem
+          label={<><Icon name="file-text" />Exam Papers</>}
+          active={view.type === 'exam-papers' || view.type === 'exam-paper'}
+          onClick={() => setView({ type: 'exam-papers' })}
         />
       </div>
 

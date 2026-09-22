@@ -2,6 +2,8 @@ import { dialog, ipcMain } from 'electron'
 import { readFileSync, writeFileSync } from 'fs'
 import { IpcChannels } from '../../shared/ipc'
 import type {
+  AiExtractPaperTemplateRequest,
+  AiGeneratePaperQuestionsRequest,
   AiJudgeFreeTextRequest,
   AiRegenerateRequest,
   AiRegenerateResult,
@@ -18,6 +20,8 @@ import type {
   ImportSharedDeckInput,
   ImportVideoInput,
   NewCardInput,
+  NewGeneratedPaperInput,
+  NewPaperTemplateInput,
   NewReviewSessionInput,
   OcrRecognizePageInput,
   ParsedDocument,
@@ -142,6 +146,18 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
     repo.updateDocumentSummary(documentId, result.summary)
     return result
   })
+
+  ipcMain.handle(IpcChannels.aiExtractPaperTemplate, (_event, req: AiExtractPaperTemplateRequest) => ai.extractPaperTemplate(req))
+  ipcMain.handle(IpcChannels.aiGeneratePaperQuestions, (_event, req: AiGeneratePaperQuestionsRequest) => ai.generatePaperQuestions(req))
+
+  ipcMain.handle(IpcChannels.paperTemplatesCreate, (_event, input: NewPaperTemplateInput) => repo.createPaperTemplate(input))
+  ipcMain.handle(IpcChannels.paperTemplatesList, () => repo.listPaperTemplates())
+  ipcMain.handle(IpcChannels.paperTemplatesDelete, (_event, id: string) => repo.deletePaperTemplate(id))
+
+  ipcMain.handle(IpcChannels.generatedPapersCreate, (_event, input: NewGeneratedPaperInput) => repo.createGeneratedPaper(input))
+  ipcMain.handle(IpcChannels.generatedPapersList, () => repo.listGeneratedPapers())
+  ipcMain.handle(IpcChannels.generatedPapersGet, (_event, id: string) => repo.getGeneratedPaper(id))
+  ipcMain.handle(IpcChannels.generatedPapersDelete, (_event, id: string) => repo.deleteGeneratedPaper(id))
 
   ipcMain.handle(IpcChannels.reviewLogList, () => repo.listReviewLog())
   ipcMain.handle(IpcChannels.reviewSessionsLog, (_event, input: NewReviewSessionInput) => repo.logReviewSession(input))

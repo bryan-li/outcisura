@@ -1,6 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { readFileSync } from 'fs'
 import type {
+  AiExtractPaperTemplateRequest,
+  AiExtractPaperTemplateResult,
+  AiGeneratePaperQuestionsRequest,
+  AiGeneratePaperQuestionsResult,
+  AiGeneratedQuestion,
   AiJudgeFreeTextRequest,
   AiJudgeFreeTextResult,
   AiRegenerateRequest,
@@ -9,6 +14,9 @@ import type {
   AiSharePrepResult,
   AiSummarizeResult,
   GenerationComplexity,
+  PaperQuestionFormat,
+  PaperSection,
+  PaperTemplateStructure,
   ShareFormat
 } from '../shared/types'
 import { Repository } from './db/repository'
@@ -16,6 +24,15 @@ import { imageMediaType } from './imageUtils'
 import { createAnthropicClient, featureHeader } from './anthropicClient'
 
 const MODEL = 'claude-sonnet-5'
+
+/** A past paper's extracted text is capped per-file before it ever reaches the prompt — plenty for
+ *  a normal multi-page exam paper's worth of structure, and keeps a mis-clicked huge PDF from
+ *  ballooning the request. */
+const MAX_PAPER_CHARS = 20_000
+
+function isPaperQuestionFormat(value: unknown): value is PaperQuestionFormat {
+  return value === 'short_answer' || value === 'long_answer' || value === 'mcq' || value === 'essay'
+}
 
 type ContentBlock = Anthropic.TextBlockParam | Anthropic.ImageBlockParam
 
@@ -101,6 +118,19 @@ export class AiService {
       'Respond with ONLY a single JSON object, no markdown code fences, no commentary before or after:',
       '{"format": "mcq" | "free_text", "distractors": ["...", "...", "..."], "correctRewrite": "...", "rubric": "..."}'
     ].join('\n')
+  }
+
+  /** Same fence-stripping/parse/shape-check convention as parseSharePrepResponse/parseJudgeResponse
+   *  below, factored out here since the exam paper generator has two call sites for it. */
+  private parseJsonBlock(text: string, label: string): unknown {
+    const jsonText = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
+    try {
+      const parsed: unknown = JSON.parse(jsonText)
+      if (typeof parsed !== 'object' || parsed === null) throw new Error('not an object')
+      return parsed
+    } catch {
+      throw new Error(`Could not parse ${label} as JSON: ${text}`)
+    }
   }
 
   private parseSharePrepResponse(text: string): AiSharePrepResult {
@@ -257,6 +287,194 @@ export class AiService {
       'Document content (page markers included for your own orientation, don\'t reproduce them):',
       text
     ].join('\n')
+  }
+
+  /** Exam paper generator, step 1: infer a past paper's STRUCTURE (sections, formats, question
+   *  counts, marks) from its extracted text — never its actual question content, which is
+   *  discarded once this returns (see PaperTemplateStructure's own doc comment). Several papers at
+   *  once (a past-paper series) let the AI spot what's consistent across them rather than fitting
+   *  one paper's quirks too tightly. */
+  async extractPaperTemplate(req: AiExtractPaperTemplateRequest): Promise<AiExtractPaperTemplateResult> {
+    const message = await this.client.messages.create(
+      {
+        model: MODEL,
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: this.buildExtractTemplatePrompt(req) }]
+      },
+      featureHeader('paper_template')
+    )
+    const text = message.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map((block) => block.text)
+      .join('')
+    return { structure: this.parseTemplateResponse(text) }
+  }
+
+  private buildExtractTemplatePrompt(req: AiExtractPaperTemplateRequest): string {
+    const papersText = req.papers
+      .map((p) => `=== ${p.filename} ===\n${p.text.slice(0, MAX_PAPER_CHARS)}`)
+      .join('\n\n')
+    return [
+      'You are analyzing one or more past exam papers to infer their STRUCTURE, for generating fresh',
+      'papers with the same shape later. Do NOT reproduce, paraphrase, or reference any of the actual',
+      'question content, names, dates, or specific facts from these papers anywhere in your response —',
+      'only the structural pattern: how the paper is organized into sections, what format each section',
+      'uses, how many questions, and how marks are allocated. If multiple papers are given and they',
+      'differ, use the pattern most consistent across them.',
+      '',
+      'Formats:',
+      '- "mcq" — multiple choice, one correct option among several.',
+      '- "short_answer" — a brief factual answer, a sentence or two.',
+      '- "long_answer" — a fuller written answer, a paragraph or structured response.',
+      '- "essay" — an extended written response.',
+      '',
+      'Respond with ONLY a single JSON object, no markdown code fences, no commentary before or after:',
+      '{"paperTitle": "...", "totalMarks": 100 | null, "sections": [{"name": "...", "instructions": "...", "questionCount": 10, "format": "mcq" | "short_answer" | "long_answer" | "essay", "marksPerQuestion": 1 | null}]}',
+      '',
+      'Past paper(s):',
+      papersText
+    ].join('\n')
+  }
+
+  private parseTemplateResponse(text: string): PaperTemplateStructure {
+    const parsed = this.parseJsonBlock(text, 'AI paper-template response')
+    const { paperTitle, totalMarks, sections } = parsed as Record<string, unknown>
+    if (typeof paperTitle !== 'string' || !paperTitle.trim()) {
+      throw new Error(`AI paper-template response had an empty paperTitle: ${text}`)
+    }
+    if (totalMarks !== null && typeof totalMarks !== 'number') {
+      throw new Error(`AI paper-template response had an invalid totalMarks: ${text}`)
+    }
+    if (!Array.isArray(sections) || sections.length === 0) {
+      throw new Error(`AI paper-template response had no sections: ${text}`)
+    }
+    const parsedSections: PaperSection[] = sections.map((s, i) => {
+      if (typeof s !== 'object' || s === null) throw new Error(`AI paper-template response section ${i} was not an object: ${text}`)
+      const { name, instructions, questionCount, format, marksPerQuestion } = s as Record<string, unknown>
+      if (typeof name !== 'string' || !name.trim()) throw new Error(`AI paper-template response section ${i} had an empty name: ${text}`)
+      if (typeof instructions !== 'string') throw new Error(`AI paper-template response section ${i} had invalid instructions: ${text}`)
+      if (typeof questionCount !== 'number' || questionCount < 1) {
+        throw new Error(`AI paper-template response section ${i} had an invalid questionCount: ${text}`)
+      }
+      if (!isPaperQuestionFormat(format)) throw new Error(`AI paper-template response section ${i} had an invalid format: ${text}`)
+      if (marksPerQuestion !== null && typeof marksPerQuestion !== 'number') {
+        throw new Error(`AI paper-template response section ${i} had an invalid marksPerQuestion: ${text}`)
+      }
+      return { name: name.trim(), instructions: instructions.trim(), questionCount: Math.round(questionCount), format, marksPerQuestion }
+    })
+    return { paperTitle: paperTitle.trim(), totalMarks, sections: parsedSections }
+  }
+
+  /** Exam paper generator, step 2: write fresh questions to fit a template's structure, grounded in
+   *  the given flashcards. One call for the whole paper (every section at once) rather than one per
+   *  section — cheaper, and lets the AI avoid repeating the same card across sections on its own. */
+  async generatePaperQuestions(req: AiGeneratePaperQuestionsRequest): Promise<AiGeneratePaperQuestionsResult> {
+    const message = await this.client.messages.create(
+      {
+        model: MODEL,
+        max_tokens: 8192,
+        messages: [{ role: 'user', content: this.buildGenerateQuestionsPrompt(req) }]
+      },
+      featureHeader('paper_generate')
+    )
+    const text = message.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map((block) => block.text)
+      .join('')
+    return { questions: this.parseGeneratedQuestions(text, req) }
+  }
+
+  private buildGenerateQuestionsPrompt(req: AiGeneratePaperQuestionsRequest): string {
+    const sectionsText = req.structure.sections
+      .map(
+        (s, i) =>
+          `${i}. "${s.name}" — ${s.questionCount} question(s), format "${s.format}"${
+            s.marksPerQuestion !== null ? `, ${s.marksPerQuestion} mark(s) each` : ''
+          }. Instructions: ${s.instructions || '(none given)'}`
+      )
+      .join('\n')
+    const cardsText = req.cards.map((c) => `[${c.ref}] Front: ${c.front}\n    Back: ${c.back}`).join('\n')
+    return [
+      `You are writing a fresh "${req.structure.paperTitle}"-style exam paper. Below is the required`,
+      'structure (already fixed — follow it exactly, one entry per section index) and a numbered list',
+      'of flashcards to draw material from. Every question you write must be grounded in one or more',
+      'of these flashcards — do not invent facts that aren\'t in them.',
+      '',
+      'Structure (sectionIndex: description):',
+      sectionsText,
+      '',
+      'Flashcards (reference by their [N] number):',
+      cardsText,
+      '',
+      'For each question:',
+      '- "mcq": include exactly 4 "mcqOptions" (the correct one plus 3 plausible wrong ones, none a',
+      '  paraphrase of it) and "mcqCorrectIndex" (0-based index of the correct option within mcqOptions).',
+      '  Do not make the correct option identifiable just by how it reads (length, phrasing, tone) —',
+      '  write all 4 in the same style.',
+      '- "short_answer"/"long_answer"/"essay": mcqOptions and mcqCorrectIndex must be null.',
+      '- Every question needs a "modelAnswer": for mcq, a one-line explanation of why the correct',
+      '  option is right; otherwise, what a full-marks answer must contain.',
+      '- "cardRefs": the [N] number(s) (as a JSON array of integers) of every flashcard this specific',
+      '  question actually drew from — usually just one, occasionally more for a synthesis question.',
+      '- "marks": a sensible integer, using the section\'s marksPerQuestion if it gave one.',
+      '',
+      'Respond with ONLY a single JSON object, no markdown code fences, no commentary before or after:',
+      '{"questions": [{"sectionIndex": 0, "format": "mcq", "prompt": "...", "marks": 1, "mcqOptions": ["...","...","...","..."] | null, "mcqCorrectIndex": 0 | null, "modelAnswer": "...", "cardRefs": [1, 4]}]}'
+    ].join('\n')
+  }
+
+  private parseGeneratedQuestions(text: string, req: AiGeneratePaperQuestionsRequest): AiGeneratedQuestion[] {
+    const parsed = this.parseJsonBlock(text, 'AI paper-generation response')
+    const { questions } = parsed as Record<string, unknown>
+    if (!Array.isArray(questions) || questions.length === 0) {
+      throw new Error(`AI paper-generation response had no questions: ${text}`)
+    }
+    const validRefs = new Set(req.cards.map((c) => c.ref))
+    const sectionCount = req.structure.sections.length
+    return questions.map((q, i): AiGeneratedQuestion => {
+      if (typeof q !== 'object' || q === null) throw new Error(`AI paper-generation response question ${i} was not an object: ${text}`)
+      const { sectionIndex, format, prompt, marks, mcqOptions, mcqCorrectIndex, modelAnswer, cardRefs } = q as Record<string, unknown>
+      if (typeof sectionIndex !== 'number' || sectionIndex < 0 || sectionIndex >= sectionCount) {
+        throw new Error(`AI paper-generation response question ${i} had an invalid sectionIndex: ${text}`)
+      }
+      if (!isPaperQuestionFormat(format)) throw new Error(`AI paper-generation response question ${i} had an invalid format: ${text}`)
+      if (typeof prompt !== 'string' || !prompt.trim()) {
+        throw new Error(`AI paper-generation response question ${i} had an empty prompt: ${text}`)
+      }
+      if (marks !== null && marks !== undefined && typeof marks !== 'number') {
+        throw new Error(`AI paper-generation response question ${i} had an invalid marks: ${text}`)
+      }
+      let options: string[] | null = null
+      let correctIndex: number | null = null
+      if (format === 'mcq') {
+        if (!Array.isArray(mcqOptions) || mcqOptions.length < 2 || mcqOptions.some((o) => typeof o !== 'string' || !o.trim())) {
+          throw new Error(`AI paper-generation response question ${i} had invalid mcqOptions: ${text}`)
+        }
+        if (typeof mcqCorrectIndex !== 'number' || mcqCorrectIndex < 0 || mcqCorrectIndex >= mcqOptions.length) {
+          throw new Error(`AI paper-generation response question ${i} had an invalid mcqCorrectIndex: ${text}`)
+        }
+        options = mcqOptions as string[]
+        correctIndex = mcqCorrectIndex
+      }
+      if (typeof modelAnswer !== 'string' || !modelAnswer.trim()) {
+        throw new Error(`AI paper-generation response question ${i} had an empty modelAnswer: ${text}`)
+      }
+      // Refs the AI hallucinated (not in the list we gave it) are dropped rather than failing the
+      // whole question — a question with zero surviving refs still keeps its content, it just won't
+      // show a backlink (same graceful-degradation choice as repository.ts's createGeneratedPaper
+      // dropping a ref to a since-deleted card).
+      const refs = Array.isArray(cardRefs) ? cardRefs.filter((r): r is number => typeof r === 'number' && validRefs.has(r)) : []
+      return {
+        sectionIndex,
+        format,
+        prompt: prompt.trim(),
+        marks: typeof marks === 'number' ? Math.round(marks) : null,
+        mcqOptions: options,
+        mcqCorrectIndex: correctIndex,
+        modelAnswer: modelAnswer.trim(),
+        cardRefs: refs
+      }
+    })
   }
 
   private buildPrompt(req: AiRegenerateRequest): string {

@@ -461,6 +461,67 @@ const MIGRATIONS: string[] = [
   -- never sync, so this rides along with everything else on that table without any sync-engine
   -- involvement.
   ALTER TABLE documents ADD COLUMN summary TEXT;
+  `,
+  `
+  -- Exam paper generator (local-only, like documents/tags — see their own migration comments on
+  -- the same tradeoff; nothing here needs cross-device sync to be useful, so it isn't taking that
+  -- risk on for a v1). A "template" is the STRUCTURE the AI inferred from one or more uploaded past
+  -- papers (sections, formats, question counts, marks) — never the old papers' actual question
+  -- text, which is discarded once the template is extracted. A "generated paper" is a fresh set of
+  -- questions the AI wrote to fit that structure, grounded in a chosen folder's cards; each
+  -- question keeps a backlink to whichever card(s) it drew from via the join table below, the same
+  -- shape as card_tags.
+  CREATE TABLE paper_templates (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    -- JSON string[] — the uploaded file names, kept only for display ("built from: Paper1.pdf").
+    source_filenames TEXT NOT NULL,
+    -- JSON PaperTemplateStructure (shared/types.ts) — sections, each with a format/question count/
+    -- marks. The one piece of real content this table exists to hold.
+    structure TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE generated_papers (
+    id TEXT PRIMARY KEY,
+    -- Nullable + a name snapshot: a generated paper stays fully readable after its template (or
+    -- the folders it drew from) is later renamed or deleted — same "snapshot, don't cascade the
+    -- reader's view" idiom as live_sessions.folder_name_snapshot (Supabase side).
+    template_id TEXT REFERENCES paper_templates(id) ON DELETE SET NULL,
+    template_name_snapshot TEXT NOT NULL,
+    name TEXT NOT NULL,
+    -- JSON string[] of folder names used to generate this paper, display-only.
+    folder_names_snapshot TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_generated_papers_template ON generated_papers(template_id);
+
+  CREATE TABLE generated_paper_questions (
+    id TEXT PRIMARY KEY,
+    paper_id TEXT NOT NULL REFERENCES generated_papers(id) ON DELETE CASCADE,
+    section_index INTEGER NOT NULL,
+    section_name TEXT NOT NULL,
+    question_index INTEGER NOT NULL,
+    format TEXT NOT NULL CHECK (format IN ('short_answer', 'long_answer', 'mcq', 'essay')),
+    prompt TEXT NOT NULL,
+    marks INTEGER,
+    -- Only set when format = 'mcq'.
+    mcq_options TEXT,
+    mcq_correct_index INTEGER,
+    -- Model answer / marking guidance either way — lets you self-check without a teacher.
+    model_answer TEXT NOT NULL
+  );
+  CREATE INDEX idx_generated_paper_questions_paper ON generated_paper_questions(paper_id);
+
+  -- The backlink: which flashcard(s) a generated question actually drew its content from. A card
+  -- being deleted later only drops that one backlink (ON DELETE CASCADE here, not on the question
+  -- itself) — the question and its other backlinks, if any, survive.
+  CREATE TABLE generated_paper_question_cards (
+    question_id TEXT NOT NULL REFERENCES generated_paper_questions(id) ON DELETE CASCADE,
+    card_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    PRIMARY KEY (question_id, card_id)
+  );
+  CREATE INDEX idx_generated_paper_question_cards_card ON generated_paper_question_cards(card_id);
   `
 ]
 
