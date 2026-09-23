@@ -3,7 +3,7 @@ import { useAuthStore } from '../../state/authStore'
 import { useUiStore } from '../../state/uiStore'
 import { supabase } from '../../lib/supabase'
 import { Icon } from '../Icon'
-import { primaryPillStyle } from '../dashboardKit'
+import { Eyebrow, inputPillStyle, pillPrimaryStyle, sessionCardStyle, stageStyle } from './liveKit'
 
 interface FindSessionRow {
   id: string
@@ -62,14 +62,17 @@ export function JoinLiveSessionView(): JSX.Element {
   }
 
   return (
-    <div style={pageStyle}>
-      <form onSubmit={handleSubmit} style={cardStyle}>
-        <h1 style={{ fontSize: 'var(--font-xxl)', margin: 0, letterSpacing: '-0.02em' }}>
-          <Icon name="join" />Join a session
-        </h1>
-        <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>
-          Enter the code from your host — you'll join as yourself.
-        </p>
+    <div style={stageStyle}>
+      <form onSubmit={handleSubmit} style={{ ...sessionCardStyle, width: 380 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', textAlign: 'center' }}>
+          <Eyebrow tinted>
+            <Icon name="join" size="1em" />Join a session
+          </Eyebrow>
+          <h1 style={{ fontSize: 'var(--font-xxl)', margin: '4px 0 0', letterSpacing: '-0.02em' }}>Enter the code</h1>
+          <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>
+            From your host — you&apos;ll join as yourself.
+          </p>
+        </div>
 
         <input
           type="text"
@@ -78,12 +81,12 @@ export function JoinLiveSessionView(): JSX.Element {
           value={joinCode}
           onChange={(e) => setJoinCode(e.target.value)}
           placeholder="Session code"
-          style={{ ...inputStyle, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+          style={codeInputStyle}
         />
 
-        {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
+        {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0, textAlign: 'center' }}>{error}</p>}
 
-        <button type="submit" disabled={joining} style={{ ...primaryPillStyle, justifyContent: 'center' }}>
+        <button type="submit" disabled={joining} style={pillPrimaryStyle}>
           {joining ? 'Joining…' : 'Join'}
         </button>
       </form>
@@ -91,28 +94,16 @@ export function JoinLiveSessionView(): JSX.Element {
   )
 }
 
-const pageStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  height: '100%'
+/** The code is the whole point of this screen, so it's typed big and spaced out — the same shape the
+ *  host's lobby shows it in. */
+const codeInputStyle: CSSProperties = {
+  ...inputPillStyle,
+  textAlign: 'center',
+  textTransform: 'uppercase',
+  fontSize: 26,
+  fontWeight: 700,
+  letterSpacing: '0.18em',
+  textIndent: '0.18em',
+  padding: 'var(--space-3)'
 }
 
-const cardStyle: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 'var(--space-3)',
-  width: 320,
-  padding: 'var(--space-6)',
-  border: '1px solid var(--border)',
-  borderRadius: 18
-}
-
-const inputStyle: CSSProperties = {
-  fontSize: 'var(--font-sm)',
-  padding: '8px 10px',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-row)',
-  background: 'var(--bg)',
-  color: 'inherit'
-}

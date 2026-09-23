@@ -14,6 +14,17 @@ export const panelStyle: CSSProperties = {
   minWidth: 0
 }
 
+/** The floating-panel finish from the sidebar and the marketing site: a hairline gradient rim that
+ *  catches light at opposite corners, a soft outer ring, and a lifted shadow — for surfaces that
+ *  should read as sitting *above* the page (the live-session cards) rather than as a plain bordered
+ *  box. Sidebar.tsx keeps its own variant, tuned for the sidebar's fill. */
+export const glassCardStyle: CSSProperties = {
+  border: '1.5px solid transparent',
+  background: 'linear-gradient(var(--bg), var(--bg)) padding-box, var(--glass-rim) border-box',
+  boxShadow: '0 0 0 1px var(--glass-ring), 0 1px 2px #0000000a, 0 12px 32px #00000014',
+  borderRadius: 'var(--radius-panel)'
+}
+
 export const eyebrowStyle: CSSProperties = {
   fontSize: 'var(--font-xs)',
   fontWeight: 600,

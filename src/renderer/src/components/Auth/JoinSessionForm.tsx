@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type FormEvent } from 'react'
 import { useGuestSessionStore } from '../../state/guestSessionStore'
 import { Icon } from '../Icon'
+import { Eyebrow, inputPillStyle, pillPrimaryStyle, pillQuietStyle, sessionCardStyle, stageStyle } from '../LiveSession/liveKit'
 
 /** The guest entry point — join code + display name, no email/password. Submitting signs the guest
  *  in anonymously (guestSessionStore.join), which immediately flips App.tsx's top-level branch to
@@ -24,10 +25,15 @@ export function JoinSessionForm({ title, subtitle, onBack }: { title: string; su
   }
 
   return (
-    <div style={pageStyle}>
-      <form onSubmit={handleSubmit} style={cardStyle}>
-        <h1 style={{ fontSize: 'var(--font-xl)', margin: 0 }}>{title}</h1>
-        <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>{subtitle}</p>
+    <div style={{ ...stageStyle, background: 'var(--bg)' }}>
+      <form onSubmit={handleSubmit} style={{ ...sessionCardStyle, width: 380 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', textAlign: 'center' }}>
+          <Eyebrow tinted>
+            <Icon name="broadcast" size="1em" />Live session
+          </Eyebrow>
+          <h1 style={{ fontSize: 'var(--font-xxl)', margin: '4px 0 0', letterSpacing: '-0.02em' }}>{title}</h1>
+          <p style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', margin: 0 }}>{subtitle}</p>
+        </div>
 
         <input
           type="text"
@@ -36,7 +42,7 @@ export function JoinSessionForm({ title, subtitle, onBack }: { title: string; su
           value={joinCode}
           onChange={(e) => setJoinCode(e.target.value)}
           placeholder="Session code"
-          style={{ ...inputStyle, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+          style={codeInputStyle}
         />
         <input
           type="text"
@@ -45,18 +51,18 @@ export function JoinSessionForm({ title, subtitle, onBack }: { title: string; su
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           placeholder="Your name"
-          style={inputStyle}
+          style={{ ...inputPillStyle, textAlign: 'center' }}
         />
 
-        {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0 }}>{error}</p>}
+        {error && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-sm)', margin: 0, textAlign: 'center' }}>{error}</p>}
 
-        <button type="submit" disabled={status === 'joining'} style={primaryButtonStyle}>
+        <button type="submit" disabled={status === 'joining'} style={pillPrimaryStyle}>
           {status === 'joining' ? 'Joining…' : 'Join'}
         </button>
 
         {onBack && (
-          <button type="button" onClick={onBack} style={quietTextButtonStyle}>
-            <Icon name="arrow-left" />Back to sign in
+          <button type="button" onClick={onBack} style={{ ...pillQuietStyle, alignSelf: 'center' }}>
+            <Icon name="arrow-left" size="0.95em" bare />Back to sign in
           </button>
         )}
       </form>
@@ -64,47 +70,16 @@ export function JoinSessionForm({ title, subtitle, onBack }: { title: string; su
   )
 }
 
-const pageStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  height: '100%',
-  background: 'var(--bg)'
+/** Matches the host lobby's big spaced-out code, so the thing you're copying and the box you're
+ *  typing it into look like the same object. */
+const codeInputStyle: CSSProperties = {
+  ...inputPillStyle,
+  textAlign: 'center',
+  textTransform: 'uppercase',
+  fontSize: 26,
+  fontWeight: 700,
+  letterSpacing: '0.18em',
+  textIndent: '0.18em',
+  padding: 'var(--space-3)'
 }
 
-const cardStyle: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 'var(--space-3)',
-  width: 320,
-  padding: 'var(--space-6)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-lg)'
-}
-
-const inputStyle: CSSProperties = {
-  fontSize: 'var(--font-sm)',
-  padding: '8px 10px',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg)',
-  color: 'inherit'
-}
-
-const primaryButtonStyle: CSSProperties = {
-  border: '1px solid var(--accent)',
-  background: 'var(--accent-soft)',
-  color: 'var(--accent)',
-  fontWeight: 600,
-  borderRadius: 'var(--radius-sm)',
-  padding: '8px 14px',
-  cursor: 'pointer'
-}
-
-const quietTextButtonStyle: CSSProperties = {
-  border: 'none',
-  background: 'none',
-  color: 'var(--fg-muted)',
-  cursor: 'pointer',
-  fontSize: 'var(--font-xs)'
-}

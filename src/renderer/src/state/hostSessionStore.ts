@@ -4,7 +4,7 @@ import { createLiveSession } from '../lib/liveSession/createSession'
 import { createLiveSessionFromPaper } from '../lib/liveSession/createPaperSession'
 import { computeSpeedRankedPoints, type TimedAnswer } from '../lib/liveSession/scoring'
 import { computeLeaderboard, type LeaderboardEntry } from '../lib/liveSession/leaderboard'
-import { QUESTION_SECONDS } from '../lib/liveSession/constants'
+import { MIN_REMAINING_SECONDS_AFTER_CHANGE, QUESTION_SECONDS } from '../lib/liveSession/constants'
 import type { GeneratedPaperRecord, ShareFormat } from '../../../shared/types'
 
 export interface HostQuestion {
@@ -72,11 +72,23 @@ interface HostSessionState {
    *  broadcast to guests, who have no other way to see it (live_session_answer_keys is host-only). */
   revealedAnswerText: string | null
   leaderboard: LeaderboardEntry[]
+  /** The host's chosen answering window, in seconds. Applies to every question from here on, and to
+   *  the one already open if setQuestionSeconds is called mid-question. Never persisted: guests
+   *  learn the window only from the broadcast deadline (see constants.ts). */
+  questionSeconds: number
+  /** When the current question opened, so a mid-question change to questionSeconds can be measured
+   *  from the question's own start rather than from the moment the host touched the control. */
+  questionStartedAt: number | null
 
   createAndHost: (folderId: string, folderName: string) => Promise<void>
   /** Same result as createAndHost, just sourced from a generated exam paper instead of a prepped
    *  card folder — see createPaperSession.ts for why no "prepare" step is needed first. */
   createAndHostFromPaper: (paper: GeneratedPaperRecord) => Promise<void>
+  /** Sets the answering window. While a question is open this also moves its deadline (to
+   *  questionStartedAt + seconds, floored at a few seconds from now so shortening the timer can't
+   *  retroactively close a question), and returns the new deadline for the caller to broadcast —
+   *  returns null when there's nothing live to re-time. */
+  setQuestionSeconds: (seconds: number) => string | null
   startSession: () => Promise<void>
   refreshParticipants: () => Promise<void>
   refreshAnsweredCount: () => Promise<void>
@@ -86,8 +98,8 @@ interface HostSessionState {
   reset: () => void
 }
 
-function computeDeadline(): string {
-  return new Date(Date.now() + QUESTION_SECONDS * 1000).toISOString()
+function computeDeadline(seconds: number): string {
+  return new Date(Date.now() + seconds * 1000).toISOString()
 }
 
 /** Shared by createAndHost and createAndHostFromPaper — both just need the freshly-inserted
@@ -122,6 +134,18 @@ export const useHostSessionStore = create<HostSessionState>((set, get) => ({
   revealedAnswers: [],
   revealedAnswerText: null,
   leaderboard: [],
+  questionSeconds: QUESTION_SECONDS,
+  questionStartedAt: null,
+
+  setQuestionSeconds: (seconds) => {
+    const { phase, questionStartedAt } = get()
+    set({ questionSeconds: seconds })
+    if (phase !== 'question' || questionStartedAt === null) return null
+    const earliest = Date.now() + MIN_REMAINING_SECONDS_AFTER_CHANGE * 1000
+    const deadline = new Date(Math.max(questionStartedAt + seconds * 1000, earliest)).toISOString()
+    set({ deadline })
+    return deadline
+  },
 
   createAndHost: async (folderId, folderName) => {
     const { sessionId, joinCode } = await createLiveSession(folderId, folderName)
@@ -136,12 +160,12 @@ export const useHostSessionStore = create<HostSessionState>((set, get) => ({
   },
 
   startSession: async () => {
-    const { sessionId } = get()
+    const { sessionId, questionSeconds } = get()
     if (!sessionId) return
-    const deadline = computeDeadline()
+    const deadline = computeDeadline(questionSeconds)
     const { error } = await supabase.from('live_sessions').update({ status: 'active', current_question_index: 0, started_at: new Date().toISOString() }).eq('id', sessionId)
     if (error) throw error
-    set({ currentQuestionIndex: 0, phase: 'question', deadline, answeredCount: 0, revealedAnswers: [], revealedAnswerText: null })
+    set({ currentQuestionIndex: 0, phase: 'question', deadline, questionStartedAt: Date.now(), answeredCount: 0, revealedAnswers: [], revealedAnswerText: null })
   },
 
   refreshParticipants: async () => {
@@ -223,13 +247,13 @@ export const useHostSessionStore = create<HostSessionState>((set, get) => ({
   },
 
   nextQuestion: async () => {
-    const { sessionId, currentQuestionIndex, questions } = get()
+    const { sessionId, currentQuestionIndex, questions, questionSeconds } = get()
     const nextIndex = currentQuestionIndex + 1
     if (!sessionId || nextIndex >= questions.length) return
-    const deadline = computeDeadline()
+    const deadline = computeDeadline(questionSeconds)
     const { error } = await supabase.from('live_sessions').update({ current_question_index: nextIndex }).eq('id', sessionId)
     if (error) throw error
-    set({ currentQuestionIndex: nextIndex, phase: 'question', deadline, answeredCount: 0, revealedAnswers: [], revealedAnswerText: null })
+    set({ currentQuestionIndex: nextIndex, phase: 'question', deadline, questionStartedAt: Date.now(), answeredCount: 0, revealedAnswers: [], revealedAnswerText: null })
   },
 
   endSession: async () => {
@@ -254,6 +278,8 @@ export const useHostSessionStore = create<HostSessionState>((set, get) => ({
       answeredCount: 0,
       revealedAnswers: [],
       revealedAnswerText: null,
-      leaderboard: []
+      leaderboard: [],
+      questionSeconds: QUESTION_SECONDS,
+      questionStartedAt: null
     })
 }))

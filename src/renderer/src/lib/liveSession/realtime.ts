@@ -9,6 +9,11 @@ import { supabase } from '../supabase'
  *  Postgres read/write, never from the broadcast itself. */
 export type SessionEvent =
   | { type: 'question_advanced'; questionIndex: number; deadline: string }
+  /** The host changed the time limit while a question was already open. Carries the question index
+   *  so a guest only moves their countdown when it's about the question they're actually on, and
+   *  never reloads the question itself — reloading would wipe an answer they're part-way through
+   *  typing, which is exactly what question_advanced does on purpose and this must not. */
+  | { type: 'deadline_changed'; questionIndex: number; deadline: string }
   /** answerText is informational only, not security-sensitive by this point (grading already
    *  happened, host-only live_session_answer_keys is never exposed to guests via RLS) — carried
    *  directly in the broadcast rather than requiring a second RLS-gated read, since a guest has no

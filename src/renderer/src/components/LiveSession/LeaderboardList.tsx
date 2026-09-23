@@ -17,13 +17,14 @@ export function LeaderboardList({ entries, podium = false }: LeaderboardListProp
 
   if (!podium) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {entries.map((entry, i) => (
           <div key={entry.userId} style={plainRowStyle}>
-            <span>
-              {i + 1}. {entry.displayName}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <span style={rankChipStyle}>{i + 1}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.displayName}</span>
             </span>
-            <span style={{ fontWeight: 600 }}>{entry.totalPoints}</span>
+            <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{entry.totalPoints}</span>
           </div>
         ))}
       </div>
@@ -46,7 +47,17 @@ export function LeaderboardList({ entries, podium = false }: LeaderboardListProp
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={medalSlotStyle}>
                 {medalColor ? (
-                  <span style={{ ...medalBadgeStyle, background: medalColor }}>{rank}</span>
+                  // On the solid-accent first place, the gold disc would sit orange-on-orange — it
+                  // gets the site's dark translucent badge treatment instead.
+                  <span
+                    style={
+                      rank === 1
+                        ? { ...medalBadgeStyle, background: '#1d110033', color: 'var(--on-accent)' }
+                        : { ...medalBadgeStyle, background: medalColor }
+                    }
+                  >
+                    {rank}
+                  </span>
                 ) : (
                   rank
                 )}
@@ -63,27 +74,52 @@ export function LeaderboardList({ entries, podium = false }: LeaderboardListProp
 
 const plainRowStyle: CSSProperties = {
   display: 'flex',
+  alignItems: 'center',
   justifyContent: 'space-between',
-  fontSize: 'var(--font-sm)'
+  gap: 'var(--space-2)',
+  fontSize: 'var(--font-sm)',
+  padding: '6px 10px',
+  borderRadius: 'var(--radius-row)'
+}
+
+/** The position number as a small neutral disc, so names line up however long the list gets. */
+const rankChipStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 20,
+  height: 20,
+  flexShrink: 0,
+  borderRadius: 'var(--radius-pill)',
+  background: 'var(--bg-sidebar)',
+  border: '1px solid var(--border)',
+  color: 'var(--fg-faint)',
+  fontSize: 'var(--font-xs)',
+  fontWeight: 700,
+  fontVariantNumeric: 'tabular-nums'
 }
 
 const podiumRowStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: '8px 12px',
-  borderRadius: 'var(--radius-md)',
+  padding: '10px 14px',
+  borderRadius: 'var(--radius-row)',
   border: '1px solid var(--border)',
   fontSize: 'var(--font-sm)'
 }
 
+/** First place gets the solid accent pill — the same lit fill as the sidebar's current page — so the
+ *  winner reads as the one thing on the screen, not as another row with a tint. */
 const podiumFirstStyle: CSSProperties = {
-  border: '1px solid var(--accent)',
-  background: 'var(--accent-soft)',
-  color: 'var(--accent)',
+  border: 'none',
+  background: 'var(--accent)',
+  color: 'var(--on-accent)',
+  boxShadow: 'inset 0 1px 0 #ffffff73, inset 0 0 0 1px #ffffff2e, 0 2px 10px color-mix(in srgb, var(--accent) 45%, transparent)',
   fontSize: 'var(--font-lg)',
   fontWeight: 700,
-  padding: '12px 14px'
+  padding: '14px 16px',
+  borderRadius: 'var(--radius-panel)'
 }
 
 const podiumTopThreeStyle: CSSProperties = {
