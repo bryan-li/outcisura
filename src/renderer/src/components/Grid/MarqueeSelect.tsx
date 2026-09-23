@@ -71,7 +71,14 @@ export function MarqueeSelect({ children, style }: MarqueeSelectProps): JSX.Elem
     if (!bandRef.current && Math.hypot(mouse.x - startViewport.x, mouse.y - startViewport.y) < DRAG_THRESHOLD) return
 
     const cr = container.getBoundingClientRect()
-    const cur = { x: mouse.x - cr.left, y: mouse.y - cr.top }
+    // Clamped to the container: the band is an absolutely-positioned child, so one that follows the
+    // cursor out past the container's bottom edge would itself extend the scroller's scrollable
+    // area — which auto-scroll then chases, growing it again, forever. Cards only exist inside the
+    // container anyway, so nothing outside it can be hit.
+    const cur = {
+      x: Math.max(0, Math.min(cr.width, mouse.x - cr.left)),
+      y: Math.max(0, Math.min(cr.height, mouse.y - cr.top))
+    }
     const rect: Rect = {
       left: Math.min(start.x, cur.x),
       top: Math.min(start.y, cur.y),
