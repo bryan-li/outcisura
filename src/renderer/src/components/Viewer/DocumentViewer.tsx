@@ -5,6 +5,7 @@ import { useCardsStore } from '../../state/cardsStore'
 import { localCardsApi } from '../../lib/api/localCards'
 import { useUiStore } from '../../state/uiStore'
 import { PageView } from './PageView'
+import { SlideNavigator } from './SlideNavigator'
 import { VideoPlayer } from './VideoPlayer'
 import { OcclusionEditor } from '../CardEditor/OcclusionEditor'
 import { PictureCardEditor } from '../CardEditor/PictureCardEditor'
@@ -33,13 +34,6 @@ const toolbarStyle: CSSProperties = {
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius-lg)',
   background: 'var(--bg-sidebar)'
-}
-
-const segmentButtonStyle: CSSProperties = {
-  border: 'none',
-  background: 'transparent',
-  color: 'var(--fg-muted)',
-  padding: '2px 8px'
 }
 
 const quietButtonStyle: CSSProperties = {
@@ -155,6 +149,7 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
   const [cardError, setCardError] = useState<string | null>(null)
   const [showCardSources, setShowCardSources] = useState(false)
   const [pictureMenuOpen, setPictureMenuOpen] = useState(false)
+  const [slideFinderOpen, setSlideFinderOpen] = useState(false)
   const pictureMenuRef = useRef<HTMLDivElement>(null)
 
   // The advanced multi-image creation modal's whole form, lifted up here (not local state inside
@@ -195,6 +190,27 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
     return result
   }, [cards, page])
 
+  /** How many flashcards cite each page of this document — the slide finder's per-slide badge and
+   *  its "with cards" filter, built once here rather than re-scanned per row. */
+  const cardCountByPageId = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const card of cards) {
+      for (const source of card.sources) {
+        if (source.pageId) counts[source.pageId] = (counts[source.pageId] ?? 0) + 1
+      }
+    }
+    return counts
+  }, [cards])
+
+  /** Every way of moving between slides goes through here, so a jump always drops the selection
+   *  that belonged to the slide you left (a selection carried across slides would otherwise create
+   *  cards sourced from a page you're no longer looking at). */
+  function goToPage(index: number): void {
+    if (index < 0 || index >= pages.length || index === activePageIndex) return
+    setSelectedElementIds(new Set())
+    setActivePageIndex(index)
+  }
+
   useEffect(() => {
     if (!flashTarget || flashTarget.documentId !== document.id) return
     const pageIndex = pages.findIndex((p) => p.id === flashTarget.pageId)
@@ -216,24 +232,37 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
     if (recaptureTarget) setFreeSelectTarget('recapture')
   }, [recaptureTarget, document.id])
 
-  // Left/right arrow keys step through slides, same as the prev/next toolbar buttons — suppressed
-  // while typing anywhere (same guard as useDeleteSelectedCardsShortcut) or while an editor/modal
-  // that might have its own use for arrow keys is open, so this never hijacks unrelated input.
+  // Keyboard slide navigation: left/right step, Home/End jump to the ends, and Cmd/Ctrl+F opens the
+  // slide finder (Cmd+K stays the global palette). All suppressed while typing anywhere (same guard
+  // as useDeleteSelectedCardsShortcut) or while an editor/modal — or the finder popover, which
+  // steers its own result list with the arrows — is open, so this never hijacks unrelated input.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {
-      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
       const target = e.target as HTMLElement | null
       if (target?.closest('input, textarea, [contenteditable="true"]')) return
       if (createModalOpen || freeSelectTarget !== null || occlusionSource !== null || pictureCardSource !== null) return
-      const nextIndex = e.key === 'ArrowLeft' ? activePageIndex - 1 : activePageIndex + 1
-      if (nextIndex < 0 || nextIndex >= pages.length) return
+
+      if (e.key.toLowerCase() === 'f' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setSlideFinderOpen(true)
+        return
+      }
+      if (slideFinderOpen) return
+
+      const nextIndex =
+        e.key === 'ArrowLeft' ? activePageIndex - 1
+        : e.key === 'ArrowRight' ? activePageIndex + 1
+        : e.key === 'Home' ? 0
+        : e.key === 'End' ? pages.length - 1
+        : null
+      if (nextIndex === null || nextIndex < 0 || nextIndex >= pages.length) return
       e.preventDefault()
-      setSelectedElementIds(new Set())
-      setActivePageIndex(nextIndex)
+      goToPage(nextIndex)
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activePageIndex, pages.length, createModalOpen, freeSelectTarget, occlusionSource, pictureCardSource, setActivePageIndex])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePageIndex, pages.length, createModalOpen, freeSelectTarget, occlusionSource, pictureCardSource, slideFinderOpen, setActivePageIndex])
 
   const selectedElements = useMemo(
     () => elements.filter((e) => selectedElementIds.has(e.id)),
@@ -516,33 +545,15 @@ export function DocumentViewer({ document }: DocumentViewerProps): JSX.Element {
       )}
 
       <div style={toolbarStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <button
-            disabled={activePageIndex === 0}
-            onClick={() => {
-              setSelectedElementIds(new Set())
-              setActivePageIndex(activePageIndex - 1)
-            }}
-            style={segmentButtonStyle}
-            title="Previous slide"
-          >
-            <Icon name="arrow-left" bare />
-          </button>
-          <span style={{ fontSize: 'var(--font-sm)', color: 'var(--fg-muted)', padding: '0 6px', whiteSpace: 'nowrap' }}>
-            {activePageIndex + 1} / {pages.length}
-          </span>
-          <button
-            disabled={activePageIndex === pages.length - 1}
-            onClick={() => {
-              setSelectedElementIds(new Set())
-              setActivePageIndex(activePageIndex + 1)
-            }}
-            style={segmentButtonStyle}
-            title="Next slide"
-          >
-            <Icon name="arrow-right" bare />
-          </button>
-        </div>
+        <SlideNavigator
+          pages={pages}
+          elementsByPage={elementsByPage}
+          activePageIndex={activePageIndex}
+          cardCountByPageId={cardCountByPageId}
+          onGoTo={goToPage}
+          open={slideFinderOpen}
+          onOpenChange={setSlideFinderOpen}
+        />
 
         <span style={dividerStyle} />
 
