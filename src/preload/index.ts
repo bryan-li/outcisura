@@ -98,6 +98,16 @@ const api: FlashcardApi = {
     get: (id) => ipcRenderer.invoke(IpcChannels.generatedPaperAttemptsGet, id),
     delete: (id) => ipcRenderer.invoke(IpcChannels.generatedPaperAttemptsDelete, id)
   },
+  libreOffice: {
+    getStatus: () => ipcRenderer.invoke(IpcChannels.libreOfficeGetStatus),
+    install: () => ipcRenderer.invoke(IpcChannels.libreOfficeInstall),
+    cancelInstall: () => ipcRenderer.invoke(IpcChannels.libreOfficeCancelInstall),
+    onStatus: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: Parameters<typeof callback>[0]): void => callback(status)
+      ipcRenderer.on(IpcChannels.libreOfficeStatus, listener)
+      return () => ipcRenderer.removeListener(IpcChannels.libreOfficeStatus, listener)
+    }
+  },
   updates: {
     getStatus: () => ipcRenderer.invoke(IpcChannels.updatesGetStatus),
     check: () => ipcRenderer.invoke(IpcChannels.updatesCheck),

@@ -9,6 +9,7 @@ import { useAiAdminStore } from '../../state/aiAdminStore'
 import { useAuthStore } from '../../state/authStore'
 import { parsePdf } from '../../parsers/pdfParser'
 import { parsePptx } from '../../parsers/pptxParser'
+import { LibreOfficePrompt } from '../Library/LibreOfficePrompt'
 import { parseVideoFile } from '../../parsers/videoParser'
 import { formatDuration } from '../../utils/formatDuration'
 import { computeMove, getChildren, type DropPosition } from '../../utils/folderTree'
@@ -138,6 +139,18 @@ export function Sidebar(): JSX.Element {
   const [libraryCollapsed, setLibraryCollapsed] = useState(false)
   const [foldersCollapsed, setFoldersCollapsed] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  /** Held open while the LibreOffice prompt is up; its resolve continues (or abandons) the import
+   *  that triggered it, so the modal reads as a step in that import rather than a separate errand. */
+  const [libreOfficeGate, setLibreOfficeGate] = useState<((ready: boolean) => void) | null>(null)
+
+  /** True when PPTX import can go ahead. Prompts for the one-time LibreOffice download when it
+   *  can't, and waits on the user's answer. */
+  async function ensureLibreOffice(): Promise<boolean> {
+    const status = await window.api.libreOffice.getStatus()
+    if (status.state === 'installed') return true
+    return new Promise<boolean>((resolve) => setLibreOfficeGate(() => resolve))
+  }
+
 
   async function handleFileChosen(file: File): Promise<void> {
     setImportError(null)
@@ -161,6 +174,13 @@ export function Sidebar(): JSX.Element {
         setImporting(false)
         setImportProgress(null)
       }
+      return
+    }
+
+    // Checked before any parsing work: without LibreOffice a pptx can't be converted at all, and
+    // finding that out after the fact would mean an error where an offer belongs.
+    if (fileExt === 'pptx' && !(await ensureLibreOffice())) {
+      setImporting(false)
       return
     }
 
@@ -401,6 +421,14 @@ export function Sidebar(): JSX.Element {
           }
         />
         {importProgress && <ImportProgressBar progress={importProgress} />}
+        {libreOfficeGate && (
+          <LibreOfficePrompt
+            onDone={(ready) => {
+              libreOfficeGate(ready)
+              setLibreOfficeGate(null)
+            }}
+          />
+        )}
         {importError && <p style={{ color: 'var(--danger)', fontSize: 'var(--font-xs)', padding: '0 var(--space-2)' }}>{importError}</p>}
         {!libraryCollapsed && (
           <div

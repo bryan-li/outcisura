@@ -15,11 +15,11 @@ cp .env.example .env                        # fill in the Supabase URL/key for s
 npm run dev
 ```
 
-**PPTX import also needs [LibreOffice](https://www.libreoffice.org/download/)** (`brew install --cask libreoffice` on macOS) — slides go through headless LibreOffice to PDF for pixel-accurate rendering, then down the same pipeline as a native PDF. Without `soffice` on PATH, PPTX import fails with a clear error; PDF import doesn't need it.
+**PPTX import needs LibreOffice**, but you don't have to install it yourself — slides go through headless LibreOffice to PDF for pixel-accurate rendering, then down the same pipeline as a native PDF. If you already have it, that copy is used as-is; if not, the first PPTX import offers a one-time ~300 MB download that installs into the app's own data directory and leaves your system untouched. PDF import never needs it.
 
 ## Capture
 
-- **Import** `.pdf`, `.pptx` and video files. Documents live in a foldered Library you can nest and reorder.
+- **Import** `.pdf`, `.pptx` and video files (PPTX fetches LibreOffice on first use — see Setup). Documents live in a foldered Library you can nest and reorder.
 - **Select elements on a slide** — click them, or marquee-drag across several (the band auto-scrolls near an edge). Turn a selection into a card, or free-hand drag any region for a screenshot.
 - **Card types**: basic front/back, **image occlusion** (black out regions of an image so the card asks what's underneath), **cloze** (`{{hidden}}` spans in a passage), and **picture** cards.
 - **Combine mode** gathers selections from any number of slides or documents into one card instead of creating them one at a time.

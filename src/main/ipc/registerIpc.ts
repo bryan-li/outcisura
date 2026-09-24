@@ -44,6 +44,7 @@ import { readImageAsDataUrl, saveDataUrlImage, saveImageBuffer } from '../imageS
 import { buildAnkiPackage, parseAnkiPackage } from '../anki'
 import { importParsedNotes } from '../ankiImport'
 import { checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate, openReleasePage, simulateUpdate } from '../updater'
+import { cancelLibreOfficeInstall, getLibreOfficeStatus, installLibreOffice } from '../libreOffice'
 import { setProxySession } from '../anthropicClient'
 import { setActiveUser } from '../accountDb'
 import { convertPptxToPdf } from '../pptxConverter'
@@ -187,6 +188,9 @@ export function registerIpc(repo: Repository, ai: AiService, ocr: OcrService, tr
     setActiveUser(repo, userId)
   })
 
+  ipcMain.handle(IpcChannels.libreOfficeGetStatus, () => getLibreOfficeStatus())
+  ipcMain.handle(IpcChannels.libreOfficeInstall, () => installLibreOffice())
+  ipcMain.handle(IpcChannels.libreOfficeCancelInstall, () => cancelLibreOfficeInstall())
   ipcMain.handle(IpcChannels.updatesGetStatus, () => getUpdateStatus())
   ipcMain.handle(IpcChannels.updatesCheck, () => checkForUpdates())
   ipcMain.handle(IpcChannels.updatesDownload, () => downloadUpdate())

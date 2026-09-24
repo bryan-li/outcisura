@@ -56,7 +56,8 @@ import type {
   TranscribeAudioInput,
   TranscriptCoverageInput,
   TranscriptCoverageResult,
-  TranscriptSegmentRecord
+  TranscriptSegmentRecord,
+  LibreOfficeStatus
 } from './types'
 import type { ReviewGrade } from './srs'
 
@@ -122,6 +123,10 @@ export const IpcChannels = {
   aiExtractPaperTemplate: 'ai:extractPaperTemplate',
   aiGeneratePaperQuestions: 'ai:generatePaperQuestions',
   aiMarkPaperAnswers: 'ai:markPaperAnswers',
+  libreOfficeGetStatus: 'libreOffice:getStatus',
+  libreOfficeInstall: 'libreOffice:install',
+  libreOfficeCancelInstall: 'libreOffice:cancelInstall',
+  libreOfficeStatus: 'libreOffice:status',
   updatesGetStatus: 'updates:getStatus',
   updatesCheck: 'updates:check',
   updatesDownload: 'updates:download',
@@ -325,6 +330,14 @@ export interface FlashcardApi {
     delete(id: string): Promise<void>
   }
   /** Self-updater (see main/updater.ts). Status changes are pushed to onStatus as they happen. */
+  /** On-demand LibreOffice install, which PPTX import depends on (see main/libreOffice.ts). */
+  libreOffice: {
+    getStatus(): Promise<LibreOfficeStatus>
+    /** Downloads and installs it; resolves with the final status (including failures). */
+    install(): Promise<LibreOfficeStatus>
+    cancelInstall(): Promise<LibreOfficeStatus>
+    onStatus(callback: (status: LibreOfficeStatus) => void): () => void
+  }
   updates: {
     getStatus(): Promise<UpdateStatus>
     check(): Promise<UpdateStatus>

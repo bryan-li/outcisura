@@ -568,6 +568,22 @@ export interface SyncOp {
 }
 
 /** Where the app's self-updater is at — pushed to the renderer whenever it changes. */
+/** State of the on-demand LibreOffice install that backs PPTX import (see main/libreOffice.ts).
+ *  Mirrors UpdateStatus deliberately — same download-with-progress shape, same UI vocabulary. */
+export interface LibreOfficeStatus {
+  state: 'missing' | 'installed' | 'downloading' | 'extracting' | 'error'
+  /** The soffice binary in use, once there is one. */
+  path?: string
+  /** 0–1 while downloading. */
+  progress?: number
+  error?: string
+  /** False when there's no verified build pinned for this platform/arch; the UI then falls back to
+   *  telling the user to install it themselves. */
+  canAutoInstall: boolean
+  /** Size of the download, so the prompt can say what it's about to cost. */
+  downloadBytes?: number
+}
+
 export interface UpdateStatus {
   state: 'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'error'
   currentVersion: string
